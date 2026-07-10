@@ -1,0 +1,178 @@
+{# Bulk actions for the Books review list (each ticked row is an edition), added beside the
+   shared "✓ Mark all reviewed" button in #bb-bulk-actions:
+     • "Assign subject" + "Add to series" — both via the reusable BulkAssign component
+       (one mechanism, two configs; add more kinds the same way);
+     • "Delete" — reversible (entity_undo + one-shot DB snapshot), kept inline since it's a
+       destructive op with a different result shape.
+   Requires _bulk_assign.html (BulkAssign) + _subj_datalist.html (the autocomplete lists)
+   included on the page. Books-only (works_detect.html). #}
+<script>
+(function () {
+  // Assign topical subject + add-to-series — same shared control, different config.
+  if (window.BulkAssign) {
+    BulkAssign.add({
+      key: 'subject', noun: 'subject', label: 'Assign subject',
+      placeholder: 'subject…', datalist: 'nw-subj-opts',
+      url: '/works/detect/bulk-subject',
+      confirm: (name, n) => `Assign subject “${name}” to ${n} book(s)?`,
+    });
+    BulkAssign.add({
+      key: 'series', noun: 'series', label: 'Add to series',
+      placeholder: 'series…', datalist: 'nw-series-opts',
+      url: '/works/detect/bulk-subject', extra: {subject_kind: 'series'},
+      confirm: (name, n) => `Add ${n} book(s) to series “${name}”?`,
+      toast: (name, r) => `series “${name}” → ${(r.assigned || []).length} book(s)`
+        + ((r.errors || []).length ? `, ${r.errors.length} failed` : ' ✓'),
+    });
+    BulkAssign.add({
+      key: 'author', noun: 'author', label: 'Add author',
+      placeholder: 'author name…', datalist: 'nw-person-opts',
+      url: '/works/detect/bulk-author',
+      // Resolves to an existing person (alias-aware) or creates one, then adds to each book.
+      confirm: (name, n) => `Add author “${name}” to ${n} book(s)?`,
+      toast: (name, r) => `author “${name}” → ${(r.assigned || []).length} book(s)`
+        + ((r.errors || []).length ? `, ${r.errors.length} failed` : ' ✓'),
+    });
+  }
+
+  // Detect + Delete live on the bar's bottom row (#bb-bulk-secondary) when it exists,
+  // below the subject/series/author line; else they fall back to the single host.
+  const host = document.getElementById('bb-bulk-secondary')
+    || document.getElementById('bb-bulk-actions');
+  if (!host) return;
+  const picked = () => (window.bbSelectedIds ? window.bbSelectedIds() : []).map(Number);
+  const postJSON = (url, body) => fetch(url, {method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-Requested-With': 'fetch'},
+    body: JSON.stringify(body)}).then(r => r.json());
+
+  // Detect from filename — the bulk form of the per-card "🔎 Detect from filename":
+  // read title/author/publisher/year/ISBN out of each ticked book's filename (and look
+  // up the ISBN where found). Non-destructive — a curated title isn't overwritten and
+  // publisher/year only fill when empty. Refreshes each card in place.
+  const detSpan = document.createElement('span');
+  detSpan.className = 'bb-bulk';
+  detSpan.innerHTML = " · <button type=\"button\" disabled title=\"Read title, author, "
+    + "publisher, year &amp; ISBN out of each book's file name\">🔎 Detect from filename</button>";
+  const detBtn = detSpan.querySelector('button');
+  host.appendChild(detSpan);
+
+  detBtn.addEventListener('click', async () => {
+    const ids = picked(); if (!ids.length) return;
+    if (!confirm(`Detect metadata from the filename for ${ids.length} book(s)? `
+      + `Cleans a raw title and fills empty publisher/year/ISBN; curated fields aren't overwritten.`)) return;
+    detBtn.disabled = true;
+    // One server call: it dry-runs all selections and REFUSES (applies nothing) if the
+    // batch would give two books the same title — the shared-ISBN/multi-volume clobber
+    // guard. Per-card detect is unaffected; this guard is bulk-only.
+    let r;
+    try { r = await postJSON('/works/detect/bulk-detect', {ids}); }
+    catch (e) { alert('Network error.'); if (window.bbRefreshSelection) window.bbRefreshSelection(); return; }
+    if (r && r.ok === false && r.collisions) {
+      const lines = r.collisions.map(c => `  “${c.title}” → books ${c.ids.map(i => '#' + i).join(', ')}`);
+      alert('Nothing was changed.\n\nThis bulk detect would give different books the SAME '
+        + 'title (likely a shared/duplicate ISBN across volumes):\n\n' + lines.join('\n')
+        + '\n\nDetect them individually, or fix the ISBN/filenames first.');
+      if (window.bbRefreshSelection) window.bbRefreshSelection();
+      return;
+    }
+    const applied = (r && r.applied) || [], failed = (r && r.failed) || [];
+    const changed = (r && r.changed) || [], unchanged = (r && r.unchanged) || [];
+    const undetected = (r && r.undetected) || [], suggested = (r && r.suggested) || [];
+    const titles = (r && r.titles) || {};
+    // LEFT PANE: set EVERY selected row's title directly from the response — deterministic,
+    // no page re-fetch and no dependency on a helper, so it updates all rows (not just the
+    // first) and also corrects any row left stale by an earlier run.
+    Object.keys(titles).forEach(id => {
+      const row = document.getElementById('ie' + id);
+      const ttl = row && row.querySelector('.ttl');
+      if (ttl && titles[id] != null) ttl.textContent = titles[id];
+    });
+    // DETAIL PANE + cached cards: re-sync from the server (re-renders the open card, drops
+    // stale cached cards) so opening any book shows the new title too.
+    if (window.bbRefreshRows) await window.bbRefreshRows(ids);
+    if (window.bbRefreshSelection) window.bbRefreshSelection();   // keep the pick, re-enable
+    // Honest summary: cleaned vs already-fine vs unreadable filename — so a no-op (curated
+    // title kept / non-Anna's filename) doesn't read as a silent failure.
+    if (window.bbToast) window.bbToast(`updated ${changed.length} of ${ids.length} book(s) from filename`
+      + (changed.length < ids.length ? ` (${ids.length - changed.length} unchanged)` : ' ✓'));
+    const notes = [];
+    if (unchanged.length)
+      notes.push(`Already had a clean title (left as-is): ${unchanged.map(i => '#' + i).join(', ')}.`);
+    if (suggested.length)
+      notes.push('Curated title kept, but the filename suggests a different one — apply by hand '
+        + 'if you prefer:\n' + suggested.map(s => `  #${s.id}: “${s.current}” → “${s.detected}”`).join('\n'));
+    if (undetected.length)
+      notes.push(`No metadata recognizable in the filename (not Anna's-Archive format) — `
+        + `edit by hand: ${undetected.map(i => '#' + i).join(', ')}.`);
+    if (failed.length)
+      notes.push('Failed:\n' + failed.map(f => '#' + f.id + ': ' + f.error).join('\n'));
+    if (notes.length) alert(notes.join('\n\n'));
+  });
+
+  // File to folder — move the ticked inbox books onto their subject shelf. Auto-files
+  // the unambiguous ones (single subject, existing dir); reports the rest as "need a
+  // folder" (open one to pick in its filing panel). Works on already-reviewed books too.
+  const fileSpan = document.createElement('span');
+  fileSpan.className = 'bb-bulk';
+  fileSpan.innerHTML = ' · <button type="button" disabled title="Move ticked inbox books '
+    + 'onto their subject directory">📁 File to folder</button>';
+  const fileBtn = fileSpan.querySelector('button');
+  host.appendChild(fileSpan);
+
+  fileBtn.addEventListener('click', async () => {
+    const ids = picked(); if (!ids.length) return;
+    if (!confirm(`File ${ids.length} book(s) out of the inbox onto their subject shelf? `
+      + `Unambiguous ones go automatically; you'll be asked about the rest.`)) return;
+    fileBtn.disabled = true;
+    const failed = [], results = [];
+    for (const id of ids) {
+      let r;
+      try { r = await postJSON(`/edition/${id}/file`, {}); }
+      catch (e) { failed.push('#' + id + ': network'); continue; }
+      if (!r || !r.ok) { failed.push('#' + id + ': ' + ((r && r.error) || 'failed')); continue; }
+      if (r.auto && window.bbRefreshDetail) window.bbRefreshDetail(id);   // already moved server-side
+      results.push({id: id, filing: r});
+    }
+    if (window.bbRefreshSelection) window.bbRefreshSelection();
+    // Same flow as Mark-reviewed: ask about ambiguous folders, then one summary popup.
+    if (window.FilingUX) await window.FilingUX.finish(results);
+    else if (window.bbToast) window.bbToast('filed ✓');
+    if (failed.length) alert('Some could not be filed:\n' + failed.join('\n'));
+  });
+
+  // Delete — destructive, reversible; kept inline (not an "assign").
+  const span = document.createElement('span');
+  span.className = 'bb-bulk';
+  span.innerHTML = ' · <button type="button" class="danger" disabled>Delete</button>';
+  const delBtn = span.querySelector('button');
+  host.appendChild(span);
+
+  const prev = window.bbOnSelectionChange;
+  window.bbOnSelectionChange = ids => { if (prev) prev(ids);
+    delBtn.disabled = ids.length === 0; detBtn.disabled = ids.length === 0;
+    fileBtn.disabled = ids.length === 0; };
+
+  delBtn.addEventListener('click', async () => {
+    const ids = picked(); if (!ids.length) return;
+    if (!confirm(`Delete ${ids.length} book(s)? Their holdings + files move to Trash `
+      + `(recoverable: a DB snapshot is taken and each row keeps an ↩ Undo).`)) return;
+    delBtn.disabled = true;
+    let r;
+    try { r = await postJSON('/works/detect/bulk-delete-editions', {ids}); }
+    catch (e) { alert('Network error.'); delBtn.disabled = false; return; }
+    (r.deleted || []).forEach(d => {
+      // Deleted → holdings gone; strip stale open-PDF links from the kept card.
+      if (window._resolveEdition) window._resolveEdition(d.edition_id, 'deleted', d.undo_token, {stripOpen: true});
+      else if (window.bbResolveRow) window.bbResolveRow(d.edition_id, '<h2>✓ Deleted</h2>', {stripOpen: true});
+      const cb = document.querySelector('#i' + d.edition_id + ' .bb-check');
+      if (cb) { cb.checked = false; cb.disabled = true; }
+    });
+    if (window.bbClearSelection) window.bbClearSelection();
+    const bad = r.errors || [];
+    if (window.bbToast) window.bbToast(`${(r.deleted || []).length} deleted`
+      + (bad.length ? `, ${bad.length} failed` : ' ✓'));
+    if (bad.length) alert('Some could not be deleted:\n'
+      + bad.map(e => '#' + e.edition_id + ': ' + e.error).join('\n'));
+  });
+})();
+</script>

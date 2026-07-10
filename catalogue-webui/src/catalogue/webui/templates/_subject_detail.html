@@ -1,0 +1,38 @@
+{# Detail pane for one subject (rendered per-row into the browser shell). Rename /
+   merge use a native datalist (#all-subjects) for completion; the tagged-works list
+   loads lazily via [data-card-url]. These forms navigate (full POST → redirect). #}
+<h2>{{ item.title }}</h2>
+<p class="meta">{{ item.n_works }} works · {{ item.n_editions }} editions</p>
+
+{% if item.title|lower == 'uncategorized' %}
+<p class="hint" style="background:#fff3cd; border:1px solid #ffe69c; color:#664d03;
+   padding:.4rem .6rem; border-radius:6px">
+  “Uncategorized” is a predefined subject — it can’t be renamed, merged, or deleted.
+  It’s auto-applied to any work/edition with no subject; assign a real subject on those
+  records (which lifts this tag) before they can be marked reviewed.</p>
+{% else %}
+<form method="post" action="/subject/{{ item.id }}/rename" style="margin:.4rem 0">
+  <label>Rename<br>
+    <input name="name" value="{{ item.title }}" list="all-subjects" size="34"
+           autocomplete="off"></label>
+  <button type="submit">Rename</button>
+  <span class="hint">renaming onto an existing subject merges into it</span>
+</form>
+
+<form method="post" action="/subject/{{ item.id }}/merge" style="margin:.4rem 0">
+  <label>Merge into<br>
+    <input name="into" list="all-subjects" placeholder="existing subject…" size="34"
+           autocomplete="off" required></label>
+  <button type="submit">Merge</button>
+</form>
+
+<form method="post" action="/subject/{{ item.id }}/delete" style="margin:.6rem 0"
+      onsubmit="return confirm('Delete subject “{{ item.title }}”? Its tags are removed.')">
+  <button type="submit" class="danger" data-key="x" data-key-label="delete">Delete subject</button>
+</form>
+{% endif %}
+
+<details style="margin-top:.6rem">
+  <summary>Tagged works &amp; editions</summary>
+  <div data-card-url="/subject/{{ item.id }}/card"><p class="hint">Loading…</p></div>
+</details>

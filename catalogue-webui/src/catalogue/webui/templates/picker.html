@@ -1,0 +1,506 @@
+{% extends "_base.html" %}
+{% block title %}Resolve {{ spec.label }}{% endblock %}
+{% block body %}
+<div class="bb-wide">
+{% include '_review_tabs.html' %}
+<h1>Resolve {{ spec.label }}</h1>
+{% if kind == 'person' %}
+<div style="background:#eef6ff; border:1px solid #cfe2ff; padding:.4rem .6rem; margin:.4rem 0">
+  Review &amp; correct persons here — bind an authority, merge duplicates, split
+  blobs, add aliases.
+</div>
+<p style="margin:.4rem 0">
+  <a href="{{ url_for('picker_dedupe_preview') }}" class="pa-btn"
+     style="display:inline-block;text-decoration:none">⛓ Deduplicate (authority-linked)</a>
+  <span class="hint">collapse records that cross-links prove are the same person — preview first.</span>
+</p>
+{% endif %}
+<p>
+  kind:
+  {% for k in kinds %}
+    {% if k == kind %}<strong>{{ k }}</strong>{% else %}<a href="{{ url_for('picker_list', kind=k) }}">{{ k }}</a>{% endif %}
+  {% endfor %}
+  · <b>{{ items|length }} of {{ total }}</b> unresolved
+  {% if items|length < total %}
+    — showing the first {{ limit }};
+    <a href="{{ url_for('picker_list', kind=kind, limit=total) }}">load all {{ total }}</a>
+  {% else %}
+    — all loaded
+  {% endif %}
+</p>
+<p class="bb-help-hint">Move with <kbd>↑</kbd>/<kbd>↓</kbd>. Candidates load when you
+  pause on an entry; <kbd>1</kbd>–<kbd>9</kbd> highlight, <kbd>↵</kbd>/<kbd>b</kbd> bind.
+  Press <kbd>?</kbd> for all shortcuts.</p>
+
+{% if kind == 'person' %}
+<form method="post" action="{{ url_for('picker_person_new') }}" style="margin:.5rem 0">
+  <strong>Create a person</strong> (no candidate fits):
+  <input name="primary_name" placeholder="primary name" required>
+  <input name="role_hint" placeholder="role hint (optional)" size="14">
+  <button type="submit">create</button>
+</form>
+{% endif %}
+
+{% if bulk_ops %}
+<p class="bb-help-hint">Tick the boxes (or <b>select all</b>) to act on several entries
+  at once — then pick an operation and <b>Apply</b>.</p>
+{% endif %}
+
+{% set detail_template = '_picker_detail.html' %}
+{% set empty_msg = 'Nothing unresolved here — every entry is bound/confirmed.' %}
+{% set bulk_select = bulk_ops|length > 0 %}
+{% include '_book_browser.html' %}
+</div>
+{% include '_typeahead.html' %}
+
+<script>
+// Page-level picker actions. All DOM reads are scoped to the VISIBLE detail pane
+// (#detail) — the master-detail shell clones each row's detail source, so ids
+// would otherwise be ambiguous. The shell (_book_browser.html) exposes
+// window.bb* helpers for candidate (re)highlighting + refetch.
+const _det = () => document.getElementById('detail');
+const _candBox = () => _det() && _det().querySelector('[data-cand-url]');
+const _esc = s => String(s).replace(/[&<>"]/g,
+  c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+// A resolve and a terminal op both end with the record GONE from the worklist —
+// bound/confirmed/marked-org (left the list) or merged/split/deleted (deleted). Both
+// route through the shell's bbResolveRow so the row badge, the live pane AND its
+// hidden .detail-src snapshot (which select() re-clones on every revisit) all show
+// the final summary. Without the snapshot write, arrowing away and back re-rendered
+// the pre-action pane — the "I merged it but it still says unbound" bug — and let its
+// now-stale action buttons be clicked again on a dead id. The two differ only in
+// wording and whether we auto-advance.
+// `undoHtml` (optional) is a control that reverses this resolve — bind/confirm-local
+// undo via unbind (back to provisional, re-listed); mark-org via un-mark. It lives in
+// the summary (and its snapshot), so a mistaken bind can be corrected even after you
+// arrow away and back, fixing the "no escape from the ✓ pane" gap.
+function _markRowDone(eid, msg, advance, undoHtml) {
+  let html = '<h2>✓ Done</h2><p>' + msg + '</p>';
+  if (undoHtml) html += '<p class="undo-row">' + undoHtml + '</p>';
+  html += '<p class="hint">Resolved — press <kbd>↓</kbd> for the next one.</p>';
+  window.bbResolveRow(eid, html);
+  // After a decisive resolve (bind / confirm-local) jump to the next entry so the
+  // operator keeps moving down the list without reaching for the mouse.
+  if (advance && window.bbSelectNext) window.bbSelectNext();
+}
+
+// An inline "↩ Undo" that calls one of the existing inverse handlers (each re-fetches
+// the now-editable pane), with a hint that it returns the record to the worklist.
+function _undoBtn(fn, eid, label) {
+  return '<button type="button" class="pa-btn" data-key="u" data-key-label="undo" '
+    + 'onclick="' + fn + '(' + eid + ')">↩ ' + label + '</button> '
+    + '<span class="hint">return to the worklist to re-edit</span>';
+}
+
+// Reverse a mark-as-organization (POST /org?undo=1), then re-fetch the editable pane.
+async function unmarkOrg(eid) {
+  const j = await (await fetch('/picker/person/' + eid + '/org?undo=1',
+    {method: 'POST', headers: {'X-Requested-With': 'fetch'}})).json();
+  if (j.ok) { if (window.bbRefreshDetail) await window.bbRefreshDetail(eid); }
+  else alert('Could not un-mark.');
+}
+
+function _markRowGone(eid, msg, undoToken) {
+  // merge/delete/split journal a reversible snapshot (server returns its undo_token).
+  // When present, offer an Undo on the summary — it survives in the row snapshot, so
+  // it's still there if you arrow back to a retired row later.
+  let html = '<h2>✓ Done</h2><p>' + msg + '</p>';
+  if (undoToken != null) html +=
+      '<p class="undo-row"><button type="button" class="pa-btn" data-key="u" data-key-label="undo" '
+    + 'onclick="undoAction(' + undoToken + ', ' + eid + ')">↩ Undo</button> '
+    + '<span class="hint">restore the record(s) exactly as they were</span></p>';
+  html += '<p class="hint">Record removed — its details are kept below for reference. '
+        + 'Press <kbd>↓</kbd> for the next one.</p>';
+  window.bbResolveRow(eid, html);
+}
+
+// Reverse a journaled op. The server restores the snapshot and returns the affected
+// person ids; we re-fetch each (awaited in turn so the shell's single-flight refresh
+// guard doesn't drop the later ones) — the restored record returns to the worklist
+// with its editable pane and the ✓/greying cleared.
+async function undoAction(token, eid) {
+  let r;
+  try { r = await (await fetch('/picker/person/undo', {
+    method: 'POST', headers: {'X-Requested-With': 'fetch', 'Content-Type': 'application/json'},
+    body: JSON.stringify({token})})).json(); }
+  catch (e) { alert('Undo failed — your change was NOT reverted.'); return; }
+  if (r.error) { alert(r.error); return; }
+  for (const id of (r.person_ids && r.person_ids.length ? r.person_ids : [eid])) {
+    if (window.bbRefreshDetail) await window.bbRefreshDetail(id);
+  }
+}
+
+async function bindCand(kind, eid, el, force) {
+  const [id, source, label] = JSON.parse(el.dataset.cand);
+  const body = new URLSearchParams({candidate_id: id, source, label});
+  if (force) body.set('force', '1');
+  let j;
+  try {
+    j = await (await fetch(`/picker/${kind}/${eid}/bind`, {
+      method: 'POST', headers: {'X-Requested-With': 'fetch'}, body})).json();
+  } catch (e) {
+    alert('Bind did not persist — the server returned no result. Your change was NOT saved.');
+    return;
+  }
+  if (j.ok) {
+    const bound = '✓ bound <code>' + _esc(j.id || id) + '</code>';
+    const d = j.dedup;
+    if (d && d.merged_into != null) {
+      // On-bind dedup found the same authority identity on another record and merged.
+      if (Number(d.merged_into) === Number(eid)) {           // THIS record won
+        // On-bind auto-merge is NOT undoable here (bind+merge are coupled) — reverse it
+        // with Unbind, which clears the binding and re-lists the record for review.
+        _markRowDone(eid, bound + ' — absorbed duplicate #' + d.merged_away
+          + ' (same authority identity)', true, _undoBtn('unbindPerson', eid, 'Undo bind'));
+      } else {                                               // THIS record was folded away
+        _markRowGone(eid, bound + ', then <b>merged into person #' + d.merged_into
+          + '</b> (same authority identity).');
+      }
+    } else if (d && d.suggest && d.suggest.length) {         // possible dup → review, no merge
+      _markRowDone(eid, bound + ' — <b>possible duplicate</b> of #' + d.suggest.join(', #')
+        + ' (' + _esc(d.reason || '') + ') — review', true, _undoBtn('unbindPerson', eid, 'Undo bind'));
+    } else {
+      _markRowDone(eid, bound, true, _undoBtn('unbindPerson', eid, 'Undo bind'));
+    }
+    return;
+  }
+  // Already bound → offer a deliberate rebind (replaces the existing authority id).
+  if (j.already_bound && !force) {
+    if (confirm(`This record is already bound to ${j.current}.\nRebind to ${id} (replace it)?`)) {
+      return bindCand(kind, eid, el, true);
+    }
+    return;
+  }
+  // A DB-level failure now arrives as an explicit error (was a silent 500 that
+  // lost the bind on reload). Tell the operator their change did NOT persist.
+  if (j.error) { alert(j.error + '\n\nYour change was NOT saved.'); return; }
+  alert('Bind failed.');
+}
+
+// Run an authority candidate search for an explicit query (shared by the re-search
+// box, the dedicated authority-id box, and the alias "search" button). The server
+// resolves an id-shaped query (bdr:/wikidata:/viaf:…) to that exact record — see
+// picker.lookup_by_id.
+async function runCandSearch(kind, eid, q) {
+  const box = _candBox(); if (!box) return;
+  q = (q || '').trim();
+  box.innerHTML = '<p class="hint">searching…</p>';
+  const url = `/picker/${kind}/${eid}/candidates` + (q ? `?q=${encodeURIComponent(q)}` : '');
+  try {
+    const html = await (await fetch(url)).text();
+    box.innerHTML = html; box.dataset.filled = '1';
+    if (window.bbCacheCands) window.bbCacheCands(box.getAttribute('data-cand-url'), html);
+    if (window.bbHighlightFirstCand) window.bbHighlightFirstCand();
+  } catch (e) { box.innerHTML = '<p class="hint">lookup failed — press f to retry.</p>'; }
+}
+function _val(sel) { const i = _det() && _det().querySelector(sel); return i ? i.value : ''; }
+function searchCands(kind, eid) { return runCandSearch(kind, eid, _val('[data-cand-search]')); }
+function lookupId(kind, eid)    { return runCandSearch(kind, eid, _val('[data-id-search]')); }
+function searchAlias(kind, eid) { return runCandSearch(kind, eid, _val('.alias-input')); }
+
+// Edit a person's primary (display) name, inline. The new spelling is saved as
+// the primary name AND seeded as an alias server-side (old names kept).
+function _renderName(pid, name) {
+  return `<h2 class="pname">${_esc(name)}</h2>`
+    + `<button type="button" class="copy-btn" title="Copy name to clipboard"`
+    + ` data-copy="${_esc(name)}" onclick="bbCopyName(this)">⧉</button>`
+    + `<button type="button" class="rename-btn" title="Edit name (rename)"`
+    + ` onclick="renamePerson(${pid})">✎</button>`;
+}
+function renamePerson(pid) {
+  const wrap = _det() && _det().querySelector('.picker-name'); if (!wrap) return;
+  if (wrap.querySelector('input')) return;                      // already editing
+  const cur = (wrap.querySelector('.pname') || {}).textContent || '';
+  wrap.dataset.orig = cur;
+  wrap.innerHTML = `<input class="rename-input" value="${_esc(cur)}" size="30"> `
+    + `<button type="button" class="pa-btn" onclick="saveRename(${pid})">Save</button> `
+    + `<button type="button" class="pa-btn" onclick="cancelRename(${pid})">Cancel</button>`;
+  const i = wrap.querySelector('input'); i.focus(); i.select();
+  i.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); saveRename(pid); }
+    else if (e.key === 'Escape') { e.preventDefault(); cancelRename(pid); }
+  });
+}
+function cancelRename(pid) {
+  const wrap = _det() && _det().querySelector('.picker-name'); if (!wrap) return;
+  wrap.innerHTML = _renderName(pid, wrap.dataset.orig || '');
+}
+async function saveRename(pid) {
+  const wrap = _det() && _det().querySelector('.picker-name'); if (!wrap) return;
+  const inp = wrap.querySelector('.rename-input'); if (!inp) return;
+  const name = (inp.value || '').trim(); if (!name) { inp.focus(); return; }
+  let j;
+  try { j = await (await fetch(`/picker/person/${pid}/rename`, {
+    method: 'POST', headers: {'X-Requested-With': 'fetch'},
+    body: new URLSearchParams({primary_name: name})})).json(); }
+  catch (e) { alert('Rename failed.'); return; }
+  if (!j.ok) { alert('Rename failed.'); return; }
+  // Re-render the whole pane (and master label) from fresh server data — the new
+  // primary name also reshapes aliases/authority signals, not just the name line.
+  window.bbRefreshDetail && window.bbRefreshDetail(pid);
+}
+
+async function addAliasInline(eid, form) {
+  const inp = form.querySelector('.alias-input');
+  const text = (inp.value || '').trim(); if (!text) return;
+  const scheme = form.querySelector('select[name=scheme]').value;
+  const j = await (await fetch(`/picker/person/${eid}/alias`, {
+    method: 'POST', headers: {'X-Requested-With': 'fetch'},
+    body: new URLSearchParams({text, scheme})})).json();
+  if (j.ok) {
+    // Re-render from fresh server data so the alias shows exactly as stored
+    // (normalised key, scheme grouping) rather than a hand-built optimistic pill.
+    window.bbRefreshDetail && window.bbRefreshDetail(eid);
+  } else alert('Add-alias failed.');
+}
+
+async function unbindPerson(eid) {
+  if (!confirm('Clear this record’s authority binding (back to provisional)?')) return;
+  const j = await (await fetch(`/picker/person/${eid}/unbind`,
+    {method: 'POST', headers: {'X-Requested-With': 'fetch'}})).json();
+  if (j.ok) {
+    // Unbinding puts the record back on the worklist as provisional, so re-fetch:
+    // the fresh pane re-renders the candidate list and reconciles the row's badge
+    // and done-state from server truth (clearing the old ✓).
+    window.bbRefreshDetail && window.bbRefreshDetail(eid);
+  } else alert('Unbind failed — the record may have been merged or deleted.');
+}
+
+async function confirmLocal(eid) {
+  const j = await (await fetch(`/picker/person/${eid}/local`,
+    {method: 'POST', headers: {'X-Requested-With': 'fetch'}})).json();
+  if (j.ok) _markRowDone(eid, '✓ confirmed local', true,
+    _undoBtn('unbindPerson', eid, 'Undo'));
+}
+
+async function markOrg(eid) {
+  if (!confirm('Mark this contributor as an organization (not a person)?\n'
+    + 'It keeps its work links but leaves the person-matching worklist.')) return;
+  const j = await (await fetch(`/picker/person/${eid}/org`,
+    {method: 'POST', headers: {'X-Requested-With': 'fetch'}})).json();
+  if (j.ok) _markRowDone(eid, 'marked as organization', false,
+    _undoBtn('unmarkOrg', eid, 'Undo (un-mark org)'));
+  else alert('Could not mark (already authority-bound?).');
+}
+
+async function deletePerson(eid) {
+  const p = await (await fetch(`/picker/person/${eid}/delete`)).json();
+  if (p.error) { alert(p.error); return; }
+  let msg = `Delete "${p.name}"?\nDetaches it from ${p.works.length} work(s)`;
+  if (p.editions.length) msg += `, clears ${p.editions.length} translator slot(s)`;
+  const works = p.works.map(w => ` • ${w.role} of ${w.label}`).join('\n');
+  if (works) msg += ':\n' + works;
+  if (!confirm(msg)) return;
+  const r = await (await fetch(`/picker/person/${eid}/delete`,
+    {method: 'POST', headers: {'X-Requested-With': 'fetch'}})).json();
+  _markRowGone(eid, `deleted — detached ${r.works_detached.length} work(s)`, r.undo_token);
+}
+
+// Split a comma-blob: inline panel (per-part role + affected works) in the pane.
+async function splitPerson(eid) {
+  const box = _candBox(); if (!box) return;
+  const p = await (await fetch(`/picker/person/${eid}/split`)).json();
+  if (p.error) { alert(p.error); return; }
+  let html = `<form onsubmit="applySplit(${eid}, this); return false">`
+    + `<div>Split <strong>${_esc(p.name)}</strong> — assign each part a role:</div>`;
+  for (const part of p.parts) {
+    const tag = part.existing_id ? 'existing #' + part.existing_id : 'new';
+    html += `<div><input type="hidden" class="pname" value="${_esc(part.name)}">`
+      + `<select class="prole">`
+      + `<option value="author"${part.role === 'author' ? ' selected' : ''}>author</option>`
+      + `<option value="translator"${part.role === 'translator' ? ' selected' : ''}>translator</option>`
+      + `</select> ${_esc(part.name)} <small>(${tag})</small></div>`;
+  }
+  html += `<div>Affected works:</div><ul>`;
+  for (const w of p.works) {
+    const books = (w.books || []).map(b => _esc(b.book)).join(', ') || '—';
+    html += `<li>${_esc(w.role)} of <em>${_esc(w.label)}</em> [book: ${books}]</li>`;
+  }
+  html += `</ul>`;
+  if (p.editions.length) html += `<div><small>${p.editions.length} translator slot(s) → the part marked translator</small></div>`;
+  html += `<button type="submit">Apply split</button> `
+    + `<button type="button" onclick="window.bbRefetchCands&&window.bbRefetchCands()">cancel</button></form>`;
+  box.innerHTML = html;
+}
+async function applySplit(eid, form) {
+  const names = [...form.querySelectorAll('.pname')].map(i => i.value);
+  const roles = [...form.querySelectorAll('.prole')].map(s => s.value);
+  const assignments = names.map((n, i) => ({name: n, role: roles[i]}));
+  const r = await (await fetch(`/picker/person/${eid}/split`, {
+    method: 'POST', headers: {'X-Requested-With': 'fetch', 'Content-Type': 'application/json'},
+    body: JSON.stringify({assignments})})).json();
+  _markRowGone(eid, 'split into ' + r.into.map(i => `${i.name} (${i.role})`).join(' + ')
+    + ` (created ${r.created.length}); ${r.works_repointed.length} work(s) re-pointed`,
+    r.undo_token);
+}
+
+// Merge into a canonical person — uses the reusable Typeahead module
+// (_typeahead.html): one live, debounced search box; type any fragment, pick a
+// match. No exact name needed, no second box.
+function mergePerson(eid) {
+  const box = _candBox(); if (!box) return;
+  box.innerHTML =
+      '<div class="merge-panel"><b>Merge this record into…</b> '
+    + '<span class="hint">type any part of a name; pick the canonical person</span>'
+    + '<div class="merge-host"></div>'
+    + '<button type="button" class="pa-btn"'
+    + '   onclick="window.bbRefetchCands && window.bbRefetchCands()">cancel</button></div>';
+  Typeahead.mount(box.querySelector('.merge-host'), {
+    searchUrl: q => `/picker/person/search?q=${encodeURIComponent(q)}&exclude=${eid}`,
+    parse: j => j.matches,
+    render: m => `<b>Saved Person:</b> <code>#${m.id}</code> ${_esc(m.name)}`
+      + (m.dates ? ` (${_esc(m.dates)})` : '')
+      + (m.external_id ? ` <small>${_esc(m.external_id)}</small>` : ''),
+    onPick: m => applyMerge(eid, m.id),
+    placeholder: 'start typing a name…',
+    emptyHtml: q => `no person matches “${q}” — keep typing, or use Create new if there's no duplicate.`,
+  });
+}
+// Picking a merge target opens an inline confirm with a checkbox controlling
+// whether the merged-away record's NAME is kept as an alias of the survivor.
+async function applyMerge(eid, into) {
+  const plan = await (await fetch(`/picker/person/${eid}/merge?into=${into}`)).json();
+  if (plan.error) { alert(plan.error); return; }
+  const box = _candBox(); if (!box) return;
+  const dup = _esc(plan.dup.name), canon = _esc(plan.canon.name);
+  box.innerHTML =
+      `<div class="merge-confirm"><b>Merge “${dup}” → “${canon}”?</b>`
+    + `<p class="hint">${plan.works.length} work(s), ${plan.editions.length} `
+    + `translator slot(s), +${plan.aliases_gained.length} alias(es).</p>`
+    + `<label style="display:block;margin:.3rem 0"><input type="checkbox" id="keepname" checked> `
+    + `Keep “${dup}” as an alias of “${canon}”</label>`
+    + `<div class="cand-tools">`
+    + `<button type="button" onclick="confirmMerge(${eid}, ${into})">Merge</button>`
+    + `<button type="button" onclick="window.bbRefetchCands && window.bbRefetchCands()">Cancel</button>`
+    + `</div></div>`;
+}
+async function confirmMerge(eid, into) {
+  const cb = _det() && _det().querySelector('#keepname');
+  const keep = cb ? cb.checked : true;
+  const r = await (await fetch(`/picker/person/${eid}/merge`, {
+    method: 'POST', headers: {'X-Requested-With': 'fetch', 'Content-Type': 'application/json'},
+    body: JSON.stringify({into, keep_name_alias: keep})})).json();
+  if (r.error) { alert(r.error); return; }
+  _markRowGone(eid, `merged into #${r.into} (${_esc(r.into_name)}); `
+    + `${r.works_repointed.length} work(s) re-pointed`, r.undo_token);
+}
+
+// ── Bulk (multi-select) actions ────────────────────────────────────────────────
+// The shell (_book_browser.html) owns the checkboxes + select-all and exposes the
+// chosen ids; this page supplies the kind-specific operations and the Apply flow.
+const BULK_KIND = '{{ kind }}';
+const BULK_OPS = {{ bulk_ops|tojson }};
+
+function _rowTitle(id) {
+  const row = document.getElementById('i' + id);
+  return row ? ((row.querySelector('.ttl') || {}).textContent || ('#' + id)).trim()
+             : ('#' + id);
+}
+
+// Visually retire a master row after a bulk op (done badge, dimmed, checkbox locked
+// so it can't be reselected). Deliberately does NOT touch #detail — unlike the
+// single-row _markRowGone, a bulk run mustn't blow away whatever pane is open.
+function _bulkRetireRow(id, title) {
+  const row = document.getElementById('i' + id);
+  if (!row) return;
+  row.classList.add('done'); row.style.opacity = .5;
+  const b = row.querySelector('.badge'); if (b) b.textContent = '✓';
+  const c = row.querySelector('.bb-check'); if (c) { c.checked = false; c.disabled = true; }
+  const t = row.querySelector('.ttl'); if (t && title) t.title = title;
+  // Stamp the row's hidden snapshot too (select() re-clones it on revisit) so the
+  // retired row shows a final summary instead of its pre-op pane with dead buttons.
+  // Snapshot-only on purpose: a bulk run must not blow away whatever pane is open.
+  const src = row.querySelector('.detail-src');
+  if (src) src.innerHTML = '<h2>✓ Done</h2><p>' + _esc(title || 'resolved by bulk action')
+    + '</p><p class="hint">This record no longer exists.</p>';
+}
+
+function renderBulkBar() {
+  const host = document.getElementById('bb-bulk-actions');
+  if (!host || !BULK_OPS.length) return;
+  const opts = BULK_OPS.map(o =>
+    `<option value="${o.key}">${_esc(o.label)}</option>`).join('');
+  host.innerHTML = `<select id="bulkop" aria-label="bulk operation">${opts}</select> `
+    + `<button type="button" id="bulkapply" onclick="applyBulk()" disabled>`
+    + `Apply to selected</button>`;
+}
+// Enable Apply only when something is ticked (the shell calls this on every change).
+window.bbOnSelectionChange = ids => {
+  const b = document.getElementById('bulkapply');
+  if (b) b.disabled = ids.length === 0;
+};
+
+// For target='survivor' ops (merge) the operator must say which selected record
+// survives. A small modal radio-list over the selection; resolves to an id or null.
+function chooseTarget(ids) {
+  return new Promise(resolve => {
+    const ov = document.createElement('div'); ov.className = 'bb-modal';
+    ov.innerHTML = '<div class="card"><b>Merge into which record?</b>'
+      + '<p class="hint">Every other selected record folds into this one.</p>'
+      + '<div class="tgt-list">' + ids.map((id, i) =>
+          `<label class="tgt"><input type="radio" name="bbtgt" value="${id}"`
+          + `${i === 0 ? ' checked' : ''}> <code>#${id}</code> `
+          + `${_esc(_rowTitle(id))}</label>`).join('')
+      + '</div><div class="cand-tools">'
+      + '<button type="button" id="bbtgtok">Merge</button> '
+      + '<button type="button" id="bbtgtcancel">Cancel</button></div></div>';
+    document.body.appendChild(ov);
+    const done = v => { ov.remove(); resolve(v); };
+    ov.addEventListener('click', e => { if (e.target === ov) done(null); });
+    ov.querySelector('#bbtgtcancel').onclick = () => done(null);
+    ov.querySelector('#bbtgtok').onclick = () => {
+      const r = ov.querySelector('input[name=bbtgt]:checked');
+      done(r ? Number(r.value) : null);
+    };
+  });
+}
+
+async function applyBulk() {
+  const ids = (window.bbSelectedIds ? window.bbSelectedIds() : []).map(Number);
+  if (!ids.length) return;
+  const opKey = document.getElementById('bulkop').value;
+  const op = BULK_OPS.find(o => o.key === opKey);
+  if (!op) return;
+  let target = null;
+  if (op.target === 'survivor') {
+    if (ids.length < 2) { alert('Pick at least two records to merge.'); return; }
+    target = await chooseTarget(ids);
+    if (!target) return;                       // cancelled
+  }
+  const verb = op.label.replace('…', '');
+  if (!confirm(`${verb} — ${ids.length} ${BULK_KIND}(s)?`)) return;
+  let resp, j;
+  try {
+    resp = await fetch(`/picker/${BULK_KIND}/bulk`, {
+      method: 'POST',
+      headers: {'X-Requested-With': 'fetch', 'Content-Type': 'application/json'},
+      body: JSON.stringify({op: opKey, ids, target})});
+    j = await resp.json();
+  } catch (e) {
+    alert('Bulk operation failed — the server returned no result. Nothing was saved.');
+    return;
+  }
+  // Success is the HTTP status; the body IS the result dict (ok/skipped/failed lists).
+  if (!resp.ok) { alert((j && j.error) || 'Bulk operation failed.'); return; }
+  // Reflect each successfully-handled row. delete/merge remove the record; the
+  // merge target survives (left selectable). create-new/mark-org just resolve it.
+  const removes = (opKey === 'delete' || opKey === 'merge');
+  for (const r of j.ok) {
+    _bulkRetireRow(r.id, removes
+      ? (opKey === 'merge' ? `merged into #${j.target}` : 'deleted')
+      : r.detail);
+  }
+  if (window.bbClearSelection) window.bbClearSelection();
+  let summary = `${j.ok.length} done`;
+  if (j.skipped && j.skipped.length) summary += `, ${j.skipped.length} skipped`;
+  if (j.failed && j.failed.length) {
+    summary += `, ${j.failed.length} failed:\n`
+      + j.failed.map(f => `  #${f.id}: ${f.error}`).join('\n');
+  }
+  alert(summary);
+}
+
+renderBulkBar();
+</script>
+{% endblock %}

@@ -1,0 +1,7 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block body %}
+<p><a href="/review-hub?tab=works">← review works</a></p>
+{% include '_work_card.html' %}
+{% include '_work_card_js.html' %}
+{% endblock %}

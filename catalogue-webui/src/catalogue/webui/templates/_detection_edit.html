@@ -1,0 +1,8 @@
+{# The editable Edition Basics card for the review pane, loaded via
+   [data-card-url]="/works/detect/<eid>/edit" into the book-browser host. It is now
+   just the shared _edition_basics.html in EDITABLE mode (same card Browse renders
+   read-only). Native/canonical titles, holdings and the title-page preview moved out:
+   native titles render per-work in Work Details, holdings/preview in _edition_extras.html.
+   Context comes from web.py:_edit_card. #}
+{% set editable = true %}
+{% include '_edition_basics.html' %}

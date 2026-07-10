@@ -1,0 +1,140 @@
+{# The edition record body — fields, contained works, sibling holdings, danger zone.
+   Shared by the full /edition/<id> page and the /edition/<id>/card fragment that the
+   book browser injects into the detail pane. Expects: e, contained, holdings, works,
+   people, formats (same context the edition_detail route builds). #}
+{% if formats %}
+<p class="fmts">Available as:
+  {% for f in formats %}<span class="pill">{{ f }}</span>{% endfor %}</p>
+{% endif %}
+<h3>Fields</h3>
+<form method="post" action="/edition/{{ e[0] }}/edit">
+  <p><label>Title     <input name="title"     value="{{ e[1] or '' }}" size="40"></label></p>
+  <p><label>Publisher <input name="publisher" value="{{ e[2] or '' }}"></label>
+     <label>Year      <input name="year"      value="{{ e[3] or '' }}" size="6"></label></p>
+  <p><label>ISBN      <input name="isbn"      value="{{ e[4] or '' }}"></label>
+     <label>Language  <input name="language"  value="{{ e[5] or '' }}" size="6"></label></p>
+  <p><label>Notes<br><textarea name="notes" cols="40" rows="3">{{ e[6] or '' }}</textarea></label></p>
+  {# Tradition: the edition's Buddhist lineage (an edition-level override for anthologies /
+     mixed volumes). Free-text box; the datalist offers the config-driven vocabulary
+     (vocab.json `_tradition`) as suggestions without constraining it. #}
+  <p><label>Tradition <input name="tradition" value="{{ e[7] or '' }}" list="tradition-opts-ed"
+              placeholder="e.g. Gelug"></label></p>
+  <datalist id="tradition-opts-ed">
+    {% for t in traditions %}<option value="{{ t }}">{% endfor %}
+  </datalist>
+  <button type="submit">Save</button>
+</form>
+
+<h3>Contained works</h3>
+<table>
+  <tr><th>work</th><th>translator</th><th>locator</th><th></th></tr>
+  {% for c in contained %}
+    {# Each row is editable: translator / locator. The HTML5 `form=` attribute
+       ties controls across cells to one update form, which the book browser
+       saves inline. `old_sequence` (hidden) identifies the row — sequence is
+       part of the PK and auto-assigned, not shown. #}
+    {% set fid = 'ew' ~ c[0] ~ '_' ~ c[1] %}
+    <tr>
+      <td>
+        <form id="{{ fid }}" method="post" action="/edition/{{ e[0] }}/work/update"></form>
+        <input form="{{ fid }}" type="hidden" name="work_id" value="{{ c[0] }}">
+        <input form="{{ fid }}" type="hidden" name="old_sequence" value="{{ c[1] }}">
+        <a href="/work/{{ c[0] }}">{{ c[5] or ('work #' ~ c[0]) }}</a>
+      </td>
+      <td>
+        {# person picker (replaces a whole-table <select>); writes translator_id on the row form #}
+        <span class="edc-person" data-empty="— set translator —">
+          <input form="{{ fid }}" type="hidden" name="translator_id" value="{{ c[2] or '' }}">
+          <button type="button" class="edc-pick-btn" onclick="edcPickPerson(this)">{{ c[3] or '— set translator —' }}</button>
+          <span class="edc-host"></span>
+        </span>
+      </td>
+      <td>
+        <select form="{{ fid }}" name="locator_type">
+          <option value="">—</option>
+          {% for lt in locator_types %}
+            <option value="{{ lt }}" {{ 'selected' if lt == c[6] else '' }}>{{ lt }}</option>
+          {% endfor %}
+        </select>
+        <input form="{{ fid }}" name="section_locator" size="10"
+               placeholder="e.g. 50 / 3" value="{{ c[4] or '' }}">
+        <br>
+        <input form="{{ fid }}" name="note" size="28"
+               placeholder="note, e.g. only chs. 1–3 of the root text"
+               value="{{ c[7] or '' }}">
+      </td>
+      <td>
+        <button form="{{ fid }}" type="submit">Save</button>
+        <form method="post" action="/edition/{{ e[0] }}/work/remove" style="display:inline">
+          <input type="hidden" name="work_id"  value="{{ c[0] }}">
+          <input type="hidden" name="sequence" value="{{ c[1] }}">
+          <button type="submit">remove</button>
+        </form>
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="4" class="stub">No contained works linked yet.</td></tr>
+  {% endfor %}
+</table>
+
+<h4 style="margin:.8rem 0 .3rem">Add a work to this book</h4>
+<form method="post" action="/edition/{{ e[0] }}/work/add">
+  <p>
+    <label>Work
+      {# work picker — search existing OR inline-create from the typed title #}
+      <span class="edc-work">
+        <input type="hidden" name="work_id">
+        <input type="hidden" name="new_work_title">
+        <button type="button" class="edc-pick-btn" onclick="edcPickWork(this)">— pick / create a work —</button>
+        <span class="edc-host"></span>
+      </span>
+    </label>
+    <label>Translator
+      <span class="edc-person" data-empty="— none —">
+        <input type="hidden" name="translator_id">
+        <button type="button" class="edc-pick-btn" onclick="edcPickPerson(this)">— none —</button>
+        <span class="edc-host"></span>
+      </span>
+    </label>
+    <label>Locator
+      <select name="locator_type">
+        <option value="">—</option>
+        {% for lt in locator_types %}<option value="{{ lt }}">{{ lt }}</option>{% endfor %}
+      </select>
+      <input name="section_locator" size="10" placeholder="e.g. 50 / 3">
+    </label>
+    <button type="submit">Add</button>
+  </p>
+</form>
+
+<h3>Holdings of this edition</h3>
+<ul>
+  {% for h in holdings %}
+    <li>
+      #{{ h[0] }} · {{ h[1] }} · {{ h[2] }} · {{ h[3] or h[4] or '' }}
+      <form method="post"
+            action="{{ url_for('holding_delete', hid=h[0]) }}"
+            style="display:inline"
+            onsubmit="return confirm('Delete holding #{{ h[0] }}? Its file moves to Trash (recoverable). Edition metadata stays.');">
+        <button type="submit">delete holding</button>
+      </form>
+    </li>
+  {% else %}
+    <li class="stub">No holdings.</li>
+  {% endfor %}
+</ul>
+
+{% with merge_kind = 'edition', merge_id = e[0],
+        merge_search = '/editions/search?exclude=' ~ e[0],
+        merge_idfield = 'edition_id', merge_labelfield = 'title',
+        merge_apply = '/edition/' ~ e[0] ~ '/merge',
+        merge_after = '/library?eid=' %}
+  {% include '_merge_widget.html' %}
+{% endwith %}
+
+<h3>Danger zone</h3>
+<form method="post"
+      action="{{ url_for('edition_delete', eid=e[0]) }}"
+      onsubmit="return confirm('Delete edition “{{ e[1] }}”? Its holdings and files move to Trash (recoverable via ↩ Undo). Works are preserved.');">
+  <button type="submit">delete this edition</button>
+</form>

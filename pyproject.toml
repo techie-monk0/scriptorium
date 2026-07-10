@@ -1,0 +1,85 @@
+# Virtual uv workspace root. This root is NOT itself a package — it just ties the
+# workspace together. The library packages live under catalogue-packages/; the apps
+# are the top-level catalogue-* dirs.
+
+[tool.uv.workspace]
+members = ["catalogue-packages/*", "catalogue-webui", "catalogue-cli"]
+# catalogue-pwa is a JS package (own package.json) and is intentionally excluded.
+
+[tool.uv.sources]
+# Inter-package deps resolve to the local workspace, not an index.
+contracts  = { workspace = true }
+db-store   = { workspace = true }
+access-api = { workspace = true }
+services   = { workspace = true }
+populate   = { workspace = true }
+test-kit   = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "import-linter",
+    "pytest-playwright>=0.8.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.importlinter]
+root_package = "catalogue"
+
+[[tool.importlinter.contracts]]
+name = "Layered architecture"
+type = "layers"
+# Top imports bottom; nothing imports upward. The webui/populate apps sit on top and are
+# independent of each other; `cli` is the admin/operations layer (backup, dedup, purge) that
+# the webui app reuses, so it sits below them. (A stricter split — moving those operations
+# down into `services` so cli is a pure entry point — is a possible follow-up.)
+layers = [
+    "catalogue.webui | catalogue.populate",
+    "catalogue.cli",
+    "catalogue.services",
+    "catalogue.access_api",
+    "catalogue.db_store",
+]
+
+# The first `forbidden` ratchet. `contracts` is the foundation every package depends on (types,
+# vocab, errors, authz, DTOs) — by design it "depends on nothing, no behavior, no I/O". It sits
+# OUTSIDE the layer stack above, so the layered contract does not constrain it; nothing would catch
+# `contracts` accidentally reaching down into db_store/access_api (which would create an import cycle
+# the moment those import contracts back). This pins the invariant directly. Already satisfied
+# (contracts imports only stdlib + its own submodules) — a zero-exemption ratchet from day one.
+[[tool.importlinter.contracts]]
+name = "contracts depends on nothing"
+type = "forbidden"
+source_modules = ["catalogue.contracts"]
+forbidden_modules = [
+    "catalogue.db_store",
+    "catalogue.access_api",
+    "catalogue.services",
+    "catalogue.cli",
+    "catalogue.webui",
+    "catalogue.populate",
+    "catalogue.test_kit",
+]
+
+# Phase-4 ratchet (the raw-SQL → access-API migration, concern by concern). As each consumer is
+# routed through the access-API it stops reaching into db_store directly; a `forbidden` rule scoped to
+# the converted modules locks that in at zero exemptions, so it can't regress, and the rule grows as
+# more concerns convert. Converted so far: the maintenance/health CLIs (verify + the cover sweep) and
+# the exclusion purge (it deletes via acc.editions/acc.holdings, gaining the non-FK closure the raw
+# DELETE skipped) — they bind an Access and go through the access-API, never connect()/raw SQL.
+[[tool.importlinter.contracts]]
+name = "routed CLIs go through access-api, not db_store"
+type = "forbidden"
+source_modules = [
+    "catalogue.cli.verify",
+    "catalogue.cli.sweep_orphan_covers",
+    "catalogue.cli.sweep_dangling_refs",
+    "catalogue.cli.exclude_purge",
+]
+forbidden_modules = ["catalogue.db_store"]
+# Only DIRECT imports are forbidden — these modules reach db_store transitively THROUGH access_api,
+# which is exactly the routing we want; what's banned is opening the DB / writing SQL themselves.
+allow_indirect_imports = "true"

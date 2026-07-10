@@ -1,0 +1,36 @@
+{% extends "_base.html" %}
+{% block title %}Review #{{ row[0] }}{% endblock %}
+{% block body %}
+{% from '_edition_link.html' import edition_link %}
+<p><a href="/review-queue">← review queue</a></p>
+<h1>{{ row[1] }} <small>#{{ row[0] }}</small></h1>
+<p>Status: <strong>{{ row[3] }}</strong>
+   · created {{ row[4] }}{% if row[5] %} · resolved {{ row[5] }}{% endif %}</p>
+
+<h3>Payload</h3>
+<pre>{{ payload | tojson(indent=2) }}</pre>
+
+{% if related_holding %}
+  <h3>Related holding</h3>
+  <ul>
+    <li>id {{ related_holding[0] }} —
+      {{ edition_link(related_holding[1]) }}</li>
+    <li>file: {{ related_holding[2] }}</li>
+    <li>text_status: <strong>{{ related_holding[3] }}</strong> ·
+        score: {{ related_holding[4] }}</li>
+  </ul>
+{% endif %}
+
+{% if row[3] == 'pending' %}
+  <form method="post" action="/review-queue/{{ row[0] }}/resolve" style="display:inline">
+    <button name="action" value="resolve" type="submit">Mark resolved</button>
+  </form>
+  {% if row[1] == 'low_quality_ocr' and related_holding %}
+    <form method="post" action="/review-queue/{{ row[0] }}/resolve" style="display:inline">
+      <button name="action" value="ocr_override" type="submit">
+        Override → mark <code>ocr_good</code>
+      </button>
+    </form>
+  {% endif %}
+{% endif %}
+{% endblock %}

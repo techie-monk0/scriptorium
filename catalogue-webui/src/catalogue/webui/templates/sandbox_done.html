@@ -1,0 +1,19 @@
+{% extends "_base.html" %}
+{% block title %}Sandbox{% endblock %}
+{% block body %}
+{% if not ok %}
+  <h1>Promote refused</h1>
+  <p style="color:#900">{{ message }}</p>
+  <p>The sandbox is unchanged. Re-fork to fold in the live changes, or promote
+     again with force if you intend to overwrite live.</p>
+{% elif discarded %}
+  <h1>Sandbox discarded</h1>
+  <p>The copy was deleted; live (<code>{{ live }}</code>) was never touched.</p>
+{% else %}
+  <h1>Promoted to live</h1>
+  <p>The sandbox is now <code>{{ live }}</code>. Live was backed up to
+     <code>{{ backup }}</code>.</p>
+{% endif %}
+<p><b>Restart the app against <code>{{ live }}</code></b> — this process is still
+   pointed at the (now consumed) sandbox path.</p>
+{% endblock %}

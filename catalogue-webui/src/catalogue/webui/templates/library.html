@@ -1,0 +1,102 @@
+{% extends "_base.html" %}
+{# One module, two modes: rp_editable=true → the editable Review surface (/review);
+   false → the read-only Search surface (/search, /library alias). #}
+{% set rp_editable = rp_editable | default(false) %}
+{% block title %}{{ 'Review' if rp_editable else 'Search' }}{% endblock %}
+{% block body %}
+<div class="bb-wide">
+<div style="display:flex; align-items:baseline; justify-content:space-between; gap:1rem; flex-wrap:wrap">
+  <h1 style="margin:.2rem 0">{{ 'Review' if rp_editable else 'Search' }}</h1>
+  <span style="flex:1"></span>
+  <a href="/by-author" style="text-decoration:none">Full holdings list →</a>
+  {# "+ Add book" is an edit action — shown on Review only, not on the Search page. #}
+  {% if rp_editable %}
+  <a href="/library/add" style="padding:.4rem .8rem; border:1px solid var(--nav-active-bg); border-radius:6px;
+     background:var(--nav-active-bg); color:var(--nav-active-fg); text-decoration:none">+ Add book</a>
+  {% endif %}
+</div>
+
+{# Outstanding-review backlog as quick-jump buttons (Books/Works/People/Subjects):
+   click a button → that review queue; type in the search box → search mode. #}
+{% if rp_editable %}<div style="margin-bottom:1rem">{% include '_review_counts.html' %}</div>{% endif %}
+
+{# Search pane (the query bar) — a reusable component, identical in both modes. #}
+{% include '_search_pane.html' %}
+
+<p class="stub" style="margin:.2rem 0 .6rem">
+  {% if sel_type %}Selected one {{ sel_type }} — its works &amp; editions are listed below.{% elif searched %}{{ panes[0].rows|length }} {{ panes[0].label|lower }} match.{% else %}{{ panes[0].rows|length }} book(s) — newest first.{% endif %}
+  {% if rp_editable %}Select a row (↑/↓ or click) to edit it in place; tick rows for a bulk action; press <kbd>›</kbd> to drill into a row's works &amp; editions.{% else %}Read-only: select a row (↑/↓ or click) to view it; press <kbd>›</kbd> on a row to drill into its works &amp; editions. To edit or bulk-act, open the <a href="{{ url_for('review') }}">Review</a> page.{% endif %}
+</p>
+
+{% include '_review_pane.html' %}
+
+{% if rp_editable %}
+{# Editable mode only: the edition bulk-action host (subject/series/author/mark-reviewed/
+   delete) populates #bb-bulk-actions, plus the autocomplete datalists it needs. #}
+{% include '_review_bulk.html' %}
+{% endif %}
+</div>
+
+{% include '_wie_styles.html' %}   {# shared "Works In This Edition" + Work Basics/Details styles #}
+{% include '_typeahead.html' %}
+{% if rp_editable %}
+  {# Editable surface (/review) injects the editable person / edition / work cards inline
+     (/person|edition|work/<id>/card). Each card carries pickers + the merge/dedup widget
+     that are driven by PAGE-level JS; without these includes the typeaheads never mount
+     (the "no picker / no merge box" bug). All three guard their globals (window.__mergeJs
+     etc.) so co-including is safe. #}
+  {% include '_person_card_js.html' %}
+  {% include '_edition_card_js.html' %}
+  {% include '_work_card_js.html' %}
+{% endif %}
+
+{# Star toggle for the listing rows + the detail pane. Reuses the shared LibraryCore.starredRequest
+   mapper so this page issues the exact same starred requests as Home/PWA/iOS — no drift. #}
+<style>
+  .row-star, .detail-star {
+    border: none; background: none; cursor: pointer; padding: 0 .25rem; line-height: 1;
+    font-size: 1rem; color: var(--subtle-fg); opacity: .6; transition: color .12s, opacity .12s;
+  }
+  .row .row-star { margin-left: auto; }
+  .row-star:hover, .detail-star:hover { opacity: 1; }
+  .row-star[aria-pressed="true"], .detail-star[aria-pressed="true"] { color: #f5b301; opacity: 1; }
+  .detail-star { font-size: 1.15rem; vertical-align: middle; margin-left: .4rem; }
+</style>
+<script type="application/json" id="starred-data">{{ starred_ids | tojson }}</script>
+<script src="/static/js/library-core.js"></script>
+<script>
+  (function () {
+    var STARRED = {};
+    JSON.parse(document.getElementById('starred-data').textContent || '[]')
+      .forEach(function (id) { STARRED[id] = true; });
+    function refresh(root) {
+      (root || document).querySelectorAll('.row-star[data-eid], .detail-star[data-eid]').forEach(function (b) {
+        b.setAttribute('aria-pressed', STARRED[+b.getAttribute('data-eid')] ? 'true' : 'false');
+      });
+    }
+    function toggle(eid) {
+      var on = !STARRED[eid];
+      if (on) STARRED[eid] = true; else delete STARRED[eid];
+      refresh();
+      var req = LibraryCore.starredRequest(on ? 'star' : 'unstar', { eid: eid });
+      fetch(req.path, { method: req.method, headers: { 'Content-Type': 'application/json' },
+                        body: req.body ? JSON.stringify(req.body) : undefined })
+        .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
+        .then(function (d) { STARRED = {}; (d.editions || []).forEach(function (id) { STARRED[id] = true; }); refresh(); })
+        .catch(function () { if (on) delete STARRED[eid]; else STARRED[eid] = true; refresh(); });
+    }
+    document.addEventListener('click', function (ev) {
+      var b = ev.target.closest && ev.target.closest('.row-star[data-eid], .detail-star[data-eid]');
+      if (!b) return;
+      ev.preventDefault(); ev.stopPropagation();
+      toggle(+b.getAttribute('data-eid'));
+    });
+    // The detail pane is re-cloned from a row's <template> on selection — refresh its star to the
+    // live state each time it changes (the cloned markup carries the server's initial aria-pressed).
+    var det = document.querySelector('.detail');
+    if (det && window.MutationObserver) {
+      new MutationObserver(function () { refresh(det); }).observe(det, { childList: true, subtree: true });
+    }
+  })();
+</script>
+{% endblock %}

@@ -1,0 +1,12 @@
+{# Shared: canonical#, authority English title, machine glosses, 84000/BDRC links.
+   Imported by both the works-review detail header and the unified edit card. #}
+{% macro canonical_block(c) %}
+  {% if c and c.number %}
+    <b>{{ c.system }}:{{ c.number }}</b>
+    {% if c.title_en %}<br><span class="hint">84000/BDRC English — compare to the book:</span> <b>{{ c.title_en }}</b>{% endif %}
+    {% if c.glosses %}<br><span class="hint" style="color:var(--muted)">rough English gloss (machine, approximate):</span>
+      {% for model, g in c.glosses.items() %}<i>{{ g }}</i> <span class="hint">({{ model }})</span>{% if not loop.last %} · {% endif %}{% endfor %}{% endif %}
+    <br>{% if c.url_84000 %}<a href="{{ c.url_84000 }}" target="_blank" rel="noopener">📖 read on 84000 (English) ↗</a>{% endif %}
+    {% if c.url_bdrc %}{% if c.url_84000 %} · {% endif %}<a href="{{ c.url_bdrc }}" target="_blank" rel="noopener">BDRC page ↗</a>{% endif %}
+  {% else %}<span class="hint">no canonical match</span>{% endif %}
+{% endmacro %}

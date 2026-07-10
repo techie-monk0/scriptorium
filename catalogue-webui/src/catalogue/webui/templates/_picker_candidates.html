@@ -1,0 +1,37 @@
+{# Lazy candidate list for one entry, auto-loaded into the detail pane. Each
+   candidate is a .cand-opt button (number-key selectable; ↵/b binds the
+   highlighted one). Two search inputs: a fuzzy name re-search on the left and a
+   dedicated authority-id lookup (bdr:/wikidata:/viaf:…) pushed to the far right. #}
+<div class="cand-tools">
+  <input id="q-{{ eid }}" data-cand-search size="24"
+         value="{{ '' if query_is_id|default(false) else (query or '') }}"
+         placeholder="re-search a better term…"
+         onkeydown="if(event.key==='Enter'){searchCands('{{ kind }}',{{ eid }});return false}">
+  <button type="button" onclick="searchCands('{{ kind }}', {{ eid }})">search</button>
+  <input data-id-search class="cand-id-search" size="22"
+         value="{{ query if query_is_id|default(false) else '' }}"
+         placeholder="paste bdr:/wikidata:/viaf: id…"
+         onkeydown="if(event.key==='Enter'){lookupId('{{ kind }}',{{ eid }});return false}">
+  <button type="button" onclick="lookupId('{{ kind }}', {{ eid }})">look up</button>
+</div>
+{% if not candidates %}
+  <p class="hint">no candidates{% if query %} for “{{ query }}”{% else %} from any authority{% endif %}
+    — use <b>Create new</b> (top right) to keep this as a new local person.</p>
+{% else %}
+<div class="cand-list">
+  {% for c in candidates %}
+    <button type="button" class="cand-opt"
+            data-cand='{{ [c.id, c.source, c.label]|tojson }}'
+            onclick="bindCand('{{ kind }}', {{ eid }}, this)">
+      <span class="num">{{ loop.index }}</span>
+      <code>{{ c.id }}</code>
+      <small>[{{ c.source }}{% if c.score %} · {{ c.score|round|int }}{% endif %}]</small>
+      {{ c.label }}{% if c.detail %} — <em>{{ c.detail }}</em>{% endif %}
+      {% if c.url %}<a href="{{ c.url }}" target="_blank" rel="noopener"
+                       onclick="event.stopPropagation()">↗</a>{% endif %}
+    </button>
+  {% endfor %}
+</div>
+<p class="hint">Press <kbd>1</kbd>–<kbd>9</kbd> then <kbd>↵</kbd> to bind, or click.
+  No match? Use <b>Create new</b> (top right).</p>
+{% endif %}

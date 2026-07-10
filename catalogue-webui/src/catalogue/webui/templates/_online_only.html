@@ -1,0 +1,17 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>File not downloaded</title>
+<body style="font-family:system-ui,sans-serif; max-width:40rem; margin:3rem auto; padding:0 1rem; line-height:1.5">
+  <h2>📥 This file is online-only in kDrive</h2>
+  <p>The book's file lives in the cloud and hasn't been downloaded to this Mac, so it
+     can't be shown yet (its local copy is an empty placeholder).</p>
+  {% if triggered %}
+    <p><b>I've asked kDrive to download it.</b> Give it a few seconds (longer for big PDFs),
+       then reload this page.</p>
+  {% else %}
+    <p>To fix it: in Finder, right-click the file (or the whole
+       <code>your library</code> folder) → <b>kDrive → Make available offline</b>,
+       wait for the download, then reload.</p>
+  {% endif %}
+  <p><button onclick="location.reload()" style="padding:.4rem .8rem">↻ Reload</button></p>
+</body>

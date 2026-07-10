@@ -1,0 +1,45 @@
+{# Shared styles for the three-layer edition/work display — "Works In This Edition"
+   subsections (_works_in_edition.html), read-only Work Basics (_work_basics.html) and
+   collapsed Work Details (_work_details.html). Include ONCE per page (works_detect.html
+   for Review, library.html for Browse) so the rules aren't duplicated per master-detail
+   row. Scoped to .detail (both panes render their detail inside it). Tints are
+   translucent over the page background — never a forced text colour — so they read in
+   light and dark; nth-of-type is scoped to .wie-works so nothing below is affected. #}
+<style>
+  .detail .wie-work { margin: 0 0 1.1rem; padding: .6rem .8rem; border: 1px solid;
+    border-left-width: 4px; border-radius: 8px; }
+  .detail .wie-work:last-child { margin-bottom: .4rem; }
+  .detail .wie-work-title { font-size: 1.25rem; font-weight: 700; margin: 0 0 .3rem;
+    display: flex; align-items: baseline; gap: .5rem; flex-wrap: wrap; }
+  .detail .wie-work-title code { font-size: .68em; font-weight: 400; opacity: .65; }
+  .detail .wie-edit { font-size: .82rem; font-weight: 400; }
+  .detail .wie-work-title form { display: inline; }
+  .detail .wie-work-title button { font-size: .72rem; font-weight: 400; cursor: pointer; }
+  .detail .wie-works > .wie-work:nth-of-type(odd)  { background: rgba(46,160,90,.10);  border-color: rgba(46,160,90,.5); }
+  .detail .wie-works > .wie-work:nth-of-type(even) { background: rgba(54,124,222,.10); border-color: rgba(54,124,222,.5); }
+  @media (prefers-color-scheme: dark) {
+    .detail .wie-works > .wie-work:nth-of-type(odd)  { background: rgba(72,200,120,.18); }
+    .detail .wie-works > .wie-work:nth-of-type(even) { background: rgba(90,150,240,.20); }
+  }
+  /* Work Basics / Details rows: a narrow label gutter, wrapping values. */
+  .detail .wb p, .detail .wd-body p { margin: .18rem 0; }
+  .detail .wb-lbl { display: inline-block; min-width: 6.5rem; color: var(--subtle-fg); font-size: .9em; }
+  .detail .wb-rel { font-weight: 600; }
+  .detail .wb-chip { display: inline-block; background: rgba(0,0,0,.06); border-radius: 10px;
+    padding: .02rem .5rem; margin: .05rem .2rem .05rem 0; font-size: .9em; }
+  @media (prefers-color-scheme: dark) { .detail .wb-chip { background: rgba(255,255,255,.12); } }
+  .detail .wd { margin: .4rem 0 0; }
+  .detail .wd > summary { cursor: pointer; color: var(--fg); font-size: .92rem; }
+  @media (prefers-color-scheme: dark) { .detail .wd > summary { color: #9bf; } }
+  .detail .wd-body { margin: .3rem 0 .2rem .4rem; }
+  /* "+ add a new work" form: each label on the SAME line as its input (the macro
+     emits label-text + <br> + input — hide the break, lay it inline). */
+  .detail .new-work-form .fld { display: inline-flex; align-items: baseline;
+    gap: .35rem; margin: .3rem .9rem .3rem 0; }
+  .detail .new-work-form .fld br { display: none; }
+  @media (max-width: 640px) {
+    .detail .wie-work { padding: .5rem .55rem; }
+    .detail .wie-work-title { font-size: 1.1rem; }
+    .detail .wb-lbl { min-width: 0; display: block; margin-bottom: -.1rem; }
+  }
+</style>

@@ -1,0 +1,18 @@
+{% extends "_base.html" %}
+{% block title %}Content search{% endblock %}
+{% block body %}
+{# Converged onto the shared frontend layer (LibraryUI.content): the SAME full-text
+   results the PWA renders, driven by the web platform adapter (live /api/v1/content). #}
+<h1>Content search</h1>
+<p class="stub" style="margin:.2rem 0 .6rem">Searches the full text <em>inside</em> the books
+  (page-level matches). To find a title, person, work, or subject instead, use
+  <a href="/search">Search</a>.</p>
+<div id="content-host"></div>
+<script>
+  LibraryUI.content(document.getElementById('content-host'), LibraryWeb.adapter(), {
+    initialQuery: {{ q | tojson }},
+    placeholder: 'Search inside books…',
+    autofocus: true,
+  });
+</script>
+{% endblock %}

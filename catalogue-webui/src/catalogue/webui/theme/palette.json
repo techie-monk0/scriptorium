@@ -1,0 +1,55 @@
+{
+  "_about": "THE single source of truth for the display palette. One named palette per theme; each lists every colour token. tokens.css and the PWA manifest are GENERATED from this file by `python -m catalogue.webui.theme.gen` — never hand-edit those; change a colour here and regenerate. A drift/losslessness test (tests/test_palette_master.py) asserts the committed outputs equal a fresh regen. To add a theme (e.g. 'sepia'), add a palette block here, regenerate, and select it at runtime with <html data-theme=\"sepia\">. NOTE: covers.py keeps its own per-title cover-art palette deliberately separate; reader-chrome tokens (--bar/--reader-bg) stay reader-local and are not here.",
+  "default": "light",
+  "manifest_palette": "light",
+  "manifest_map": { "theme_color": "brand", "background_color": "bg" },
+  "token_order": [
+    "bg", "fg", "muted", "border", "surface", "surface-2", "link", "brand",
+    "nav-hover", "nav-active-bg", "nav-active-fg", "card-border", "subtle-fg",
+    "btn-bg", "btn-fg", "btn-border", "btn-hover-bg", "accent", "ok", "warn"
+  ],
+  "_reading_about": "In-book READER themes (Apple Books style: White/Sepia/Gray/Night), kept separate from the app `palettes` above (the reader chrome is reader-local by design). Generated into static/reader/reader-themes.css and CatalogueDesign/Generated/ReadingPalette.swift; selected at runtime with <body data-reader-theme=\"…\"> (web/PWA) or ReadingTheme (iOS). `scheme` drives color-scheme + PDF night-invert.",
+  "reading_token_order": ["reader-bg", "reader-fg", "reader-chrome-bg", "reader-chrome-fg", "reader-accent"],
+  "reading_themes": {
+    "white": {
+      "scheme": "light",
+      "colors": { "reader-bg": "#ffffff", "reader-fg": "#11151b", "reader-chrome-bg": "#f2f3f5", "reader-chrome-fg": "#11151b", "reader-accent": "#1856c5" }
+    },
+    "sepia": {
+      "scheme": "light",
+      "colors": { "reader-bg": "#f4ecd8", "reader-fg": "#5b4636", "reader-chrome-bg": "#e8ddc4", "reader-chrome-fg": "#5b4636", "reader-accent": "#9a6b3f" }
+    },
+    "gray": {
+      "scheme": "light",
+      "colors": { "reader-bg": "#d9d9de", "reader-fg": "#1b1b1f", "reader-chrome-bg": "#c7c7cd", "reader-chrome-fg": "#1b1b1f", "reader-accent": "#3a4452" }
+    },
+    "night": {
+      "scheme": "dark",
+      "colors": { "reader-bg": "#0c0d10", "reader-fg": "#c9ccd1", "reader-chrome-bg": "#1b1b1f", "reader-chrome-fg": "#c9ccd1", "reader-accent": "#7db4ff" }
+    }
+  },
+  "palettes": {
+    "light": {
+      "scheme": "light",
+      "colors": {
+        "bg": "#fbfcfd", "fg": "#11151b", "muted": "#5b6573", "border": "#cdd4dd",
+        "surface": "#ffffff", "surface-2": "#eef1f6", "link": "#1856c5", "brand": "#16202c",
+        "nav-hover": "#e4ecfb", "nav-active-bg": "#1856c5", "nav-active-fg": "#ffffff",
+        "card-border": "#cdd4dd", "subtle-fg": "#38424f",
+        "btn-bg": "#eef1f6", "btn-fg": "#11151b", "btn-border": "#b9c1cc", "btn-hover-bg": "#e1e6ee",
+        "accent": "#1856c5", "ok": "#15803d", "warn": "#b45309"
+      }
+    },
+    "dark": {
+      "scheme": "dark",
+      "colors": {
+        "bg": "#0f1318", "fg": "#eef1f5", "muted": "#aab3c0", "border": "#2c343f",
+        "surface": "#181d24", "surface-2": "#212834", "link": "#7db4ff", "brand": "#dbe4f0",
+        "nav-hover": "#232c38", "nav-active-bg": "#2f6bd4", "nav-active-fg": "#ffffff",
+        "card-border": "#2c343f", "subtle-fg": "#b6c0cd",
+        "btn-bg": "#252d39", "btn-fg": "#eef1f5", "btn-border": "#3a4452", "btn-hover-bg": "#303a48",
+        "accent": "#7db4ff", "ok": "#4ade80", "warn": "#fbbf24"
+      }
+    }
+  }
+}

@@ -1,0 +1,364 @@
+{
+  "_comment": "Open vocabularies seeded into lookup tables at init (INSERT OR IGNORE, never destructive). Add a code/label here and restart to surface a new option in the web UI — no schema change, no code change (§12.4). Each top-level key is a lookup-table name; its value is a list of {code, label}. Override the file location with the CATALOGUE_VOCAB env var.",
+  "_comment_exclusions": "Files kept OUT of the catalogue (skipped at sweep/ingest AND removable from already-ingested data via `python -m catalogue.cli.exclude_purge`). Each rule = {field, op, value}: field = 'path' | 'title' | 'any'; op = 'starts_with' | 'ends_with' | 'contains'; matched case-insensitively. A book is excluded if ANY rule matches. See catalogue/domain/skip.py.",
+  "_exclusions": [
+    {
+      "field": "any",
+      "op": "contains",
+      "value": "ANNOTATED"
+    }
+  ],
+  "_comment_features": "Feature flags gating experimental surfaces (nav link + web route + CLI all check the same switch). Absent = OFF. `multi_work_detection` = the multi-work segmentation review (low-quality; off by default). See catalogue/domain/features.py.",
+  "_features": {
+    "multi_work_detection": true
+  },
+  "_comment_library_root": "INSTALL-SPECIFIC — set to YOUR on-disk root of the library tree (the books folder); left empty in the shipped file. `<root>/A/B` yields subject `A/B`. Drives subject derivation (subject_backfill --read-subject-from-dir-structure) AND relative file-path display in review panes (rel_path), matched as a substring. Configure via the web Settings UI (persists here) or edit directly. See catalogue/domain/features.py + subjects.subject_root.",
+  "_library_root": "",
+  "_comment_local_llm": "The local (Ollama) model used for glosses/segmentation. Change `model` to swap models (e.g. 'gemma3:12b', 'qwen3:14b') and `base_url` to point at a different OpenAI-compatible server — no code change. See catalogue/domain/llm.py (local_llm_config).",
+  "_local_llm": {
+    "model": "gemma3:12b",
+    "base_url": "http://localhost:11434/v1"
+  },
+  "_comment_external_llm": "The cloud model used alongside the local one (e.g. for Tibetan/Sanskrit glosses). Set `provider` to 'claude' or 'gemini'. Keys come from env (claude: ANTHROPIC_API_KEY or api_key.txt; gemini: GOOGLE_API_KEY / GEMINI_API_KEY, e.g. exported in .zshrc). Override a provider's model/base_url under `providers`. See catalogue/domain/llm.py (external_llm_config).",
+  "_external_llm": {
+    "provider": "claude",
+    "providers": {
+      "claude": {
+        "model": "claude-sonnet-4-6",
+        "base_url": "https://api.anthropic.com/v1"
+      },
+      "gemini": {
+        "model": "gemini-2.0-flash",
+        "base_url": "https://generativelanguage.googleapis.com/v1beta/openai"
+      }
+    }
+  },
+  "_comment_tradition": "Controlled vocabulary of Buddhist traditions (the tradition-classifier target + the editable tradition field on person/work/edition). Seeded into the `tradition` table by name (INSERT OR IGNORE, never destructive) at init — add a name here and restart to surface it everywhere, no schema/code change. Medium granularity: the four Tibetan schools + sub-lineages present in the subject tree, plus two scope labels ('Common' = pan-Buddhist/Indian-source, 'Rimé' = non-sectarian). The first entry is the library default used when an author has no lineage.",
+  "_tradition": [
+    "Gelug",
+    "Kagyu",
+    "Sakya",
+    "Nyingma",
+    "Shangpa Kagyu",
+    "Kadam",
+    "Jonang",
+    "Common",
+    "Rimé"
+  ],
+  "work_type": [
+    {
+      "code": "root",
+      "label": "Root text"
+    },
+    {
+      "code": "commentary",
+      "label": "Commentary"
+    }
+  ],
+  "relation_type": [
+    {
+      "code": "commentary_on",
+      "label": "Commentary on"
+    }
+  ],
+  "holding_type": [
+    {
+      "code": "pdf",
+      "label": "PDF (electronic)"
+    },
+    {
+      "code": "epub",
+      "label": "EPUB (electronic)"
+    },
+    {
+      "code": "physical",
+      "label": "Physical copy"
+    }
+  ],
+  "locator_type": [
+    {
+      "code": "page",
+      "label": "Page (physical / PDF)"
+    },
+    {
+      "code": "chapter",
+      "label": "Chapter (EPUB / reflowable)"
+    },
+    {
+      "code": "section",
+      "label": "Section (EPUB / reflowable)"
+    }
+  ],
+  "_comment_honorifics": "Underscore-prefixed keys are CONFIG (not DB lookup tables; db.load_vocab skips them). _honorific / _office drive author-name MATCHING only (never storage) — see catalogue/honorifics.py. Edit here to extend; restart (or honorifics.reload()) to pick up changes. When present these REPLACE the built-in defaults, so keep the full list.",
+  "_honorific": [
+    "geshe",
+    "geshema",
+    "lama",
+    "rinpoche",
+    "kyabje",
+    "tulku",
+    "khenpo",
+    "khenchen",
+    "khentrul",
+    "khen",
+    "lopon",
+    "ponlop",
+    "gen",
+    "ani",
+    "je",
+    "jetsun",
+    "jetsunma",
+    "choje",
+    "terton",
+    "togden",
+    "gomchen",
+    "drupon",
+    "drubpon",
+    "gyaltsab",
+    "naljorpa",
+    "lharampa",
+    "acharya",
+    "acarya",
+    "pandita",
+    "pandit",
+    "mahapandita",
+    "bhikshu",
+    "bhikkhu",
+    "bhikshuni",
+    "bhikkhuni",
+    "shri",
+    "sri",
+    "arya",
+    "sthavira",
+    "thera",
+    "mahathera",
+    "mahasiddha",
+    "siddha",
+    "guru",
+    "swami",
+    "upasaka",
+    "sayadaw",
+    "ajahn",
+    "ajaan",
+    "roshi",
+    "sensei",
+    "venerable",
+    "ven",
+    "rev",
+    "reverend",
+    "dr",
+    "prof",
+    "professor",
+    "mr",
+    "mrs",
+    "ms",
+    "sir"
+  ],
+  "_office": [
+    "dalai",
+    "panchen",
+    "karmapa",
+    "trizin",
+    "tripa",
+    "shamarpa",
+    "sharmapa",
+    "gyalwang",
+    "gyalwa",
+    "ganden"
+  ],
+  "_comment_organization": "Name substrings that mark a contributor as an ORGANIZATION (a translation group/committee/press), not a person — so it is kept off the person authority-match worklist. Fold-keyed substring match (case/diacritic-insensitive). See catalogue/names.is_organization_name.",
+  "_organization": [
+    "translation group",
+    "translation committee",
+    "translation society",
+    "translation team",
+    "committee",
+    "publications",
+    "publishing",
+    "press",
+    "foundation",
+    "institute",
+    "society",
+    "sangha",
+    "monastery",
+    "association",
+    "editions"
+  ],
+  "_comment_translit": "Equivalence groups of Tibetan/Sanskrit transliteration variants that fold_key cannot collapse. These are phonetic English spelling variants, not diacritic-only variants and not Wylie-only forms. Used ONLY to widen author-name MATCHING queries under --person-resolution-extensions; never used for storage. Conservative list; extend only when the corpus shows real English usage.",
+  "_translit_variant": [
+    [
+      "lozang",
+      "lobzang",
+      "lobsang",
+      "losang"
+    ],
+    [
+      "tenzin",
+      "tendzin",
+      "tenzing"
+    ],
+    [
+      "gyatso",
+      "gyamtso",
+      "gyatsho"
+    ],
+    [
+      "thubten",
+      "tubten",
+      "thupten"
+    ],
+    [
+      "ngawang",
+      "nawang"
+    ],
+    [
+      "sonam"
+    ],
+    [
+      "chokyi",
+      "choekyi",
+      "chokey"
+    ],
+    [
+      "lodro",
+      "lodru",
+      "lodroe"
+    ],
+    [
+      "sherab",
+      "sherap"
+    ],
+    [
+      "jamyang",
+      "jamyong"
+    ],
+    [
+      "palden",
+      "paldan",
+      "pelden",
+      "penden"
+    ],
+    [
+      "tseten",
+      "tsheten"
+    ],
+    [
+      "sangye",
+      "sanggye"
+    ],
+    [
+      "jigme",
+      "jikme"
+    ],
+    [
+      "dorje",
+      "dorji"
+    ],
+    [
+      "tashi",
+      "trashi"
+    ],
+    [
+      "phuntsok",
+      "puntsok",
+      "phuntsog",
+      "puntsog"
+    ],
+    [
+      "gyaltsen",
+      "gyeltsen",
+      "gyeltshen"
+    ],
+    [
+      "trinle",
+      "trinley",
+      "thinley",
+      "thinle",
+      "thrinle",
+      "trinlay"
+    ],
+    [
+      "kelzang",
+      "kelsang",
+      "kalzang"
+    ],
+    [
+      "choephel",
+      "chophel",
+      "chopel"
+    ],
+    [
+      "dondrup",
+      "dondrub",
+      "dondup",
+      "dhondup"
+    ],
+    [
+      "tsultrim",
+      "tshultrim",
+      "tsulthrim",
+      "tshulthrim"
+    ],
+    [
+      "namgyal",
+      "namgyel"
+    ],
+    [
+      "yeshe",
+      "yeshey",
+      "yeshi",
+      "yeshay"
+    ],
+    [
+      "wangchuk",
+      "wangchuck",
+      "wangchug"
+    ],
+    [
+      "pema",
+      "padma"
+    ],
+    [
+      "lhundrup",
+      "lhundrub",
+      "lhundup",
+      "lhundub"
+    ],
+    [
+      "rigdzin",
+      "rigzin",
+      "rinzin"
+    ],
+    [
+      "gyurme",
+      "gyurmed"
+    ],
+    [
+      "khedrup",
+      "khedrub",
+      "kedrup",
+      "kedrub"
+    ],
+    [
+      "gendun",
+      "gedun",
+      "gendün"
+    ],
+    [
+      "choden",
+      "choedon",
+      "chodron",
+      "choedron"
+    ],
+    [
+      "tsogyal",
+      "tsogyel",
+      "tshogyal",
+      "tshogyel"
+    ]
+  ],
+  "_comment_library_roots": "INSTALL-SPECIFIC — YOUR scan roots (empty in the shipped file). Each: {id, path, derive_subject}. Add via the web Settings UI (persists here) or edit directly. Example: {\"id\": 1, \"path\": \"/path/to/Books\", \"derive_subject\": false}.",
+  "_library_roots": [],
+  "_comment_inbox_dirs": "INSTALL-SPECIFIC — YOUR inbox/drop folders for new scans (empty in the shipped file). Configure via the web Settings UI or edit directly.",
+  "_inbox_dirs": []
+}

@@ -1,0 +1,19 @@
+{
+  "name": "Library — device",
+  "short_name": "Library",
+  "description": "Offline lookup and open for the personal dharma library.",
+  "start_url": "/app",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fbfcfd",
+  "theme_color": "#16202c",
+  "icons": [
+    {
+      "src": "/static/pwa/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

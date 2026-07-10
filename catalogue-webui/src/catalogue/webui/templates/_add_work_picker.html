@@ -1,0 +1,14 @@
+{# ── "+ Add or link a work" (Review only) ───────────────────────────────────
+   The picker to link an existing work or add a new one to this edition — one per
+   pick. Renders ABOVE "Works In This Edition" in the review pane. The collapsible
+   "+ add a new work" form is part of the work_picker macro. Expects `eid` and
+   `kind` ('multi' | other). The CALLER wraps the surrounding region in
+   [data-bb-refresh] so the add submits in place (no auto-advance). #}
+{% from '_work_picker.html' import work_picker with context %}
+<div class="add-work" style="margin:.4rem 0 .9rem">
+  <b>➕ {% if kind == 'multi' %}Add a work the detection missed{% else %}Add or link a work{% endif %}</b>
+  {{ work_picker(eid, '/works/detect/%d/add-work'|format(eid), 'Add an existing or new work', allow_new=True) }}
+  <p class="hint" style="margin:.2rem 0">
+    {% if kind == 'multi' %}Add as many as you need — one per pick. Use this when the
+      segmentation found too <b>few</b> texts.{% else %}Link an existing work or add a new one — one per pick.{% endif %}</p>
+</div>

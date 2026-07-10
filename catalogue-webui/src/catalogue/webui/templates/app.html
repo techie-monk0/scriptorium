@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Library</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#16202c">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Library">
+  <link rel="apple-touch-icon" href="/static/pwa/icon.svg">
+  {# Same shared palette + tile styling the web uses (single source of truth). #}
+  <link rel="stylesheet" href="/static/css/tokens.css">
+  <link rel="stylesheet" href="/static/css/shelf.css">
+  <link rel="stylesheet" href="/static/pwa/pwa.css">
+  <!-- Apply saved theme + shelf-art before first paint — same localStorage keys/semantics
+       as the web _base.html, so a device's choice is consistent across web and PWA. -->
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('theme');
+        if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+        var s = localStorage.getItem('shelfArt');
+        document.documentElement.setAttribute('data-shelf', s === 'spine' ? 'spine' : 'cover');
+      } catch (e) {}
+    })();
+  </script>
+</head>
+<body>
+  <header class="top">
+    <div class="row">
+      <button class="brand" id="home">Library</button>
+      <span id="status"><span class="dot"></span><span id="statusText">…</span></span>
+    </div>
+  </header>
+  <main id="view"><div class="empty">Loading your library…</div></main>
+  {# Floating nav — the SHARED LibraryUI.nav component (Tier 3) renders a bottom-right button
+     that expands into a vertical menu. app.js supplies the PWA's item list (hash routes) and
+     keeps the active item in sync with the router. Same component the web UI mounts. #}
+  <div id="navhost"></div>
+  {# Shared frontend layer (Tiers 2–3), then the PWA app (which defines the PWA adapter). #}
+  <script src="/static/js/shelf.js"></script>
+  <script src="/static/js/typeahead.js"></script>
+  <script src="/static/js/library-core.js"></script>
+  <script src="/static/js/library-ui-dom.js"></script>
+  <script src="/static/pwa/content-index.js"></script>
+  <script src="/static/pwa/app.js"></script>
+</body>
+</html>

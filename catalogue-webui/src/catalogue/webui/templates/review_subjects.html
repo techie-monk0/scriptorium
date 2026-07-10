@@ -1,0 +1,46 @@
+{% extends "_base.html" %}
+{% block title %}Review subjects{% endblock %}
+{% block body %}
+<div class="bb-wide">
+{# Folded into the Review surface (review_module): the outstanding-review backlog
+   buttons, Subjects marked active. Standalone (legacy) keeps the review-hub tab strip. #}
+{% if review_module %}{% set rv_active = 'subjects' %}{% include '_review_counts.html' %}
+{% else %}{% include '_review_tabs.html' %}{% endif %}
+  <h1>Subjects</h1>
+
+  {# Topics vs Series/Collections — the same curation tree over each namespace. #}
+  {% set _seg_base = url_for('review_subjects') if review_module else '/review-hub?tab=subjects' %}
+  {% set _seg_sep = '?' if review_module else '&' %}
+  <div class="bb-segs">
+    <a class="bb-seg {% if kind != 'series' %}active{% endif %}"
+       href="{{ _seg_base }}{{ _seg_sep }}kind=topic">Topics</a>
+    <a class="bb-seg {% if kind == 'series' %}active{% endif %}"
+       href="{{ _seg_base }}{{ _seg_sep }}kind=series">Series / Collections</a>
+  </div>
+
+  <p class="stub">Curate the {{ 'series / collections' if kind == 'series' else 'subject hierarchy' }} —
+    rename, merge duplicates, and delete orphans.
+    {% if kind != 'series' %}Fold / unfold a branch with its ▸ / ▾ caret.{% endif %}
+    Only a genuine orphan (a leaf with no books and no sub-{{ 'series' if kind == 'series' else 'subjects' }})
+    is flagged <b>needs review</b>. ↑/↓ to move.</p>
+  <p class="hint">{{ count }} {{ 'series' if kind == 'series' else 'subject' }}(s).</p>
+
+  {# Shared completion source for rename / merge inputs (native datalist autocomplete). #}
+  <datalist id="all-subjects">
+    {% for n in subject_names() %}<option value="{{ n }}">{% endfor %}
+  </datalist>
+
+  {% if not items %}
+    <p class="stub">{{ 'No series yet — add one from a book’s Series field.' if kind == 'series' else 'No subjects yet.' }}</p>
+  {% else %}
+    {% set detail_template = '_subject_detail.html' %}
+    {% set empty_msg = 'No subjects.' %}
+    {% set master_search = true %}
+    {% set master_collapse = false %}
+    {% set tree = (kind != 'series') %}
+    {% set tree_key = 'subjects-' ~ kind %}
+    {% set master_search_label = 'Filter ' ~ ('series' if kind == 'series' else 'subjects') ~ ' by name…' %}
+    {% include '_book_browser.html' %}
+  {% endif %}
+</div>
+{% endblock %}

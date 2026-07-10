@@ -1,0 +1,90 @@
+{# Reusable "pick an existing work OR add a new one" widget. Both paths POST to the
+   same `target` URL, which resolves a work_id (existing or freshly created) and does
+   its role-specific action (link / set-root / set-commentary). Mounted by the page's
+   bbMountWorkPick / bbMountNewWorkAuthors handlers via inline onclick (the fragment's
+   own <script> would not run under innerHTML). `current` = {id,title} already chosen. #}
+{% macro work_picker(eid, target, label, current=None, allow_new=True) %}
+  <div class="work-pick" style="margin:.25rem 0">
+    {% if current %}
+      <div class="chip" style="display:block; border-radius:6px">
+        <code>#{{ current.id }}</code> {{ current.title }}
+        <form method="post" action="{{ target }}" style="display:inline">
+          <input type="hidden" name="work_id" value=""><button title="clear">✕</button></form>
+      </div>
+    {% endif %}
+    <button type="button" onclick="bbMountWorkPick(this, {{ eid }})">🔍 {{ label }}…</button>
+    <span class="work-search-host"></span>
+    {# As-you-type searches the LOCAL catalogue + offline 84000 (instant). BDRC/Wikidata are
+       a network round-trip, so they're opt-in here (seeded with what you've typed) rather
+       than fired on every keystroke. #}
+    <button type="button" class="work-live-btn" style="display:none; margin-left:.3rem; font-size:.85em"
+            onclick="bbWorkPickLive(this, {{ eid }})"
+            title="search BDRC + Wikidata over the network (slower)">🌐 also search live authorities…</button>
+    <span class="work-live-host"></span>
+    {% if allow_new %}
+    {# paste an authority id directly (bdr:W… / Toh 3824 / wd:Q…) → resolves + creates #}
+    <span class="id-paste" style="display:inline-block; margin-left:.4rem">
+      <input class="id-input" size="22" placeholder="or paste id: bdr:W… / toh 3824 / wd:Q…">
+      <button type="button" onclick="bbResolveWorkId(this)">id →</button>
+    </span>
+    {% endif %}
+    {# carries EITHER an existing work_id OR an authority-derived canonical#/titles, so a
+       picked 84000/Toh entry creates the work via _resolve_work_from_form. #}
+    <form class="pick-work-form" method="post" action="{{ target }}">
+      <input type="hidden" name="work_id">
+      <input type="hidden" name="edition_id">
+      <input type="hidden" name="canonical_system">
+      <input type="hidden" name="canonical_number">
+      <input type="hidden" name="english_title">
+      <input type="hidden" name="sanskrit_title">
+      <input type="hidden" name="tibetan_title"></form>
+    {% if allow_new %}
+    <details style="margin-top:.2rem">
+      <summary style="cursor:pointer; color:var(--link)">+ add a new work…</summary>
+      <form method="post" action="{{ target }}" class="new-work-form"
+            style="margin:.3rem 0; padding:.3rem .5rem; background:var(--surface-2); border:1px solid var(--border); border-radius:6px">
+        <label class="fld">English title <span class="req">*</span><br>
+          <input name="english_title" required></label>
+        <label class="fld">Sanskrit title <span class="hint">(IAST)</span><br>
+          <input name="sanskrit_title"></label>
+        <label class="fld">Tibetan title <span class="hint">(Wylie)</span><br>
+          <input name="tibetan_title"></label><br>
+        <div style="margin:.2rem 0">
+          <button type="button" onclick="bbMountAuthoritySearch(this)">🔍 Search 84000 / Toh authorities…</button>
+          <span class="authority-host"></span>
+          <span class="hint">type the title in English, Sanskrit (IAST) or Tibetan (Wylie) — pick to fill the canonical# &amp; titles</span>
+        </div>
+        <label class="fld">Canonical system <span class="hint">(toh / derge / bdrc / wikidata)</span><br>
+          <input name="canonical_system" size="10" placeholder="toh"></label>
+        <label class="fld">Canonical id <span class="hint">(e.g. 3824 / bdr:W… / Q…)</span><br>
+          <input name="canonical_number" size="14" placeholder="bdrc:<id> / toh:<id> / …"></label><br>
+        <label class="fld">Type:
+          <label><input type="radio" name="work_type" value="root" onchange="bbNewWorkType(this)"> root text</label>
+          <label><input type="radio" name="work_type" value="commentary" onchange="bbNewWorkType(this)"> commentary</label></label><br>
+        {# A commentary also names the ROOT text it explains (stored as commentary_on);
+           shown only while 'commentary' is ticked. The picked id rides root_work_id and is
+           turned into the relation by _resolve_work_from_form after the work is created. #}
+        <div class="nw-root-box" style="display:none; margin:.1rem 0 .35rem 1.4rem; border-left:3px solid var(--card-border); padding-left:.6rem">
+          <input type="hidden" name="root_work_id">
+          <span class="nw-root-chip hint">no root text picked yet</span>
+          <button type="button" onclick="bbMountNewWorkRoot(this)">📖 pick the root text this explains…</button>
+          <span class="nw-root-host"></span>
+        </div>
+        <label class="fld">Original language<br>
+          <input name="original_language" size="12" placeholder="sanskrit / tibetan"></label>
+        <label class="fld">Era<br><input name="era" size="10"></label><br>
+        <label class="fld">Subjects <span class="req">*</span> <span class="hint">(comma-separated; each autocompletes)</span><br>
+          {# list → the ONE page-level _subj_datalist.html (no per-row datalist; see that file) #}
+          <input name="subjects" list="nw-subj-opts" autocomplete="off" size="30" required></label><br>
+        <label class="fld">Notes<br><textarea name="notes" rows="2"></textarea></label><br>
+        <div><b>Authors</b> <span class="nw-author-chips"></span>
+          <button type="button" onclick="bbMountNewWorkAuthors(this)">+ add author…</button>
+          <span class="nw-author-host"></span></div>
+        <p class="hint" style="margin:.2rem 0">Fields marked <span class="req">*</span> are required.
+          A matching canonical# or title folds onto the existing work instead of duplicating.</p>
+        <button type="submit">Create &amp; use this work</button>
+      </form>
+    </details>
+    {% endif %}
+  </div>
+{% endmacro %}

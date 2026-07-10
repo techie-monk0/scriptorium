@@ -1,0 +1,53 @@
+{# Driver for the shared _merge_widget.html. Include ONCE per page that renders a
+   merge widget. Works on injected cards too (delegated; mounts the target typeahead
+   the first time the widget is opened). #}
+{% include '_typeahead.html' %}
+<script>
+(function () {
+  if (window.__mergeJs) return;            // define once per page
+  window.__mergeJs = true;
+  const esc = s => window.Typeahead ? Typeahead.esc(s) : String(s == null ? '' : s);
+
+  function initWidget(w) {
+    if (!w || w.dataset.mounted) return;
+    const host = w.querySelector('.merge-host');
+    if (!host) return;
+    w.dataset.mounted = '1';
+    const d = w.dataset, sep = d.mergeSearch.includes('?') ? '&' : '?';
+    window.Typeahead.mount(host, {
+      searchUrl: q => d.mergeSearch + sep + 'q=' + encodeURIComponent(q),
+      parse: j => (j.matches || []).filter(m =>
+        String(m[d.mergeIdfield]) !== String(d.mergeId) && (!d.mergeFilter || m.kind === d.mergeFilter)),
+      render: m => esc(m[d.mergeLabelfield] || ('#' + m[d.mergeIdfield])),
+      onPick: m => doMerge(w, m[d.mergeIdfield], m[d.mergeLabelfield]),
+      placeholder: 'search a ' + d.mergeKind + ' to merge into…',
+      autofocus: true, minChars: 2,
+    });
+  }
+
+  function doMerge(w, into, label) {
+    const d = w.dataset;
+    if (!window.confirm('Merge THIS ' + d.mergeKind + ' into “' + (label || ('#' + into)) + '”?\n'
+        + 'Re-points its links and deletes this ' + d.mergeKind + ' (reversible). Proceed?')) return;
+    const body = new FormData();
+    body.append('into', into);
+    if (d.mergeKeepalias) body.append('keep_name_alias', '1');
+    const msg = w.querySelector('.merge-msg');
+    if (msg) msg.innerHTML = '<p class="hint">Merging…</p>';
+    fetch(d.mergeApply, { method: 'POST', body: body, headers: { 'X-Requested-With': 'fetch' } })
+      .then(r => r.json()).then(res => {
+        if (res && res.error) { if (msg) msg.innerHTML = '<p style="color:#a00">' + esc(res.error) + '</p>'; return; }
+        if (d.mergeAfter && d.mergeAfter !== 'reload') location.href = d.mergeAfter + into;
+        else location.reload();
+      })
+      .catch(() => { if (msg) msg.textContent = 'Merge failed.'; });
+  }
+
+  // Mount the target picker the first time the widget is expanded (delegated, so it
+  // works on cards injected into the browser-shell pane).
+  document.addEventListener('click', e => {
+    const s = e.target.closest && e.target.closest('.merge-widget > summary');
+    if (s) initWidget(s.parentElement);
+  });
+})();
+</script>

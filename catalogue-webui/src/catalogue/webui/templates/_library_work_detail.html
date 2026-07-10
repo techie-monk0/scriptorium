@@ -1,0 +1,9 @@
+{# A work in the /library detail pane. `editable` ⇒ the full editable work card
+   (/work/<id>/card); read-only (Search page) ⇒ the read-only summary (/work/<id>/summary).
+   Expects `item` = {id, title, subtitle}. #}
+<h2>{{ item.title }}</h2>
+{% set cat_id = item.id %}{% include '_cat_id.html' %}
+<div class="meta">{{ item.subtitle }}</div>
+<div class="edition-card" data-card-url="/work/{{ item.id }}/{{ 'card' if editable | default(false) else 'summary' }}">
+  <p class="hint">Loading work…</p>
+</div>

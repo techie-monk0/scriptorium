@@ -1,0 +1,58 @@
+{% extends "_base.html" %}
+{% block title %}People{% endblock %}
+{% block body %}
+<h1>People</h1>
+
+{# ── Add / edit section, at the TOP ────────────────────────────────────────── #}
+<h3 id="new-person">New person</h3>
+<form method="post" action="/people/new">
+  {# Authority search: type a name → BDRC/Wikidata/VIAF → fills name + hub id (+ dates). #}
+  <div class="pa-search">
+    <button type="button" onclick="mountPersonAuthoritySearch(this)">🔎 search authorities to auto-fill…</button>
+    <span class="pa-host"></span>
+  </div>
+  <p><label>Primary name <input name="primary_name" required size="32"></label>
+     <label>Role hint <input name="role_hint" size="16" placeholder="translator / author"></label></p>
+  <p><label>Dates <input name="dates" size="16" placeholder="e.g. 1357–1419"></label>
+     <label>Hub id <input name="external_id" size="20" placeholder="bdr:P… / wikidata:Q… / viaf:…"></label></p>
+  <p><label>Tenet system
+      <select name="tenet_system">
+        <option value="">—</option>
+        {% for topt in tenet_opts %}<option>{{ topt }}</option>{% endfor %}
+      </select></label></p>
+  <p><label>Name scheme
+    <select name="scheme">
+      <option value="english">english</option>
+      <option value="iast">iast</option>
+      <option value="wylie">wylie</option>
+      <option value="phonetic">phonetic</option>
+    </select>
+  </label></p>
+  <button type="submit">Create</button>
+</form>
+
+{# ── Search (over EVERY alias, not just the primary name) + full list ───────── #}
+<h3>All people</h3>
+<form method="get" action="/people" style="margin:.4rem 0">
+  <label>Search <input name="q" value="{{ q or '' }}" size="28"
+         placeholder="name or any alias…"></label>
+  <button type="submit">Search</button>
+  {% if q %}<a href="/people" style="margin-left:.4rem">clear</a>{% endif %}
+</form>
+<p class="stub">
+  {% if q %}{{ rows|length }} match{{ '' if rows|length == 1 else 'es' }} for “{{ q }}” (of {{ total }} people)
+  {% else %}{{ rows|length }} people{% endif %}.</p>
+<table>
+  <tr><th>id</th><th>name</th><th>role hint</th><th>status</th></tr>
+  {% for r in rows %}
+    <tr><td>{{ r[0] }}</td>
+        <td><a href="/person/{{ r[0] }}">{{ r[1] }}</a></td>
+        <td>{{ r[2] or '' }}</td>
+        <td>{{ r[3] or 'provisional' }}</td></tr>
+  {% else %}
+    <tr><td colspan="4" class="stub">{% if q %}No people match “{{ q }}”.{% else %}No people yet.{% endif %}</td></tr>
+  {% endfor %}
+</table>
+{% include '_typeahead.html' %}
+{% include '_person_authority_js.html' %}
+{% endblock %}

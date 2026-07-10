@@ -1,0 +1,33 @@
+{# ── Edition extras: holdings + title-page preview ──────────────────────────
+   The edition's actual files (open in the viewer) and a title-page preview of the
+   first file. Rendered BELOW "Works In This Edition" on both Browse and Review.
+   Expects `holdings` = [{id,label,path,has_file,ext}, …]. `openNative` is defined by
+   the shared _book_browser.html shell on both pages; `rel_path` is a Jinja global. #}
+<h3>Holdings</h3>
+<div class="ed-holdings">
+  {% for h in holdings %}
+    <div style="margin:.1rem 0">
+      <b>{{ h.label }}</b> <span class="hint">{{ rel_path(h.path) or '—' }}</span>
+      {% if h.has_file %}
+        <button type="button" class="lnk" onclick="openNative({{ h.id }}, this)"
+                title="open this file in the viewer">open ↗</button>
+      {% else %}<span class="hint">(no file)</span>{% endif %}
+    </div>
+  {% else %}<span class="hint">none</span>{% endfor %}
+</div>
+
+{% set pv = (holdings | selectattr('has_file') | list | first) %}
+{% if pv %}
+  <div class="title-preview" style="margin-top:.6rem; text-align:center">
+    <div class="hint" style="margin-bottom:.2rem">Title page <span class="hint">— click to open in the viewer</span></div>
+    {% if pv.ext == 'pdf' %}
+      <a href="/holding/{{ pv.id }}/file" target="_blank" rel="noopener" title="open the PDF">
+    {% else %}
+      <a href="#" onclick="openNative({{ pv.id }}, this); return false;" title="open in the viewer">
+    {% endif %}
+      <img src="/holding/{{ pv.id }}/preview.png" loading="lazy" alt="title page"
+           onerror="this.closest('.title-preview').style.display='none'"
+           style="max-width:100%; max-height:60vh; border:1px solid var(--border); border-radius:6px;
+                  box-shadow:0 1px 6px rgba(0,0,0,.12)"></a>
+  </div>
+{% endif %}

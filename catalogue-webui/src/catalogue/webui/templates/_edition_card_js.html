@@ -1,0 +1,91 @@
+{# Pickers for the edition card (_edition_card.html). The card is injected via innerHTML
+   on several pages (the /edition/<id> page, holdings, library), so these handlers are
+   GLOBAL and each host page includes this file once (alongside _typeahead.html). A picker
+   fills a hidden input + a button label; the surrounding form is submitted by its own
+   Save/Add button (or, inside the book browser, intercepted + re-rendered by the host).
+   Offers inline create when nothing matches. #}
+{% include '_merge_js.html' %}   {# shared merge/dedup widget driver (edition card) #}
+<script>
+(function () {
+  function esc(s) { return window.Typeahead ? Typeahead.esc(s) : String(s == null ? '' : s); }
+  function mount(host, opts) {
+    if (host.dataset.mounted) { const i = host.querySelector('input'); if (i) i.focus(); return; }
+    host.dataset.mounted = '1';
+    window.Typeahead.mount(host, opts);
+  }
+
+  // ── Person picker (translator). wrap = .edc-person { hidden input[name], button, .edc-host } ──
+  window.edcPickPerson = function (btn) {
+    const wrap = btn.closest('.edc-person');
+    const host = wrap.querySelector('.edc-host');
+    const hidden = wrap.querySelector('input[type=hidden]');
+    wrap._set = (id, name) => {
+      hidden.value = id || '';
+      btn.textContent = name || wrap.dataset.empty || '— none —';
+      host.innerHTML = ''; delete host.dataset.mounted; btn.style.display = '';
+    };
+    btn.style.display = 'none';
+    mount(host, {
+      searchUrl: q => `/picker/person/search?q=${encodeURIComponent(q)}`,
+      parse: j => j.matches,
+      render: m => `<code>#${m.id}</code> ${esc(m.name)}`
+        + (m.dates ? ` <small>${esc(m.dates)}</small>` : ''),
+      onPick: m => wrap._set(m.id, m.name),
+      placeholder: 'type a person name…', autofocus: true,
+      emptyHtml: q => `no match — <button type="button" class="lnk" data-create="${esc(q)}" `
+        + `onclick="edcCreatePerson(this)">➕ create “${esc(q)}”</button>`,
+    });
+  };
+  window.edcCreatePerson = function (lnk) {
+    const wrap = lnk.closest('.edc-person');
+    const name = lnk.getAttribute('data-create') || '';
+    const fd = new FormData(); fd.append('primary_name', name);
+    fetch('/picker/person/new', { method: 'POST', headers: { 'X-Requested-With': 'fetch' }, body: fd })
+      .then(r => r.json())
+      .then(res => { if (res && res.id) wrap._set(res.id, res.name);
+                     else alert('Could not create person.'); })
+      .catch(() => alert('Could not create person.'));
+  };
+
+  // ── Work picker (add-a-work). wrap = .edc-work { hidden work_id, hidden new_work_title,
+  //    button, .edc-host }. Existing pick → work_id; inline create → new_work_title (the
+  //    add route creates the work, de-duping onto a canonical#/title match). ──
+  window.edcPickWork = function (btn) {
+    const wrap = btn.closest('.edc-work');
+    const host = wrap.querySelector('.edc-host');
+    const widEl = wrap.querySelector('input[name=work_id]');
+    const newEl = wrap.querySelector('input[name=new_work_title]');
+    wrap._set = (label, work_id, new_title) => {
+      widEl.value = work_id || '';
+      newEl.value = new_title || '';
+      btn.textContent = label;
+      host.innerHTML = ''; delete host.dataset.mounted; btn.style.display = '';
+    };
+    btn.style.display = 'none';
+    mount(host, {
+      searchUrl: q => `/works/search?q=${encodeURIComponent(q)}`,
+      parse: j => j.matches,
+      render: m => `<b>Saved Work:</b> <code>#${m.work_id}</code> ${esc(m.title)}`
+        + (m.canonical_number ? ` <small>· ${esc(m.canonical_system || '')} ${esc(m.canonical_number)}</small>` : '')
+        + (m.authors && m.authors.length ? ` <small>— ${esc(m.authors.join(', '))}</small>` : ''),
+      onPick: m => wrap._set('Work: ' + m.title, m.work_id, ''),
+      placeholder: 'search works by title…', autofocus: true,
+      emptyHtml: q => `no match — <button type="button" class="lnk" data-create="${esc(q)}" `
+        + `onclick="edcCreateWork(this)">➕ create work “${esc(q)}”</button>`,
+    });
+  };
+  window.edcCreateWork = function (lnk) {
+    const wrap = lnk.closest('.edc-work');
+    const title = lnk.getAttribute('data-create') || '';
+    wrap._set('New work: ' + title, '', title);
+  };
+})();
+</script>
+<style>
+  .edc-person, .edc-work { display: inline-flex; flex-direction: column; gap: .2rem; vertical-align: top; }
+  .edc-pick-btn { font: inherit; padding: .25rem .5rem; border: 1px solid var(--btn-border); border-radius: 6px;
+                  background: var(--btn-bg); cursor: pointer; text-align: left; min-width: 11rem; }
+  .edc-pick-btn:hover { background: var(--btn-hover-bg); border-color: #99b; }
+  .edc-host:empty { display: none; }
+  .lnk { color: var(--link); border: 0; background: none; cursor: pointer; font: inherit; padding: 0; }
+</style>

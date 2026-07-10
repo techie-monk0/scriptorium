@@ -1,0 +1,10 @@
+{# Catalogue id, shown in muted monospace just under an entity's title/name on
+   the review & browse detail panes (work / edition / person). Self-contained
+   inline style so it renders correctly even when injected as an AJAX fragment.
+   Set `cat_id` right before including, e.g.
+     {% set cat_id = item.id %}{% include '_cat_id.html' %}
+#}
+{%- if cat_id is defined and cat_id is not none %}
+<div class="cat-id" title="catalogue id"
+     style="font-family:ui-monospace,Menlo,monospace;font-size:.82rem;color:var(--muted);margin:-.15rem 0 .3rem">#{{ cat_id }}</div>
+{%- endif %}

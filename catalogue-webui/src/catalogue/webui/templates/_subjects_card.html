@@ -1,0 +1,69 @@
+{# Subjects editor for one work/edition. Chips (remove ×) + an add form + the
+   folder-derived suggestion. Slash makes a hierarchy: "Dharma/Emptiness".
+   Used both as a lazy [data-card-url] fragment (edition review) and included
+   inline on /work/<id>. Expects: kind, pid, subjects [(id, name)], suggestion. #}
+<div class="subjects">
+  {% if subjects %}
+    <ul class="chips" style="list-style:none; padding:0; margin:.2rem 0; display:flex; flex-wrap:wrap; gap:.3rem">
+      {% for sid, name in subjects %}
+        <li class="chip" style="background:var(--surface-2); border:1px solid var(--border); border-radius:1rem; padding:.1rem .5rem">
+          {{ name }}
+          <form method="post" action="/subjects/{{ kind }}/{{ pid }}/remove" style="display:inline">
+            <input type="hidden" name="subject_id" value="{{ sid }}">
+            <button type="submit" title="remove subject" style="border:0; background:none; cursor:pointer; color:#a00">×</button>
+          </form>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="hint">No subjects yet.</p>
+  {% endif %}
+
+  {% if suggestion %}
+    <form method="post" action="/subjects/{{ kind }}/{{ pid }}/add" style="margin:.3rem 0">
+      <input type="hidden" name="name" value="{{ suggestion }}">
+      <button type="submit">+ from folder: <b>{{ suggestion }}</b></button>
+    </form>
+  {% endif %}
+
+  <form method="post" action="/subjects/{{ kind }}/{{ pid }}/add">
+    <input name="name" list="subj-opts-{{ kind }}-{{ pid }}" autocomplete="off" size="30"
+           placeholder="Add subject — type to autocomplete, or a new one">
+    <datalist id="subj-opts-{{ kind }}-{{ pid }}">
+      {% for s in subject_names('topic') %}<option value="{{ s }}">{% endfor %}
+    </datalist>
+    <button type="submit">+ Add</button>
+  </form>
+  <p class="hint">Pick an existing subject from the list, or type a new one to create it
+    (a slash nests it: <code>Dharma/Emptiness</code>).</p>
+
+  {# ── Series / Collections — a separate namespace (kind='series'); a series tag does
+       NOT count as a topic, so a book in only a series still "needs a subject". ── #}
+  <div class="series" style="margin-top:.7rem; border-top:1px dashed var(--border); padding-top:.5rem">
+    <p class="hint" style="margin:.1rem 0 .3rem"><b>Series / Collections</b></p>
+    {% if series %}
+      <ul class="chips" style="list-style:none; padding:0; margin:.2rem 0; display:flex; flex-wrap:wrap; gap:.3rem">
+        {% for sid, name in series %}
+          <li class="chip" style="background:var(--surface-2); border:1px solid var(--border); border-radius:1rem; padding:.1rem .5rem">
+            <a href="/subject/{{ sid }}" style="text-decoration:none; color:inherit">{{ name }}</a>
+            <form method="post" action="/subjects/{{ kind }}/{{ pid }}/remove" style="display:inline">
+              <input type="hidden" name="subject_id" value="{{ sid }}">
+              <button type="submit" title="remove from series" style="border:0; background:none; cursor:pointer; color:#a00">×</button>
+            </form>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="hint">Not in any series.</p>
+    {% endif %}
+    <form method="post" action="/subjects/{{ kind }}/{{ pid }}/add">
+      <input type="hidden" name="subject_kind" value="series">
+      <input name="name" list="series-opts-{{ kind }}-{{ pid }}" autocomplete="off" size="30"
+             placeholder="Add to a series — type to autocomplete, or a new one">
+      <datalist id="series-opts-{{ kind }}-{{ pid }}">
+        {% for s in subject_names('series') %}<option value="{{ s }}">{% endfor %}
+      </datalist>
+      <button type="submit">+ Add to series</button>
+    </form>
+  </div>
+</div>

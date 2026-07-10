@@ -1,0 +1,234 @@
+/* Shared home-shelf component — used by BOTH the web view (home.html) and the PWA.
+ * Single source of truth for the Netflix-style shelves + Dock magnification.
+ * Depends only on the theme tokens (--bg/--fg/--muted/--surface-2/--card-border/--link),
+ * which both surfaces define. Markup contract:
+ *   .shelf > .shelf-head + .shelf-row > (.arrow, .shelf-track > .tile > .cover > img.art)
+ */
+.shelf {
+  margin: 1.4rem 0;
+  --tile-w: 46px; --tile-h: 212px; --art-fit: fill;   /* spine mode (default) */
+}
+html[data-shelf="cover"] .shelf { --tile-w: 140px; --tile-h: 200px; --art-fit: contain; }
+.shelf.expanded { --tile-w: 72px; --tile-h: 300px; }
+html[data-shelf="cover"] .shelf.expanded { --tile-w: 168px; --tile-h: 240px; }
+
+.shelf-head { display: flex; align-items: baseline; gap: .6rem; margin: 0 0 .5rem; }
+.shelf-head h2 { margin: 0; font-size: 1.05rem; font-weight: 700; }
+.title-toggle {
+  margin: 0; padding: 0; border: none; background: none; cursor: pointer;
+  font: inherit; color: inherit; display: inline-flex; align-items: baseline; gap: .3rem;
+}
+/* Shelf title rendered as a link (subject / series shelves): looks like the title,
+   navigates to the subject page; the caret button beside it expands in place. */
+.shelf-head h2 .tlink { color: inherit; text-decoration: none; cursor: pointer; }
+.shelf-head h2 .tlink:hover { text-decoration: underline; }
+.shelf-head h2 .title-toggle { margin-left: .3rem; }
+.title-toggle .caret { font-size: .7em; color: var(--muted); transition: transform .15s; }
+.shelf.expanded .title-toggle .caret { transform: rotate(180deg); }
+.shelf-head .count { font-size: .8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.shelf-head .more { margin-left: auto; font-size: .82rem; text-decoration: none; color: var(--link); }
+.shelf-head .more:hover { text-decoration: underline; }
+
+.shelf-row { position: relative; }
+.shelf-track {
+  display: flex; gap: .7rem; overflow-x: auto; scroll-behavior: smooth;
+  /* Spines stand on a common baseline (their heights vary → real-bookshelf look); covers
+     keep a centred poster row. position+z-index lift the books above the shelf board. */
+  align-items: flex-end; position: relative; z-index: 1;
+  /* Books grow only UPWARD on magnification (transform-origin bottom), so the room must be
+     on TOP (≥ height*(MAX-1)); the bottom needs just enough to clear the drop shadow + the
+     shelf board. overflow-x clips the cross axis, so the pop must fit the track's own box. */
+  padding: 3.75rem 1.7rem 1.6rem; scroll-snap-type: x proximity; scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+.shelf.expanded .shelf-track { padding-top: 5rem; }   /* taller tiles bloom higher */
+html[data-shelf="cover"] .shelf-track { align-items: center; }
+
+/* A faint stationary shelf board the spines sit on (spine mode only). It spans the
+   viewport while the books scroll along it, like a real shelf; sits at the books'
+   baseline (the track's 1.6rem bottom padding). */
+.shelf-row::after {
+  content: ""; position: absolute; left: .3rem; right: .3rem; bottom: calc(1.6rem - 4px);
+  height: 4px; border-radius: 2px; z-index: 0; pointer-events: none;
+  background: linear-gradient(180deg, var(--muted), transparent);
+  box-shadow: 0 2px 5px rgba(0,0,0,.22);
+}
+html[data-shelf="cover"] .shelf-row::after { display: none; }
+.shelf-track::-webkit-scrollbar { height: 8px; }
+.shelf-track::-webkit-scrollbar-thumb { background: var(--card-border); border-radius: 999px; }
+
+.arrow {
+  position: absolute; top: 0; bottom: .8rem; width: 2.4rem; z-index: 2;
+  display: none; align-items: center; justify-content: center; cursor: pointer;
+  border: none; font-size: 1.4rem; color: var(--fg);
+  background: linear-gradient(90deg, var(--bg), transparent);
+}
+.arrow.right { right: 0; background: linear-gradient(270deg, var(--bg), transparent); }
+.arrow.left { left: 0; }
+.shelf-row:hover .arrow { display: flex; }
+@media (hover: none) { .arrow { display: none !important; } }
+
+.tile {
+  flex: 0 0 auto; width: calc(var(--tile-w) * var(--wjit, 1)); scroll-snap-align: center;
+  text-decoration: none; color: inherit;
+}
+/* --wjit / --hjit are per-book thickness/height multipliers set by shelf.js in spine mode
+   (deterministic from the book id) for the bookshelf look; default 1 → uniform (covers, no-JS). */
+.tile .cover {
+  position: relative; display: block; width: 100%; height: calc(var(--tile-h) * var(--hjit, 1));
+  border-radius: 8px; overflow: hidden; border: 1px solid var(--card-border);
+  background: var(--surface-2); box-shadow: 0 1px 5px rgba(0,0,0,.14);
+  /* Dock magnification: JS sets --mag per tile (cursor distance on pointer devices,
+     distance to the scroll-centre on touch). Scales about the BOTTOM centre so a book
+     grows only upward off the shelf — never below it — while its x stays stable. */
+  transform: scale(var(--mag, 1)); transform-origin: center bottom;
+  transition: transform .14s ease-out, box-shadow .14s ease-out;
+}
+.tile:hover .cover { box-shadow: 0 10px 26px rgba(0,0,0,.30); }
+.tile .cover img {
+  position: absolute; inset: 0; z-index: 2; width: 100%; height: 100%;
+  /* contain (cover mode) shows the whole cover, centred, with the leftover bands painted in
+     the PAGE background (--bg, not a surface token) so they melt into the page in every theme;
+     fill (spine mode) covers the whole box, so the band/positioning don't show. */
+  object-fit: var(--art-fit); object-position: center center; background: var(--bg);
+}
+.tile .cover::before {
+  content: ""; position: absolute; inset: 0; z-index: 0; opacity: .2;
+  background: center/52% no-repeat
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23808080' stroke-width='1.4'%3E%3Cpath d='M4 4.5A1.5 1.5 0 0 1 5.5 3H18a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H6.5A2.5 2.5 0 0 0 4 21.5z'/%3E%3Cpath d='M4 17.5A2.5 2.5 0 0 1 6.5 15H19'/%3E%3C/svg%3E");
+}
+/* Star TOGGLE overlay — pinned top-right above the cover art (img is z-index 2). Outline-grey by
+   default, gold + filled when starred (aria-pressed=true). A circular scrim keeps it legible on any
+   cover. Shared by home rails + the search grid (both build tiles via Shelf.tile). */
+.tile .cover .star {
+  position: absolute; z-index: 3; bottom: 6px; right: 6px;
+  width: 26px; height: 26px; padding: 0; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+  border: none; border-radius: 999px; cursor: pointer;
+  font-size: 15px; color: #fff; background: rgba(0,0,0,.45);
+  opacity: .85; transition: opacity .12s ease, transform .12s ease, color .12s ease;
+}
+.tile .cover .star:hover { opacity: 1; transform: scale(1.08); }
+.tile .cover .star[aria-pressed="true"] { color: #f5b301; opacity: 1; }   /* gold = starred */
+/* "New" badge — freshly-added book in the merged Recent rail. */
+.tile .cover .new-badge {
+  position: absolute; z-index: 3; top: 6px; left: 6px;
+  font-size: .62rem; font-weight: 700; letter-spacing: .03em; text-transform: uppercase;
+  color: #fff; background: var(--accent, #c0392b);
+  padding: .12rem .4rem; border-radius: 999px;
+}
+.tile .blank-title {
+  position: absolute; inset: 0; z-index: 1; display: flex;
+  align-items: center; justify-content: center; padding: .6rem .55rem;
+}
+.tile .blank-title span {
+  text-align: center; font-size: .85rem; font-weight: 600; line-height: 1.28; color: var(--fg);
+  display: -webkit-box; -webkit-line-clamp: 7; -webkit-box-orient: vertical; overflow: hidden;
+}
+
+/* ── Series rail: one set-tile per series; tapping one drops a drawer of its volumes ──
+   A series is ONE object, not a shelf of loose spines. Set-tiles are uniform box-set
+   posters (a cover-mode shape) regardless of the spine/cover art mode. */
+.series-rail .shelf-track { align-items: flex-end; }
+.set-tile {
+  /* Box size is STYLE-DRIVEN: shelf.js sets --set-w/--set-h inline per the active set-view's
+     declared w×h (see SET_VIEWS). These are only the no-JS fallback (the widest, = fan). */
+  --set-w: 210px;
+  --set-h: 200px;
+  flex: 0 0 auto; width: var(--set-w); scroll-snap-align: center;
+  display: flex; flex-direction: column; gap: .45rem;
+  background: none; border: none; padding: 0; margin: 0; cursor: pointer;
+  font: inherit; color: inherit; text-align: center;
+}
+.set-tile .cover {
+  position: relative; width: var(--set-w); height: var(--set-h);
+  border-radius: 8px; overflow: hidden; border: 1px solid var(--card-border);
+  background: var(--surface-2); box-shadow: 0 1px 5px rgba(0,0,0,.16);
+  /* Same upward Dock-bloom as book tiles (shelf.js sets --mag per tile). */
+  transform: scale(var(--mag, 1)); transform-origin: center bottom;
+  transition: transform .14s ease-out, box-shadow .14s ease-out;
+}
+.set-tile:hover .cover { box-shadow: 0 10px 26px rgba(0,0,0,.30); }
+.set-tile.active .cover { outline: 2px solid var(--link); outline-offset: 1px; }
+
+/* The live "display one set" style switcher in the rail head. */
+.series-rail .shelf-head .set-style-sel {
+  margin-left: auto; font-size: .78rem; padding: .12rem .4rem; border-radius: 6px;
+  border: 1px solid var(--card-border); background: var(--surface-2); color: var(--fg); cursor: pointer;
+}
+
+/* ── set-art view: "collage" — a 2×2 mosaic of the first volumes (1–4 cells) ── */
+.set-cover { position: absolute; inset: 0; display: grid; gap: 2px; background: var(--card-border); }
+.set-cover[data-n="0"], .set-cover[data-n="1"] { grid-template-columns: 1fr; grid-template-rows: 1fr; }
+.set-cover[data-n="2"] { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr; }
+.set-cover[data-n="3"] { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+.set-cover[data-n="3"] .set-cell:first-child { grid-row: span 2; }
+.set-cover[data-n="4"] { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+.set-cell { position: relative; overflow: hidden; background: var(--surface-2); }
+/* Scoped under `.set-tile .cover` so it OUTRANKS the shared `.tile .cover img` rule
+   (which would otherwise force inset:0 / object-fit:contain onto every set-art image). */
+.set-tile .cover .set-cell img {
+  position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block;
+}
+
+/* ── set-art view: "cover" — one cover with two card edges stepping behind = a stack ── */
+.set-single { position: absolute; inset: 0; }
+.set-tile .cover .set-single .art {
+  /* Explicit size (NOT auto): an absolutely-positioned <img> with width/height auto would
+     render at its intrinsic pixel size and overflow. calc() leaves the 8px edge reveal. */
+  position: absolute; inset: auto; left: 0; top: 0; z-index: 3;
+  width: calc(100% - 8px); height: calc(100% - 8px);
+  object-fit: contain;                              /* show the WHOLE cover, not a crop */
+  border-radius: 6px; border: 1px solid var(--card-border); background: var(--surface-2);
+  box-shadow: 0 1px 5px rgba(0,0,0,.28);
+}
+.set-single .set-edge {
+  position: absolute; border-radius: 6px; border: 1px solid var(--card-border);
+  background: var(--surface-2);
+}
+.set-single .set-edge.e1 { left: 4px; top: 4px; right: 4px; bottom: 4px; z-index: 2; }
+.set-single .set-edge.e2 { left: 8px; top: 8px; right: 0; bottom: 0; z-index: 1; opacity: .8; }
+
+/* ── set-art view: "fan" — cover-flow: one cover in front, the rest fanned dimmed behind
+   on each side (JS sets each transform/opacity/filter). */
+.set-fan { position: absolute; inset: 0; overflow: hidden; }
+.fan-book {                              /* background book: centred, slightly shorter than the box */
+  position: absolute; left: 50%; bottom: 6px; margin-left: -58px;    /* centre the 116px book */
+  width: 116px; height: 188px; transform-origin: center bottom;
+}
+.fan-book.fg {                           /* foreground book: full box height */
+  width: 134px; height: 200px; bottom: 0; margin-left: -67px;        /* centre the 134px book */
+}
+/* Scoped to beat the shared `.tile .cover img` rule (see collage note above). */
+.set-tile .cover .fan-book img {
+  position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block;
+  border-radius: 5px; border: 1px solid var(--card-border); background: var(--surface-2);
+  box-shadow: 0 2px 8px rgba(0,0,0,.4);
+}
+.set-tile .cover .fan-book.fg img { box-shadow: 0 5px 16px rgba(0,0,0,.5); }
+
+/* Count bubble pinned at the bottom, centred, above every cover (incl. the fan's fg). */
+.set-badge {
+  position: absolute; bottom: .4rem; left: 50%; transform: translateX(-50%); z-index: 40;
+  font-size: .72rem; font-weight: 700; padding: .14rem .5rem; border-radius: 999px;
+  background: rgba(0,0,0,.72); color: #fff; font-variant-numeric: tabular-nums;
+}
+
+/* The accordion drawer that drops below the rail with the selected series' volumes. */
+.series-drawer { display: none; }
+.series-drawer.open {
+  display: block; margin: .3rem .3rem 0; padding-top: .2rem;
+  border-top: 2px solid var(--card-border); animation: drawer-in .18s ease-out;
+}
+@keyframes drawer-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+.drawer-head { display: flex; align-items: baseline; gap: .5rem; margin: .5rem .3rem -.6rem 1.7rem; }
+.drawer-head .dh-title { font-weight: 700; }
+.drawer-head .dh-count { font-size: .8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.series-drawer .shelf { margin: 0; }
+
+/* Search / browse: a responsive poster grid that reuses the same .tile component (no
+   magnification — it's a static grid, not a scrolling rail). */
+.tile-grid { display: grid; gap: 16px 12px; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); }
+.tile-grid .tile { width: 100%; }
+.tile-grid .tile .cover { width: 100%; height: auto; aspect-ratio: 2 / 3; transform: none; }
+.tile-grid .tile .cover img { object-fit: contain; }

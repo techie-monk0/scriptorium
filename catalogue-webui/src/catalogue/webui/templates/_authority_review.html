@@ -1,0 +1,111 @@
+{% extends "_base.html" %}
+{% block title %}Confirm match #{{ item.id }}{% endblock %}
+{% block body %}
+{% from '_edition_link.html' import edition_link %}
+{% set p = item.payload %}
+<p><a href="/review-queue">← review queue</a></p>
+<h1>Confirm authority match <small>#{{ item.id }}</small></h1>
+<p><strong>Type:</strong> {{ item.item_type }} &middot;
+   <strong>Status:</strong> {{ item.status }}</p>
+
+<table>
+  <tr><th>Our record</th><td>{{ local_label }}</td></tr>
+  {% if item.item_type == 'person_authority' %}
+    <tr><th>Candidate id</th><td>{{ p.candidate_id }}</td></tr>
+    <tr><th>Candidate name</th><td>{{ p.canonical_name or '' }}</td></tr>
+    {% if p.aliases %}<tr><th>Aliases</th><td>{{ p.aliases | join(', ') }}</td></tr>{% endif %}
+    <tr><th>Source</th><td>{{ p.verifier }} &middot; {{ p.reason }}</td></tr>
+  {% elif item.item_type == 'work_canonical' %}
+    <tr><th>Candidate id</th><td>{{ p.candidate_id }} ({{ p.system or '?' }})</td></tr>
+    <tr><th>Candidate title</th><td>{{ p.canonical_name or '' }}</td></tr>
+    <tr><th>Source</th><td>{{ p.verifier }} &middot; {{ p.reason }}</td></tr>
+  {% elif item.item_type == 'person_work_joint' %}
+    <tr><th>Candidate id</th><td>{{ p.candidate_id }}</td></tr>
+    <tr><th>Candidate name</th><td>{{ p.candidate_name or '' }}</td></tr>
+    <tr><th>Why</th><td>identified via the work(s) this person is attached to
+        ({{ p.reason }})</td></tr>
+    <tr><th>Via works</th><td>
+      {% for w in p.via_works or [] %}
+        <a href="/work/{{ w.work_id }}">{{ w.title }}</a> → {{ w.author_id }}<br>
+      {% endfor %}
+    </td></tr>
+    {% if p.reason == 'work_conflict' %}
+      <tr><th>Competing identities</th><td>
+        {% for c in p.candidates or [] %}{{ c.name }} ({{ c.external_id }})<br>{% endfor %}
+      </td></tr>
+    {% endif %}
+  {% elif item.item_type == 'title_proposal' %}
+    <tr><th>Current title</th><td>{{ p.old_title or '' }}</td></tr>
+    <tr><th>Proposed title</th><td><strong>{{ p.new_title or '' }}</strong></td></tr>
+    {% if p.native_title %}<tr><th>Native title</th><td>{{ p.native_title }} ({{ p.native_script or '?' }})</td></tr>{% endif %}
+    <tr><th>Confidence</th><td>{{ '%.2f' % (p.confidence or 0.0) }} &middot;
+        {{ 'already applied — reject to revert' if p.applied else 'not applied — accept to apply' }}</td></tr>
+    {% if p.evidence %}<tr><th>Evidence</th><td><em>“{{ p.evidence }}”</em></td></tr>{% endif %}
+    {% if p.work_id %}<tr><th>Work</th><td><a href="/work/{{ p.work_id }}">work {{ p.work_id }}</a></td></tr>{% endif %}
+  {% elif item.item_type == 'edition_metadata' %}
+    {% if p.identifier %}<tr><th>Identifier</th><td>{{ p.identifier }} (page) &middot;
+        via {{ p.authority or '?' }}</td></tr>{% endif %}
+    <tr><th>Current title</th><td>{{ p.old_title or '' }}</td></tr>
+    <tr><th>Chosen title</th><td><strong>{{ p.new_title or '' }}</strong>
+        &middot; from {{ p.title_source or '?' }}</td></tr>
+    {% if p.cip_title %}<tr><th>CIP title</th><td>{{ p.cip_title }}</td></tr>{% endif %}
+    {% if p.id_title %}<tr><th>ISBN title</th><td>{{ p.id_title }}</td></tr>{% endif %}
+    {% if p.page_title %}<tr><th>Page title</th><td>{{ p.page_title }}</td></tr>{% endif %}
+    {% if p.authors %}<tr><th>Authors</th><td>{{ p.authors | join(', ') }}</td></tr>{% endif %}
+    {% if p.translators %}<tr><th>Translators</th><td>{{ p.translators | join(', ') }}</td></tr>{% endif %}
+    {% if p.publisher %}<tr><th>Publisher</th><td>{{ p.publisher }}</td></tr>{% endif %}
+    {% if p.year %}<tr><th>Year</th><td>{{ p.year }}</td></tr>{% endif %}
+    <tr><th>Status</th><td>{{ 'applied — reject to revert' if p.applied else 'not applied' }}</td></tr>
+    {% if p.work_id %}<tr><th>Work</th><td><a href="/work/{{ p.work_id }}">work {{ p.work_id }}</a></td></tr>{% endif %}
+  {% elif item.item_type == 'edition_verify' %}
+    <tr><th>Matched by</th><td>{{ p.by }} &middot; overall: <strong>{{ p.overall }}</strong></td></tr>
+    <tr><th>Field diff</th><td>
+      <table>
+        <tr><th>Field</th><th>Status</th><th>Ours</th><th>Authority</th><th>Sources</th></tr>
+        {% for f in p.fields or [] %}
+        <tr>
+          <td>{{ f.field }}</td>
+          <td>{{ f.status }}</td>
+          <td>{% if f.inferred is iterable and f.inferred is not string %}{{ f.inferred | join(', ') }}{% else %}{{ f.inferred if f.inferred is not none else '' }}{% endif %}</td>
+          <td>{{ (f.authority or []) | join(', ') }}</td>
+          <td>{{ (f.sources or []) | join(', ') }}</td>
+        </tr>
+        {% endfor %}
+      </table>
+      <p><small>Accept backfills only a genuinely-empty publisher/year from an
+        unambiguous authority value; mismatches on title/authors/translators are
+        surfaced for a human, never auto-applied.</small></p>
+    </td></tr>
+    {% if p.edition_id %}<tr><th>Edition</th><td>{{ edition_link(p.edition_id) }}</td></tr>{% endif %}
+  {% else %}{# work_authorship #}
+    {% if p.authors %}<tr><th>Authors</th><td>{{ p.authors | join(', ') }}</td></tr>{% endif %}
+    {% if p.translators %}<tr><th>Translators</th><td>{{ p.translators | join(', ') }}</td></tr>{% endif %}
+    {% if p.canonical_number %}<tr><th>Canonical</th><td>{{ p.canonical_number }} ({{ p.canonical_system or '?' }})</td></tr>{% endif %}
+    <tr><th>Verdict</th><td>{{ p.verdict }} &middot; {{ p.agreement }} source(s): {{ (p.sources or []) | join(', ') }}</td></tr>
+  {% endif %}
+  {% if authority_url %}
+    <tr><th>Check</th><td><a href="{{ authority_url }}" target="_blank" rel="noopener">open authority page ↗</a></td></tr>
+  {% endif %}
+</table>
+
+{% if item.status == 'pending' %}
+{% set is_conflict = (item.item_type == 'person_work_joint' and p.reason == 'work_conflict') %}
+{% if is_conflict %}
+  <p><em>Conflicting identities — this person's works disagree on who they are
+     (possible conflation, or a mis-attributed work). Resolve by hand / merge first;
+     auto-bind is disabled.</em></p>
+{% else %}
+  <form method="post" action="/review-queue/{{ item.id }}/authority/accept" style="display:inline">
+    <button type="submit">{{ '✓ Confirm title' if item.item_type == 'title_proposal' else ('✓ Confirm metadata' if item.item_type == 'edition_metadata' else ('✓ Acknowledge &amp; backfill' if item.item_type == 'edition_verify' else '✓ Accept &amp; bind')) }}</button>
+  </form>
+{% endif %}
+<form method="post" action="/review-queue/{{ item.id }}/authority/reject" style="display:inline">
+  <button type="submit">✗ Reject</button>
+</form>
+{% else %}
+<p><em>Resolved as “{{ item.status }}”.</em></p>
+{% endif %}
+
+<h3>Raw payload</h3>
+<pre>{{ item.payload | tojson(indent=2) }}</pre>
+{% endblock %}

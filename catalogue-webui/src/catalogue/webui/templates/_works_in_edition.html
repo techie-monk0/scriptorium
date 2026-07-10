@@ -1,0 +1,45 @@
+{# ── Shared "Works In This Edition" section ─────────────────────────────────
+   One subsection per contained work (tinted, larger title), each showing read-only
+   Work Basics + a collapsed Work Details. Used by Browse (read-only) AND Review
+   (editable=true → adds a ✕ detach form and a "✎ To edit this work →" link to
+   /work/<id>). Editing a work happens on /work/<id>, never inline here.
+
+   Expects:
+     works    = [library.work_summary dict, …]   (already surfaced/filtered)
+     eid      = the edition id
+     editable = bool (Review) — gates detach + edit link + inline per-edition note editor
+   Styles come from _wie_styles.html (included once at page level). In Review the
+   CALLER wraps this in [data-bb-refresh] so the detach form submits in place. #}
+{% set editable = editable | default(false) %}
+<h3>Works In This Edition <span class="hint">({{ works|length }})</span></h3>
+<div class="wie-works">
+{% for w in works %}
+  <section class="wie-work">
+    <div class="wie-work-title">
+      <span>{{ w.title }}</span> <code>#{{ w.id }}</code>
+      {% if editable %}
+        <a class="wie-edit" href="/work/{{ w.id }}" title="open the full editable work page">✎ edit this work →</a>
+        <form method="post" action="/works/detect/{{ eid }}/work-detach?wid={{ w.id }}"
+              onsubmit="return confirm('Detach this work from the edition? (The work itself is kept.)');">
+          <button type="submit">✕ detach</button></form>
+      {% endif %}
+    </div>
+    {% if editable %}
+      {# Per-appearance note (edition_work.note) — editable here in Review; saves in place
+         via the data-bb-refresh wrapper the caller puts around this section. Scoped to
+         THIS edition, not the work. #}
+      <form method="post" action="/works/detect/{{ eid }}/work-note?wid={{ w.id }}"
+            style="margin:.15rem 0 .4rem">
+        <input name="note" size="40"
+               placeholder="note for this edition, e.g. only chs. 1–3 of the root text"
+               value="{{ w.edition_note or '' }}">
+        <button type="submit">save note</button>
+      </form>
+    {% elif w.edition_note %}
+      <p class="wie-note" style="margin:.15rem 0 .35rem; font-style:italic; color:var(--subtle-fg)">{{ w.edition_note }}</p>
+    {% endif %}
+    {% include '_work_basics.html' %}
+    {% include '_work_details.html' %}
+  </section>
+{% else %}<p class="hint">— no works linked yet —</p>{% endfor %}
+</div>

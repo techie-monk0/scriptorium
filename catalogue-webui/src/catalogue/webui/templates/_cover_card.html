@@ -1,0 +1,39 @@
+{# Cover override for one edition (editable Edition Basics). Pin the cover to a page of
+   one of its files, or upload an image; reset reverts to AUTO (ISBN) art. Each form
+   submits through the inline-card host (saveCardForm = FormData POST, multipart-safe),
+   which re-renders this card afterwards — so the thumbnail refreshes via cover_v.
+   Context: eid, holdings [{id,label,ext,has_file}], cover_pinned (bool), cover_v (token). #}
+<div class="ed-cover" style="overflow:hidden">
+  <img src="/edition/{{ eid }}/cover.jpg?v={{ cover_v }}" alt="cover"
+       style="float:right;width:60px;height:auto;border:1px solid var(--border);border-radius:4px;margin:0 0 .4rem .6rem">
+
+  {% set has_files = holdings | selectattr('has_file') | list %}
+  {% if has_files %}
+  <div class="hint" style="margin:.1rem 0">Use a page from a file:</div>
+  {% for h in holdings if h.has_file and h.ext in ('pdf', 'epub') %}
+  <form method="post" action="/edition/{{ eid }}/cover/from-holding/{{ h.id }}"
+        style="margin:.15rem 0; display:flex; gap:.35rem; align-items:center; flex-wrap:wrap">
+    <span class="hint">#{{ h.id }} {{ h.label }}{% if h.ext %} · {{ h.ext }}{% endif %}</span>
+    <label class="hint">p.<input type="number" name="page" value="1" min="1"
+           style="width:3.4em">{% if not loop.first %}{% endif %}</label>
+    <button type="submit">Use this page</button>
+  </form>
+  {% endfor %}
+  {% endif %}
+
+  <form method="post" action="/edition/{{ eid }}/cover/upload" enctype="multipart/form-data"
+        style="margin:.35rem 0; display:flex; gap:.35rem; align-items:center; flex-wrap:wrap">
+    <span class="hint">or upload an image:</span>
+    <input type="file" name="image" accept="image/*">
+    <button type="submit">Set cover</button>
+  </form>
+
+  {% if cover_pinned %}
+  <form method="post" action="/edition/{{ eid }}/cover/reset" style="margin:.15rem 0">
+    <button type="submit">Reset to auto</button>
+    <span class="hint">— currently using a custom cover</span>
+  </form>
+  {% else %}
+  <span class="hint">Using automatic cover (by ISBN).</span>
+  {% endif %}
+</div>

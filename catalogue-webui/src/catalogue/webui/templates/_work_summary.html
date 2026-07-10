@@ -1,0 +1,19 @@
+{# Read-only work summary for the Search page detail pane (/work/<id>/summary).
+   Browse-only: shows the work's basics and links to the Review page to edit.
+   `w` = library.work_summary dict. #}
+<h3 style="margin-top:0">{{ w.title }} <code>#{{ w.id }}</code></h3>
+{% if w.authors %}
+<p class="meta">By {% for a in w.authors %}{{ a.name }}{% if a.role and a.role != 'author' %} ({{ a.role }}){% endif %}{{ ', ' if not loop.last }}{% endfor %}</p>
+{% endif %}
+{% if w.work_type %}<p><span class="pill">{{ w.work_type }}</span>
+  {% if w.root %}· root: <a href="/work/{{ w.root.id }}">{{ w.root.title }}</a>{% endif %}</p>{% endif %}
+{% if w.canonical_system and w.canonical_number %}
+<p>Authority: {% for l in w.authority_links %}<a href="{{ l.url }}">{{ l.label }}</a>{% else %}{{ w.canonical_system }}:{{ w.canonical_number }}{% endfor %}</p>
+{% endif %}
+{% if w.native.sanskrit %}<p>Sanskrit: {{ w.native.sanskrit | join('; ') }}</p>{% endif %}
+{% if w.native.tibetan %}<p>Tibetan: {{ w.native.tibetan | join('; ') }}</p>{% endif %}
+{% if w.subjects %}<p>Subjects: {% for s in w.subjects %}{{ s[1] }}{{ ', ' if not loop.last }}{% endfor %}</p>{% endif %}
+{% if w.tradition %}<p>Tradition: {{ w.tradition }}</p>{% endif %}
+{% if w.notes %}<p>{{ w.notes }}</p>{% endif %}
+<p style="margin-top:.8rem; padding-top:.6rem; border-top:1px solid var(--border)">
+  <a href="/work/{{ w.id }}" title="open the full editable work page">✎ Edit this work on the Review page →</a></p>

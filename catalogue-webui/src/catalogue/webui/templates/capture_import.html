@@ -1,0 +1,37 @@
+{% extends "_base.html" %}
+{% block title %}Bulk import{% endblock %}
+{% block body %}
+<p><a href="/capture">← capture</a></p>
+<h1>Bulk-import ISBNs (Barcode to PC CSV mode)</h1>
+<p class="stub">
+  Paste the lines from a Barcode to PC CSV export, or upload the file. One
+  ISBN per line; extra columns (timestamps, titles) are ignored. Each row
+  goes through the same validate → Open Library → staging flow as a single
+  capture, so invalid checksums still land in staging for manual review.
+</p>
+
+{% if report %}
+  <p style="background:#efe;padding:0.5rem">
+    Scanned <strong>{{ report.scanned }}</strong> ·
+    imported <strong>{{ report.imported }}</strong> ·
+    invalid <strong>{{ report.invalid }}</strong> ·
+    duplicates in batch <strong>{{ report.duplicate_in_batch }}</strong>.
+    {% if report.ids %}
+      <br>New staging IDs:
+      {% for sid in report.ids %}<a href="/staging/{{ sid }}">{{ sid }}</a>{% if not loop.last %}, {% endif %}{% endfor %}.
+    {% endif %}
+  </p>
+{% endif %}
+
+<form method="post" action="/capture/import" enctype="multipart/form-data">
+  <p>
+    <label>CSV file<br>
+      <input type="file" name="file" accept=".csv,text/csv,text/plain">
+    </label>
+  </p>
+  <p>or paste lines:<br>
+    <textarea name="lines" rows="8" cols="40" placeholder="9780205309023&#10;978-0-374-52837-9&#10;..."></textarea>
+  </p>
+  <p><button type="submit">Import</button></p>
+</form>
+{% endblock %}

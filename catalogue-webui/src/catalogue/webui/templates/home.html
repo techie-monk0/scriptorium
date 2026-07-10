@@ -1,0 +1,97 @@
+{% extends "_base.html" %}
+{% block title %}Library{% endblock %}
+{% block body %}
+{# Netflix-style splash. The rails are composed by the SHARED Tier-2 presenter
+   (LibraryCore.homeVM, /static/js/library-core.js) over the cached /api/v1/replica, then
+   painted by the SHARED Tier-3 renderer (Shelf.render/renderSeriesRail, /static/js/shelf.js)
+   — the SAME composition + tiles web/PWA/native use, so there is ONE source of truth for the
+   shelves. The server ships only the one primitive a client can't know locally: which editions
+   were recently OPENED. #}
+<link rel="stylesheet" href="/static/css/shelf.css">
+<style>
+  .splash-empty { margin: 3rem 0; text-align: center; color: var(--subtle-fg); }
+  .status-strip { display: flex; flex-wrap: wrap; gap: .5rem; margin: .8rem 0 .2rem; }
+  .status-strip .chip {
+    display: inline-flex; align-items: center; gap: .4rem; text-decoration: none;
+    font-size: .82rem; padding: .25rem .7rem; border-radius: 999px;
+    background: #fde2c8; color: #8a4b10; border: 1px solid #f0c79a;
+  }
+  .status-strip .chip b { font-variant-numeric: tabular-nums; }
+</style>
+
+{% if can_edit() and (badges.review or badges.scan or badges.capture) %}
+<div class="status-strip">
+  {% if badges.review %}<a class="chip" href="/review">Review <b>{{ badges.review }}</b></a>{% endif %}
+  {% if badges.scan %}<a class="chip" href="/reconcile">Scan <b>{{ badges.scan }}</b></a>{% endif %}
+  {% if badges.capture %}<a class="chip" href="/capture">Capture <b>{{ badges.capture }}</b></a>{% endif %}
+</div>
+{% endif %}
+
+<div id="shelves"></div>
+<div class="splash-empty" id="splash-empty" hidden>
+  <p>No books in the catalogue yet.</p>
+  <p>Use <strong>Scan</strong> or <strong>Capture</strong> (in the menu) to add some.</p>
+</div>
+<script type="application/json" id="recent-data">{{ recent_ids | tojson }}</script>
+<script src="/static/js/library-core.js"></script>
+<script src="/static/js/shelf.js"></script>
+<script>
+  (function () {
+    var host = document.getElementById('shelves');
+    var href = function (eid) { return '/edition/' + eid + '/read'; };   // web tile → reader
+    var recentIds = JSON.parse(document.getElementById('recent-data').textContent || '[]');
+    function empty() { document.getElementById('splash-empty').hidden = false; }
+    function getJSON(url) {
+      return fetch(url, { headers: { 'Accept': 'application/json' } })
+        .then(function (r) { return r.ok ? r.json() : Promise.reject(); });
+    }
+    var lastReplica = null, lastStamp = null;
+    // Tier 3 — paint the view-model with the shared Shelf renderer (idempotent: clears + repaints).
+    function paint(replica, starredIds) {
+      lastReplica = replica;
+      Shelf.setStarred(starredIds);                       // seed the shared highlight set
+      var vm = LibraryCore.homeVM(replica, recentIds, starredIds, {});   // ONE composition, shared with native
+      if (vm.empty) { empty(); return; }
+      host.innerHTML = '';
+      vm.rails.forEach(function (rail) {
+        if (rail.kind === 'series') {
+          host.appendChild(Shelf.renderSeriesRail({
+            series: rail.sets.map(function (s) { return { name: s.name, count: s.count, books: s.cards }; }),
+            hrefFor: href }));
+        } else {
+          // Subject rails carry an id → the title deep-links to the descendant-inclusive subject page.
+          host.appendChild(Shelf.render({
+            title: rail.title, books: rail.cards, count: rail.count, kind: rail.kind,
+            moreUrl: rail.kind === 'subject' ? ('/subject/' + rail.id) : undefined,
+            hrefFor: href }));
+        }
+      });
+      Shelf.enhance(host);
+    }
+    // The starred set is a sibling payload (like recentIds) — feeds the Starred rail + cover highlights.
+    // The starred GET routes through the shared mapper (no surface hardcodes the endpoint).
+    function load() {
+      return Promise.all([getJSON('/api/v1/replica'),
+                          getJSON(LibraryCore.starredRequest('list').path).catch(function () { return { editions: [] }; })])
+        .then(function (res) {
+          var replica = res[0], starredIds = (res[1] && res[1].editions) || [];
+          // Skip the repaint (and its scroll reset) when nothing changed — `exported_at` is stable while
+          // the conditional GET 304s, and bumps when a new edition/series lands.
+          if (replica.exported_at === lastStamp) { Shelf.setStarred(starredIds); return; }
+          lastStamp = replica.exported_at;
+          paint(replica, starredIds);
+        })
+        .catch(empty);
+    }
+    // Star a book (any cover) → the shared toggle fires 'starred:changed'; splice the Starred rail in/out
+    // live from the SAME homeVM, no reload. Attached once; uses the latest painted replica.
+    document.addEventListener('starred:changed', function (ev) {
+      if (lastReplica) Shelf.syncStarredRail(host, { replica: lastReplica, ids: (ev.detail && ev.detail.ids) || [], hrefFor: href });
+    });
+    // Returning to a long-open Home tab revalidates (cheap 304 when unchanged), so a newly-added
+    // edition/series appears without a manual reload — the browser's foreground-refresh.
+    document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') load(); });
+    load();
+  })();
+</script>
+{% endblock %}

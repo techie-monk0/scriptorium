@@ -1,0 +1,564 @@
+{% extends "_base.html" %}
+{% block title %}{{ 'Multi-work' if mode == 'multi' else 'Single-work' }} review — dry run{% endblock %}
+{% block body %}
+{% include '_wie_styles.html' %}   {# shared "Works In This Edition" + Work Basics/Details styles #}
+<div class="bb-wide">
+{% include '_review_tabs.html' %}
+{# Quick way to register a person who isn't in the catalogue yet, without leaving the
+   review: opens the add-person page in a NEW TAB. Create them there, then come back and
+   pick them in any author/translator picker. #}
+<div style="display:flex; justify-content:flex-end; margin:0 0 .4rem">
+  <a href="/people#new-person" target="_blank" rel="noopener"
+     style="padding:.35rem .8rem; border:1px solid var(--link); border-radius:6px;
+            background:var(--link); color:#fff; text-decoration:none; font-size:.9rem">
+     ＋ Add Person ↗</a>
+</div>
+{% if mode == 'multi' %}
+  <h1>Multi-work editions — review &amp; apply</h1>
+  <p class="stub">Each book holds several texts. Compare the segmentations
+    (deterministic vs the local model vs the cloud model), verify each contained
+    work (title, canonical#, English gloss, authority links), then apply the method
+    you trust. <a href="/works/detect/single">→ single-work editions</a></p>
+  <p class="hint">{{ counts.multi }} multi-work editions. ↑/↓ to move.</p>
+{% else %}
+  <p class="stub">Each book is one text. <b>classical</b> → links a canonical work
+    (verify via the 84000/BDRC English title or gloss), <b>modern</b> → author goes on
+    the edition, no work. Accept &amp; apply per edition.
+    {% if feature_enabled('multi_work_detection') %}<a href="/works/detect/multi">→ multi-work editions</a>{% endif %}</p>
+  <p class="hint">{{ items|length }} editions · {{ counts.classical }} classical ·
+    {{ counts.modern }} modern{% if counts.multi %} · {{ counts.multi }} marked multi-work{% endif %}.
+    <i>Confidence is the classical-match score (classical only).</i> ↑/↓ to move.</p>
+{% endif %}
+
+{% if not items %}
+  <p class="stub">No detections cached yet — run
+    <code>python3 -m catalogue.cli.{{ 'segment_detect' if mode == 'multi' else 'work_detect' }}</code> first.</p>
+{% else %}
+  {% set detail_template = '_detection_detail.html' %}
+  {% set empty_msg = 'No detections.' %}
+  {% set master_search = true %}
+  {% set master_collapse = true %}
+  {% set master_search_label = 'Filter editions by title…' %}
+  {% set bulk_select = true %}
+  {# Keep ALREADY-REVIEWED books tickable too, so a batch can be added to a series /
+     subject / author after review (use "show all reviewed" or the filter to surface
+     them). Mark-all-reviewed still skips done rows. #}
+  {% set bulk_include_reviewed = true %}
+  {% include '_book_browser.html' %}
+{% endif %}
+</div>
+
+{% if items %}
+{# Bulk "✓ Mark all reviewed": flips each ticked edition's `applied` flag (the same
+   /reviewed route the single Mark-reviewed button uses) so it leaves the Books backlog
+   WITHOUT an AI apply — for editions an operator has eyeballed. Reversible per-row. #}
+<script>
+// Reviewed rows stay selectable here (for add-to-series etc.), so the mark-reviewed
+// action leaves their checkbox enabled instead of disabling it after a mark.
+window.BB_INCLUDE_REVIEWED = true;
+window.BB_REVIEW = {
+  buttonLabel: '✓ Mark all reviewed',
+  confirm: n => `Mark ${n} book(s) reviewed? They leave the backlog without an AI apply `
+    + `(reversible — open one and Unmark).`,
+  endpoint: id => `/works/detect/${id}/reviewed`,
+  body: {value: '1'},
+  done: id => `<h2>✓ Reviewed</h2><p>Book #${id} marked reviewed.</p>`
+    + `<p class="hint">Reversible — open it and press <b>Mark reviewed</b> again to Unmark.</p>`,
+};
+</script>
+{% include '_bulk_filing_ux.html' %}   {# FilingUX: ask about ambiguous folders, then a summary popup #}
+{% include '_bulk_mark_reviewed.html' %}
+{# Books-only: assign-subject / add-to-series / delete over the same ticked rows.
+   _bulk_assign defines the reusable BulkAssign control the actions partial configures. #}
+{% include '_bulk_assign.html' %}
+{% include '_bulk_edition_actions.html' %}
+{% endif %}
+
+{% include '_typeahead.html' %}
+{% include '_subj_datalist.html' %}   {# ONE shared subjects datalist for every picker on the page #}
+{# The contained works are shown as inline /work/<wid>/card fragments (injected via
+   innerHTML, so their own <script> can't run) — include the work-card's page-level JS
+   here, ONCE, so the card's onclick handlers (mountRootPicker / mountAuthorPicker /
+   merge / open) are defined when an injected card fires them. #}
+{% include '_work_card_js.html' %}
+<script>
+// The edit card (_detection_edit.html) is injected via innerHTML, so its picker
+// handlers live here on the page and are invoked by the card's inline onclick. On
+// pick we set the matching hidden form's value + submit it; the book-browser card
+// host intercepts the POST and re-fetches the card. Mirrors catalogue_review.html.
+// After a pick, the card re-renders (showing the new chip). `_reopenContrib` tells the
+// bb:cardrendered handler to RE-OPEN this same field's picker with the query restored, so
+// the OTHER candidates from the same search are still there to add — multi-add without
+// retyping. Cleared after one use, so only a pick (not other card edits) re-opens.
+let _reopenContrib = null;
+function bbMountPersonSearch(btn, eid, initialQuery) {
+  const wrap = btn.closest('.contrib-row');
+  const host = wrap.querySelector('.person-search-host');
+  const form = wrap.querySelector('.add-person-form');           // action picks author vs translator
+  if (host.dataset.mounted) { host.querySelector('input')?.focus(); return; }
+  host.dataset.mounted = '1'; btn.style.display = 'none';
+  window.Typeahead.mount(host, {
+    searchUrl: q => `/picker/person/search?q=${encodeURIComponent(q)}`,
+    parse: j => j.matches,
+    render: m => `<b>Saved Person:</b> <code>#${m.id}</code> ${Typeahead.esc(m.name)}`
+      + (m.dates ? ` <small>${Typeahead.esc(m.dates)}</small>` : ''),
+    onPick: m => { form.querySelector('input[name=pid]').value = m.id;
+                   form.querySelector('input[name=name]').value = '';
+                   _reopenContrib = { action: form.action,         // re-open this field after re-render
+                                      query: host.querySelector('.ta-q')?.value || '' };
+                   form.requestSubmit ? form.requestSubmit() : form.submit(); },
+    // No saved person matches → create one with the typed name (editable first, so an
+    // honorific like "Professor of Music …" can be trimmed before saving).
+    emptyHtml: q => `no saved person “${q}” — `   /* q is already HTML-escaped by Typeahead */
+      + `<button type="button" class="lnk" style="color:var(--link);border:0;background:none;cursor:pointer"`
+      + ` onclick="bbAddTypedPerson(this)">➕ add as a new person</button>`,
+    placeholder: 'type a person name…',
+    initialQuery: initialQuery || '',
+  });
+}
+// Create a brand-new person from the typed query and link them (author/translator per the
+// row's add-person-form). The picker offers this when no saved person matches.
+function bbAddTypedPerson(btn) {
+  const row = btn.closest('.contrib-row');
+  const q = (row.querySelector('.person-search-host .ta-q')?.value || '').trim();
+  if (!q) return;
+  const form = row.querySelector('.add-person-form');
+  form.querySelector('input[name=pid]').value = '';
+  form.querySelector('input[name=name]').value = q;
+  _reopenContrib = { action: form.action, query: '' };   // re-open empty for the next add
+  form.requestSubmit ? form.requestSubmit() : form.submit();
+}
+// Re-open the contributor picker after its add re-rendered the card (multi-add).
+document.addEventListener('bb:cardrendered', () => {
+  if (!_reopenContrib) return;
+  const r = _reopenContrib; _reopenContrib = null;
+  const form = document.querySelector(`.detail .add-person-form[action="${r.action}"]`);
+  const addBtn = form && form.closest('.contrib-row').querySelector('button[onclick^="bbMountPersonSearch"]');
+  if (addBtn) bbMountPersonSearch(addBtn, 0, r.query);
+});
+// Authority id (Toh/BDRC/Wikidata) appended to the END of a saved-work row when it has one.
+function bbAuthorityTag(m) {
+  if (!m.canonical_number) return '';
+  const IDP = {bdrc: 'BDRC', wikidata: 'WD', toh: 'Toh'};
+  const sys = IDP[m.canonical_system] || Typeahead.esc(m.canonical_system || 'id');
+  return ` <small class="auth-tag">· ${sys} ${Typeahead.esc(m.canonical_number)}</small>`;
+}
+// Generic work picker (used by the works list + the commentary/root pickers). Finds
+// its own .work-pick wrapper, so several can coexist in one card; each submits its
+// own .pick-work-form, whose action decides what happens to the chosen work.
+// Work picker (works list + root/commentary boxes): one box searching, in order,
+// local WORKS (prefix "Work:"), EDITIONS (prefix "Edition:" — uses the edition's work),
+// and the 84000/Toh authority index (prefix "Toh:" — by English / Sanskrit / Tibetan,
+// creating the work from its canonical#). Works are listed first.
+// Shared Typeahead options (render + onPick + empty) for the work picker. The fast
+// as-you-type mount AND the on-demand live-authority mount reuse these — they differ
+// ONLY in searchUrl, so a BDRC/Wikidata hit picks + auto-populates exactly like a local one.
+function bbWorkPickOpts(eid, form) {
+  const ALL = ['work_id', 'edition_id', 'canonical_system', 'canonical_number',
+               'english_title', 'sanskrit_title', 'tibetan_title'];
+  const setf = (n, v) => { const el = form.querySelector(`[name=${n}]`); if (el) el.value = v || ''; };
+  return {
+    parse: j => j.matches,
+    render: m => {
+      if (m.authority) {
+        const SRC = {bdrc: 'BDRC live', wikidata: 'Wikidata live', toh: '84000'};
+        const IDP = {bdrc: 'BDRC', wikidata: 'WD', toh: 'Toh'};
+        return `<b>${IDP[m.system] || m.system} ${m.number}:</b> ${Typeahead.esc(m.title)}`
+          + (m.sanskrit && m.sanskrit !== m.title ? ` <small>· ${Typeahead.esc(m.sanskrit)}</small>` : '')
+          + (m.tibetan && m.tibetan !== m.title ? ` <small>· ${Typeahead.esc(m.tibetan)}</small>` : '')
+          + ` <small>· ${SRC[m.system] || m.system}</small>`;
+      }
+      if (m.kind === 'edition') return `<b>Saved Edition:</b> ${Typeahead.esc(m.title)} <small>· #${m.edition_id}</small>`;
+      return `<b>Saved Work:</b> <code>#${m.work_id}</code> ${Typeahead.esc(m.title)}`
+        + (m.authors && m.authors.length ? ` <small>— ${Typeahead.esc(m.authors.join(', '))}</small>` : '')
+        + (m.attached ? ' <small>· already on this book</small>' : '')
+        + bbAuthorityTag(m);   // authority id (Toh/BDRC/…) at the END
+    },
+    onPick: m => {
+      ALL.forEach(n => setf(n, ''));
+      if (m.authority) {
+        setf('canonical_system', m.system); setf('canonical_number', m.number);
+        // each title to its own script field — never the display title into English
+        setf('english_title', m.english); setf('sanskrit_title', m.sanskrit); setf('tibetan_title', m.tibetan);
+      } else if (m.kind === 'edition') { setf('edition_id', m.edition_id); }
+      else { setf('work_id', m.work_id); }
+      form.requestSubmit ? form.requestSubmit() : form.submit();
+    },
+    emptyHtml: q => `no match for “${q}” — `
+      + `<button type="button" class="lnk" style="color:var(--link);border:0;background:none;cursor:pointer"`
+      + ` onclick="bbAddTypedWork(this)">➕ add as a new work</button>`,
+  };
+}
+function bbMountWorkPick(btn, eid) {
+  const wrap = btn.closest('.work-pick');
+  const host = wrap.querySelector('.work-search-host');
+  const form = wrap.querySelector('.pick-work-form');
+  if (host.dataset.mounted) { host.querySelector('input')?.focus(); return; }
+  host.dataset.mounted = '1'; btn.style.display = 'none';
+  // As-you-type searches LOCAL works + editions + the OFFLINE 84000 index only — instant,
+  // no network. The slow live BDRC/Wikidata lookup is OPT-IN (bbWorkPickLive) so typing a
+  // title never fires a network round-trip per keystroke (which made the box feel like it
+  // re-searched after every letter).
+  window.Typeahead.mount(host, Object.assign({
+    searchUrl: q => `/works/search?q=${encodeURIComponent(q)}&exclude_edition=${eid}&editions=1&authority=1`,
+    placeholder: 'search works / editions / 84000 — prefix skt: or tib: to scope…',
+  }, bbWorkPickOpts(eid, form)));
+  const liveBtn = wrap.querySelector('.work-live-btn');
+  if (liveBtn) liveBtn.style.display = '';
+}
+// Opt-in LIVE authority search (BDRC + Wikidata over the network) — one deliberate click,
+// seeded with whatever's already typed in the fast box, instead of a network hit per key.
+function bbWorkPickLive(btn, eid) {
+  const wrap = btn.closest('.work-pick');
+  const host = wrap.querySelector('.work-live-host');
+  const form = wrap.querySelector('.pick-work-form');
+  if (host.dataset.mounted) { host.querySelector('input')?.focus(); return; }
+  host.dataset.mounted = '1';
+  const typed = wrap.querySelector('.work-search-host .ta-q');
+  window.Typeahead.mount(host, Object.assign({
+    searchUrl: q => `/works/search?q=${encodeURIComponent(q)}&exclude_edition=${eid}&authority=1&live=1`,
+    searchingLabel: 'searching BDRC + Wikidata (live)…',
+    placeholder: 'live BDRC / Wikidata authority search…',
+    initialQuery: (typed && typed.value.trim()) || '',
+    debounce: 450,
+  }, bbWorkPickOpts(eid, form)));
+}
+// Resolve a PASTED authority id (bdr:W… / Toh 3824 / wd:Q…) to its titles and create
+// the work with that canonical identity — no need to type a title by hand.
+async function bbResolveWorkId(btn) {
+  const wrap = btn.closest('.work-pick');
+  const id = (wrap.querySelector('.id-input')?.value || '').trim();
+  if (!id) return;
+  let m;
+  try { m = await (await fetch(`/works/authority/resolve?id=${encodeURIComponent(id)}`)).json(); }
+  catch (e) { alert('Lookup failed.'); return; }
+  if (!m || m.error) { alert((m && m.error) || 'Could not resolve that id.'); return; }
+  const form = wrap.querySelector('.pick-work-form');
+  const setf = (n, v) => { const el = form.querySelector(`[name=${n}]`); if (el) el.value = v || ''; };
+  ['work_id', 'edition_id'].forEach(n => setf(n, ''));
+  setf('canonical_system', m.system); setf('canonical_number', m.number);
+  // each title to its own script field; a Tibetan-only work gets no English → review queue
+  setf('english_title', m.english); setf('sanskrit_title', m.sanskrit); setf('tibetan_title', m.tibetan);
+  form.requestSubmit ? form.requestSubmit() : form.submit();
+}
+// Create a brand-new work from the typed text when nothing matched (root/commentary or
+// the works list) — it's added to the works table via _resolve_work_from_form/create_work.
+function bbAddTypedWork(btn) {
+  const wrap = btn.closest('.work-pick');
+  const title = (wrap.querySelector('.ta-q')?.value || '').trim();
+  if (!title) return;
+  const form = wrap.querySelector('.pick-work-form');
+  ['work_id', 'edition_id', 'canonical_system', 'canonical_number', 'sanskrit_title', 'tibetan_title']
+    .forEach(n => { const el = form.querySelector(`[name=${n}]`); if (el) el.value = ''; });
+  form.querySelector('[name=english_title]').value = title;
+  form.requestSubmit ? form.requestSubmit() : form.submit();
+}
+// Authority-only search inside the "add a new work" form: fills the canonical#/titles
+// from a picked 84000/Toh entry so you don't look up the number by hand.
+function bbMountAuthoritySearch(btn) {
+  const form = btn.closest('.new-work-form');
+  const host = btn.parentElement.querySelector('.authority-host');
+  if (host.dataset.mounted) { host.querySelector('input')?.focus(); return; }
+  host.dataset.mounted = '1'; btn.style.display = 'none';
+  window.Typeahead.mount(host, {
+    searchUrl: q => `/works/authority/search?q=${encodeURIComponent(q)}&live=1`,
+    searchingLabel: 'searching live authorities (BDRC + Wikidata)…',
+    debounce: 450,        // this hits the network (BDRC/Wikidata) — don't fire per keystroke
+    parse: j => j.matches,
+    render: m => {
+      const IDP = {bdrc: 'BDRC', wikidata: 'WD', toh: 'Toh'};
+      const SRC = {bdrc: 'BDRC live', wikidata: 'Wikidata live', toh: '84000'};
+      return `<b>${IDP[m.system] || 'Toh'} ${m.number || m.toh}:</b> ${Typeahead.esc(m.english || '')}`
+        + (m.sanskrit ? ` <small>· ${Typeahead.esc(m.sanskrit)}</small>` : '')
+        + (m.tibetan ? ` <small>· ${Typeahead.esc(m.tibetan)}</small>` : '')
+        + ` <small>· ${SRC[m.system] || '84000'}</small>`;
+    },
+    onPick: m => {
+      const fill = (n, v) => { const el = form.querySelector(`[name=${n}]`); if (el && (v || !el.value)) el.value = v || el.value; };
+      form.querySelector('[name=canonical_system]').value = m.system || 'toh';
+      form.querySelector('[name=canonical_number]').value = m.number || m.toh || '';
+      fill('english_title', m.english); fill('sanskrit_title', m.sanskrit); fill('tibetan_title', m.tibetan);
+    },
+    placeholder: 'title (English / Sanskrit / Tibetan) — searches 84000 + live BDRC…',
+  });
+}
+// New-work author picker: accumulates chosen persons as hidden author_pids inputs
+// on the create form (submitted all at once when the work is created).
+function bbMountNewWorkAuthors(btn) {
+  const form = btn.closest('.new-work-form');
+  const host = form.querySelector('.nw-author-host');
+  const chips = form.querySelector('.nw-author-chips');
+  if (host.dataset.mounted) { host.querySelector('input')?.focus(); return; }
+  host.dataset.mounted = '1'; btn.style.display = 'none';
+  window.Typeahead.mount(host, {
+    searchUrl: q => `/picker/person/search?q=${encodeURIComponent(q)}`,
+    parse: j => j.matches,
+    render: m => `<b>Saved Person:</b> <code>#${m.id}</code> ${Typeahead.esc(m.name)}`,
+    onPick: m => {
+      if (form.querySelector(`input[name=author_pids][value="${m.id}"]`)) return;
+      const inp = document.createElement('input');
+      inp.type = 'hidden'; inp.name = 'author_pids'; inp.value = m.id;
+      const chip = document.createElement('span');
+      chip.className = 'chip'; chip.textContent = m.name + ' ';
+      const x = document.createElement('button');
+      x.type = 'button'; x.textContent = '✕';
+      x.onclick = () => { inp.remove(); chip.remove(); };
+      chip.appendChild(x); chip.appendChild(inp); chips.appendChild(chip);
+    },
+    placeholder: 'add author…',
+  });
+}
+// New-work commentary → root: ticking the 'commentary' Type radio reveals the root-text
+// box; ticking 'root' (or nothing) hides it and drops any pick. The chosen root rides the
+// hidden root_work_id, which _resolve_work_from_form turns into a commentary_on relation.
+function bbNewWorkType(radio) {
+  const form = radio.closest('.new-work-form');
+  const box = form.querySelector('.nw-root-box');
+  if (!box) return;
+  const isComm = form.querySelector('input[name=work_type][value=commentary]')?.checked;
+  box.style.display = isComm ? '' : 'none';
+  if (!isComm) {                       // switching away from commentary clears the pick
+    box.querySelector('input[name=root_work_id]').value = '';
+    const chip = box.querySelector('.nw-root-chip');
+    chip.textContent = 'no root text picked yet'; chip.classList.add('hint');
+  }
+}
+// Root-text picker for the "add a new work" form (commentary only): search existing works
+// and on pick fill the hidden root_work_id + show which root was chosen. Reuses Typeahead +
+// /works/search, same as the standalone /work page's mountRootPicker.
+function bbMountNewWorkRoot(btn) {
+  const form = btn.closest('.new-work-form');
+  const host = form.querySelector('.nw-root-host');
+  if (host.dataset.mounted) { host.querySelector('input')?.focus(); return; }
+  host.dataset.mounted = '1';
+  window.Typeahead.mount(host, {
+    searchUrl: q => `/works/search?q=${encodeURIComponent(q)}`,
+    parse: j => (j.matches || []).filter(m => m.kind === 'work'),
+    render: m => `<code>#${m.work_id}</code> ${Typeahead.esc(m.title)}`
+      + (m.authors && m.authors.length ? ` <small>— ${Typeahead.esc(m.authors.join(', '))}</small>` : ''),
+    onPick: m => {
+      form.querySelector('input[name=root_work_id]').value = m.work_id;
+      const chip = form.querySelector('.nw-root-chip');
+      chip.textContent = `📖 commentary on #${m.work_id} ${m.title}`; chip.classList.remove('hint');
+      host.dataset.mounted = ''; host.innerHTML = '';   // collapse the search; ↑ button re-picks
+    },
+    placeholder: 'search the root text by title / alias…', autofocus: true,
+  });
+}
+
+// ── Delete / merge an edition or work (reversible) — mirrors the persons picker.
+// Edition ops retire the row via the shell's bbResolveRow + an ↩ Undo (u); work ops
+// re-render the edit card + offer Undo in a snackbar. Undo runs through the shared
+// kind-dispatched journal at /works/detect/undo.
+async function _post(url, body) {
+  try {
+    return await (await fetch(url, {method: 'POST',
+      headers: {'X-Requested-With': 'fetch', 'Content-Type': 'application/json'},
+      body: JSON.stringify(body || {})})).json();
+  } catch (e) { alert('Request failed — nothing was changed.'); return {error: 'network'}; }
+}
+
+// A modal typeahead that resolves to the chosen match (or null on cancel).
+function _pickEntity(title, searchUrl, render) {
+  return new Promise(resolve => {
+    const ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.3);display:flex;'
+      + 'align-items:center;justify-content:center;z-index:50';
+    const card = document.createElement('div');
+    card.style.cssText = 'background:var(--surface);border-radius:8px;padding:1rem;min-width:24rem;max-width:90vw';
+    card.innerHTML = `<b>${title}</b><div class="ta-host" style="margin:.4rem 0"></div>`
+      + '<button type="button" class="pa-btn cancel">Cancel</button>';
+    ov.appendChild(card); document.body.appendChild(ov);
+    const done = m => { ov.remove(); resolve(m); };
+    ov.addEventListener('click', e => { if (e.target === ov) done(null); });
+    card.querySelector('.cancel').onclick = () => done(null);
+    window.Typeahead.mount(card.querySelector('.ta-host'), {
+      searchUrl, parse: j => j.matches, render, onPick: done,
+      autofocus: true, placeholder: 'type to search…',
+    });
+  });
+}
+
+function _resolveEdition(eid, msg, token, opts) {
+  let html = `<h2>✓ Done</h2><p>Edition #${eid} ${msg}.</p>`;
+  if (token != null) html += '<p class="undo-row"><button type="button" class="pa-btn" '
+    + `data-key="u" data-key-label="undo" onclick="undoWorks(${token}, ${eid})">↩ Undo</button> `
+    + '<span class="hint">restore it exactly as it was</span></p>';
+  html += '<p class="hint">Press <kbd>↓</kbd> for the next one.</p>';
+  window.bbResolveRow(eid, html, opts);
+}
+async function deleteEdition(eid) {
+  if (!confirm(`Delete edition #${eid}? Its holdings + files move to Trash (recoverable via ↩ Undo).`)) return;
+  const r = await _post(`/works/detect/${eid}/delete-edition`, {});
+  if (r.error) { alert(r.error); return; }
+  // Deleted → its holdings are gone; strip the now-dead open-PDF links from the kept card.
+  _resolveEdition(eid, r.files_moved ? 'deleted (files moved to Trash)' : 'deleted', r.undo_token,
+                  {stripOpen: true});
+}
+async function mergeEdition(eid) {
+  const m = await _pickEntity('Merge this edition INTO which edition?',
+    q => `/editions/search?q=${encodeURIComponent(q)}&exclude=${eid}`,
+    m => `<b>Saved Edition:</b> <code>#${m.edition_id}</code> ${Typeahead.esc(m.title)}`
+       + (m.isbn ? ` <small>ISBN ${Typeahead.esc(m.isbn)}</small>` : ''));
+  if (!m) return;
+  if (!confirm(`Merge edition #${eid} INTO #${m.edition_id} (${m.title})? #${eid} is removed.`)) return;
+  const r = await _post(`/works/detect/${eid}/merge-edition`, {into: m.edition_id});
+  if (r.error) { alert(r.error); return; }
+  _resolveEdition(eid, `merged into <b>${Typeahead.esc(r.into_title || ('#' + m.edition_id))}</b>`, r.undo_token);
+  // The destination edition just absorbed this one's holdings/works. If it's also a
+  // row in this worklist, refresh its card so the moved files show up at once (no-op
+  // if #into isn't listed here) — otherwise it keeps rendering its pre-merge state,
+  // which makes a just-merged holding look like it vanished.
+  if (window.bbRefreshDetail) window.bbRefreshDetail(m.edition_id);
+}
+// `s` = apply and advance — the works twin of Enter-binds-and-next in the person picker.
+async function applyEdition(eid) {
+  // Apply uses the SAVED edition state, so pending edits would be ignored. Rather than
+  // force a save-then-apply two-step, offer it inline: Save & apply (save every dirty
+  // card, then apply the fresh state), Apply anyway (drop the edits), or Cancel.
+  if (window.bbIsDirty && window.bbIsDirty()) {
+    const f = (window.bbDirtyFields && window.bbDirtyFields()) || [];
+    const what = f.length ? 'You have unsaved edits:\n  • ' + f.join('\n  • ')
+                          : 'This card has unsaved edits.';
+    const choice = window.bbChoose
+      ? await window.bbChoose(what, [
+          { key: 'save',  label: 'Save & apply', primary: true },
+          { key: 'apply', label: 'Apply without saving' },
+          { key: 'cancel', label: 'Cancel' }])
+      : (confirm(what + '\n\nOK = apply without them · Cancel = go back and Save') ? 'apply' : 'cancel');
+    if (!choice || choice === 'cancel') return;
+    if (choice === 'save') {
+      try { await window.bbSaveAllDirty(); }
+      catch (e) { alert('Could not save edits — nothing applied.'); return; }
+    }
+  }
+  let r = await _post(`/works/detect/${eid}/apply`, {});
+  // Server guard: a work has a canonical authority id but the edition isn't marked classical.
+  if (r.status === 'confirm' && r.field === 'classical') {
+    if (!confirm(r.reason)) return;                 // Cancel → let them review / tick the box
+    await _post(`/works/detect/${eid}/determination`, {classical: '1'});   // OK → mark classical
+    r = await _post(`/works/detect/${eid}/apply`, {});                     // …then apply
+  }
+  if (r.error) { alert(r.error); return; }
+  if (r.status !== 'applied') { alert(r.reason || 'Nothing to apply.'); return; }
+  // Re-render the POST-apply view (canonical work linked, degenerate work dropped, ↩ Undo
+  // in the action bar) instead of keeping the stale pre-apply card whose edit links 404.
+  // This also clears the dirty flag, so advancing won't trip the discard guard.
+  if (window.bbRefreshDetail) await window.bbRefreshDetail(eid);
+  if (window.bbSelectNext) window.bbSelectNext();      // → next edition
+}
+// Mark a MULTI-work edition reviewed (value=1) / unmark (value=0). The contained texts
+// are curated by hand (add/detach), so there's no AI apply — this just flips the
+// detection's done flag so the book leaves the backlog and the row collapses. Mirrors
+// applyEdition's unsaved-edits guard + advance-to-next on marking done.
+async function markReviewed(eid, value) {
+  if (value && window.bbIsDirty && window.bbIsDirty()) {
+    const f = (window.bbDirtyFields && window.bbDirtyFields()) || [];
+    const what = f.length ? 'You have unsaved edits:\n  • ' + f.join('\n  • ')
+                          : 'This card has unsaved edits.';
+    const choice = window.bbChoose
+      ? await window.bbChoose(what, [
+          { key: 'save',  label: 'Save & mark reviewed', primary: true },
+          { key: 'mark',  label: 'Mark reviewed without saving' },
+          { key: 'cancel', label: 'Cancel' }])
+      : (confirm(what + '\n\nOK = mark reviewed · Cancel = go back and Save') ? 'mark' : 'cancel');
+    if (!choice || choice === 'cancel') return;
+    if (choice === 'save') {
+      try { await window.bbSaveAllDirty(); }
+      catch (e) { alert('Could not save edits — nothing marked.'); return; }
+    }
+  }
+  const r = await _post(`/works/detect/${eid}/reviewed`, { value: value ? '1' : '0' });
+  if (r && r.error) { alert(r.error); return; }
+  if (window.bbToast) window.bbToast(value ? 'Marked reviewed ✓' : 'Unmarked');
+  if (window.bbRefreshDetail) await window.bbRefreshDetail(eid);
+  if (value && window.bbSelectNext) window.bbSelectNext();      // → next edition
+}
+// Save the stored title and refresh the whole row, so the edition NAME AT THE TOP
+// (and the master-list label) updates to the saved title — not just the card field.
+async function saveEditionTitle(eid, btn) {
+  // Read the input from the CLICKED button's own context, not a global id lookup:
+  // after a card submit (e.g. linking a toh/bdrc work) the row's hidden .detail-src
+  // snapshot holds a STALE duplicate of this same input id, and getElementById would
+  // return that stale copy — so the typed title never gets saved. Scope to the live pane.
+  const inp = (btn && btn.closest('td') && btn.closest('td').querySelector('input'))
+            || document.querySelector('.detail #ed-title-' + eid)
+            || document.getElementById('ed-title-' + eid);
+  if (!inp || !inp.value.trim()) { alert('Title cannot be empty.'); return; }
+  const r = await _post(`/works/detect/${eid}/set-title`, {title: inp.value});
+  if (r && r.error) { alert(r.error); return; }
+  if (window.bbToast) window.bbToast('Title saved ✓');
+  if (window.bbRefreshDetail) await window.bbRefreshDetail(eid);   // re-renders heading + label + card
+}
+// ISBN — in-place edit twin of saveEditionTitle. Scope the input to the clicked button's
+// own cell (not getElementById) to dodge the stale .detail-src snapshot duplicate. Blank
+// is allowed (clears the ISBN). Refresh so the Google Books link tracks the new value.
+async function saveEditionIsbn(eid, btn) {
+  const inp = (btn && btn.closest('td') && btn.closest('td').querySelector('input'))
+            || document.querySelector('.detail #ed-isbn-' + eid)
+            || document.getElementById('ed-isbn-' + eid);
+  if (!inp) return;
+  const r = await _post(`/works/detect/${eid}/set-isbn`, {isbn: inp.value});
+  if (r && r.error) { alert(r.error); return; }
+  if (window.bbToast) window.bbToast('ISBN saved ✓');
+  if (window.bbRefreshDetail) await window.bbRefreshDetail(eid);
+}
+// Notes — in-place edit twin of saveEditionIsbn, but for the <textarea>. Scope to the
+// clicked button's own cell to dodge the stale .detail-src snapshot duplicate. Blank
+// clears the note.
+async function saveEditionNotes(eid, btn) {
+  const ta = (btn && btn.closest('td') && btn.closest('td').querySelector('textarea'))
+           || document.querySelector('.detail #ed-notes-' + eid)
+           || document.getElementById('ed-notes-' + eid);
+  if (!ta) return;
+  const r = await _post(`/works/detect/${eid}/set-notes`, {notes: ta.value});
+  if (r && r.error) { alert(r.error); return; }
+  if (window.bbToast) window.bbToast('Notes saved ✓');
+  if (window.bbRefreshDetail) await window.bbRefreshDetail(eid);
+}
+// Tradition — in-place edit twin of saveEditionIsbn, for the edition's Buddhist lineage.
+async function saveEditionTradition(eid, btn) {
+  const inp = (btn && btn.closest('td') && btn.closest('td').querySelector('input'))
+            || document.querySelector('.detail #ed-tradition-' + eid)
+            || document.getElementById('ed-tradition-' + eid);
+  if (!inp) return;
+  const r = await _post(`/works/detect/${eid}/set-tradition`, {tradition: inp.value});
+  if (r && r.error) { alert(r.error); return; }
+  if (window.bbToast) window.bbToast('Tradition saved ✓');
+  if (window.bbRefreshDetail) await window.bbRefreshDetail(eid);
+}
+// "Detect from filename" is a plain inline-card form (see _edition_basics.html); the
+// book-browser host's delegated submit handler POSTs it and re-renders the card, so no
+// page-level handler is needed here.
+// Reclassify the whole book single↔multi from the checkbox at the top of the detail.
+// Checked → multi_work (single-apply disabled, lands in the 'Multi-work' group);
+// unchecked → single_work. Re-render so the action bar + note reflect the new state.
+// Volume number at the top of the detail. 0 = no volume.
+async function saveVolume(eid, inp) {
+  const n = Math.max(0, parseInt(inp.value || '0', 10) || 0);
+  inp.value = n;
+  await _post(`/works/detect/${eid}/volume`, {volume: n});
+  if (window.bbToast) window.bbToast(n ? `Volume ${n} saved ✓` : 'No volume ✓');
+  if (window.bbRefreshDetail) await window.bbRefreshDetail(eid);
+}
+async function toggleMultiWork(eid, cb) {
+  await _post(`/works/detect/${eid}/structure`, {multi: cb.checked ? '1' : ''});
+  if (window.bbToast) window.bbToast(cb.checked ? 'Marked multi-work ✓' : 'Marked single-work ✓');
+  if (window.bbRefreshDetail) await window.bbRefreshDetail(eid);
+}
+// `classical work` checkbox — checked → classical (apply keeps a Work), unchecked → modern.
+// Moves the edition between the Classical and Modern groups on the next reload.
+async function toggleClassical(eid, cb) {
+  await _post(`/works/detect/${eid}/determination`, {classical: cb.checked ? '1' : ''});
+  if (window.bbToast) window.bbToast(cb.checked ? 'Marked classical ✓' : 'Marked modern ✓');
+  if (window.bbRefreshDetail) await window.bbRefreshDetail(eid);
+}
+async function undoWorks(token, eid) {
+  const r = await _post('/works/detect/undo', {token});
+  if (r && r.error) { alert(r.error); return; }
+  location.reload();                       // restored edition/detection re-appears
+}
+// Deleting / merging a WORK lives on the work page (/work/<id>), not at the edition
+// level — from here you only link/unlink works to this edition.
+</script>
+{% endblock %}

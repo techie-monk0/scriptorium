@@ -1,0 +1,21 @@
+{# One work in the review queue. Expects `item` with item.detail = work_review.review_detail.
+   The FULL editable work detail (fields, authors, editions + all holdings, subjects,
+   aliases, merge/delete) is shown inline via the shared /work/<id>/card fragment — no
+   page jump. The page includes _work_card_js.html once so the card's buttons work. #}
+{% set d = item.detail %}
+<div class="picker-head">
+  <div class="picker-name"><h2 style="margin:0">{{ d.title }}</h2></div>
+  {% set cat_id = d.id %}{% include '_cat_id.html' %}
+  <div class="picker-actions">
+    <button type="button" class="pa-btn" data-key="s" data-key-label="mark reviewed &amp; next"
+            onclick="markWorkReviewed({{ d.id }})">✓ Mark reviewed</button>
+  </div>
+</div>
+
+{% if d.reasons %}
+  <p style="background:#fdecea; border:1px solid #f5c2c0; padding:.3rem .5rem; margin:.3rem 0">
+    <b>Incomplete:</b> {{ d.reasons | join(' · ') }} — fix below, then mark reviewed.</p>
+{% endif %}
+
+{# The full work detail, editable in place. #}
+<div data-card-url="/work/{{ d.id }}/card"><p class="hint">Loading work…</p></div>

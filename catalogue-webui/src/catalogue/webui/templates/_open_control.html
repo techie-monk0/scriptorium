@@ -1,0 +1,39 @@
+{# Clickable "open the book file" control, shared by every detail pane.
+   Expects `item` with: holding_id, has_file, file_ext, (optional) missing.
+   When `missing` is truthy the file is recorded but gone on disk → a greyed,
+   non-clicking "⚠ file not found" marker replaces the open icon (broken link).
+   Optional `open_label` overrides the link text (defaults to item.title).
+   Optional `icon_only` (truthy) renders JUST the 📖↗ icon as the control — use
+   when the title is a separate link (to the edition page) and this is only the
+   "open the file" affordance beside it. With no file, icon-only renders nothing.
+   PDFs open inline in a new browser tab (quickest); other formats (EPUB, …)
+   launch the OS default reader via the /open route (openNative in the browser JS). #}
+{% set lbl = open_label if open_label is defined else item.title %}
+{% set icon = icon_only is defined and icon_only %}
+{% if item.has_file and (item.missing is defined and item.missing) %}
+  {# Path recorded but the file is GONE on disk (deleted/renamed) — a broken link.
+     Greyed, non-clicking marker; surfaced even in icon-only mode since it's an error.
+     Re-link or remove it on the Scan page (/reconcile). #}
+  <span class="bookopen broken{% if icon %} iconbtn{% endif %}"
+     title="Broken link — the recorded file is not on disk. Fix it on the Scan page."
+     >{% if not icon %}{{ lbl }} {% endif %}<span class="oi">⚠ file not found</span></span>
+{% elif item.has_file and item.file_ext == 'pdf' and can_download() %}
+  <a class="bookopen{% if icon %} iconbtn{% endif %}" href="/holding/{{ item.holding_id }}/file"
+     target="_blank" rel="noopener" title="Open in browser PDF viewer"
+     >{% if not icon %}{{ lbl }} {% endif %}<span class="oi">📖↗</span></a>
+{% elif item.has_file and item.file_ext == 'pdf' %}
+  {# Read-only guest: open in the in-app PDF.js reader (renders inline, no browser
+     "download" chrome) rather than streaming the raw file into a viewer tab. #}
+  <a class="bookopen{% if icon %} iconbtn{% endif %}" href="/holding/{{ item.holding_id }}/read"
+     target="_blank" rel="noopener" title="Open in the in-app reader"
+     >{% if not icon %}{{ lbl }} {% endif %}<span class="oi">📖↗</span></a>
+{% elif item.has_file %}
+  {# Non-PDF (EPUB, …): open in the in-app reader (epub.js, inline) in a new tab. Works
+     for cloud online-only files (the reader's /holding/<id>/file fetch is WebDAV-backed)
+     and saves reading position — no external Books bounce. #}
+  <a class="bookopen{% if icon %} iconbtn{% endif %}" href="/holding/{{ item.holding_id }}/read"
+     target="_blank" rel="noopener" title="Open in the in-app reader"
+     >{% if not icon %}{{ lbl }} {% endif %}<span class="oi">📖↗</span></a>
+{% elif not icon %}
+  <span class="bookopen noopen">{{ lbl }} <span class="hint">(no file)</span></span>
+{% endif %}

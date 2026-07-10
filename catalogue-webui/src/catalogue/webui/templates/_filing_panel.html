@@ -1,0 +1,48 @@
+{# Where to shelve a reviewed book — moves its copies out of the inbox into the
+   subject directory. Expects: eid, plan (filing.FilingPlan), has_inbox (bool);
+   optional report (filing.file_edition result). Additive: only inbox copies move. #}
+{% if report %}
+  {% if report.moved %}
+  <div class="stub" style="color:#176">✓ Filed {{ report.moved|length }}
+    file{{ '' if report.moved|length == 1 else 's' }} to <code>{{ report.destination }}</code></div>
+  {% endif %}
+  {% for d in report.deferred %}
+  <div class="stub" style="color:#a60">deferred — {{ d.reason }}: <code>{{ d.file_path }}</code></div>
+  {% endfor %}
+{% endif %}
+
+{% if has_inbox and (not report or report.deferred) %}
+<div class="filing-panel" style="margin:.4rem 0; padding:.5rem .7rem; border:1px solid #d8d8d8;
+     border-radius:6px; background:#fafafa">
+  {% if plan and plan.auto and plan.destination %}
+  <form method="post" action="/edition/{{ eid }}/filing">
+    <input type="hidden" name="dest" value="{{ plan.destination.path }}">
+    <p style="margin:.2rem 0">File to <code>{{ plan.destination.path }}</code>
+      <span class="stub">({{ plan.destination.n_books }}
+        book{{ '' if plan.destination.n_books == 1 else 's' }} there)</span></p>
+    <button type="submit">📁 File here</button>
+  </form>
+  {% elif plan and plan.candidates %}
+  <p style="margin:.2rem 0">Choose where to file this book:</p>
+  {% for c in plan.candidates %}
+  <form method="post" action="/edition/{{ eid }}/filing" style="margin:.2rem 0">
+    <input type="hidden" name="dest" value="{{ c.path }}">
+    {% if not c.exists %}<input type="hidden" name="create_new" value="1">{% endif %}
+    <button type="submit">{{ '📁' if c.exists else '➕' }} {{ c.path }}</button>
+    <span class="stub">{{ c.source_subject }}{% if c.is_series %} · series{% endif %}
+      {%- if c.exists %} · {{ c.n_books }} book{{ '' if c.n_books == 1 else 's' }}
+      {%- else %} · new folder{% endif %}</span>
+  </form>
+  {% endfor %}
+  {% else %}
+  <p class="stub" style="margin:.2rem 0">No subject directory could be determined — file manually.</p>
+  {% endif %}
+
+  {# Always allow a manual path (override / brand-new top-level subject). #}
+  <form method="post" action="/edition/{{ eid }}/filing" style="margin-top:.4rem">
+    <input name="dest" placeholder="…or type a directory" size="48">
+    <label style="margin-left:.3rem"><input type="checkbox" name="create_new" value="1"> create</label>
+    <button type="submit">File</button>
+  </form>
+</div>
+{% endif %}

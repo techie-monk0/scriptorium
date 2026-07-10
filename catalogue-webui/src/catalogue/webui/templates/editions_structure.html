@@ -1,0 +1,56 @@
+{% extends "_base.html" %}
+{% block title %}Mark multi-work editions{% endblock %}
+{% block body %}
+{% from '_edition_link.html' import edition_link %}
+<h1>Mark multi-work editions</h1>
+<p class="stub">A <b>work</b> is a Sanskrit/Tibetan root text or commentary.
+  <b>Tick</b> the editions that hold <i>several</i> such texts (anthologies,
+  root + commentary) — those get the segmentation pass. Everything left unticked
+  is treated as <b>single-work</b> and gets the single-text autodetect. Boxes are
+  pre-ticked from the autodetected guess; correct them and Save.</p>
+
+<form method="post" action="/editions/structure/seed" style="display:inline">
+  <button type="submit" title="pre-fill unset editions from the autodetected proposal guess">
+    Seed unset from guesses</button>
+</form>
+<input id="filter" placeholder="filter by title…" size="30" autocomplete="off"
+       oninput="filterRows(this.value)" style="margin-left:1rem">
+
+{% set n_multi = editions|selectattr('structure','equalto','multi_work')|list|length %}
+{% set n_single = editions|selectattr('structure','equalto','single_work')|list|length %}
+<p class="hint" id="counts">{{ editions|length }} editions ·
+  {{ n_multi }} multi · {{ n_single }} single ·
+  {{ editions|length - n_multi - n_single }} unset</p>
+
+<form method="post" action="/editions/structure">
+  <table style="border-collapse:collapse; width:100%">
+    <tr><th>multi?</th><th>id</th><th>title</th><th>works</th><th>guess</th><th></th></tr>
+    {% for e in editions %}
+      {% set checked = (e.structure == 'multi_work') or (not e.structure and e.guess == 'multi_work') %}
+      <tr class="ed-row" data-title="{{ e.title|lower }}" style="border-bottom:1px solid var(--border)">
+        <td style="text-align:center">
+          <input type="checkbox" name="multi" value="{{ e.id }}" {{ 'checked' if checked else '' }}></td>
+        <td>{{ edition_link(e.id, '#' ~ e.id) }}</td>
+        <td>{{ e.title }}</td>
+        <td class="hint" style="text-align:center">{{ e.n_works }}</td>
+        <td class="hint">{{ e.guess or '—' }}</td>
+        <td>{% if e.holding_id %}
+          <button type="button" onclick="fetch('/holding/{{ e.holding_id }}/open',{method:'POST'})"
+                  title="open the file in the viewer">📖 open</button>
+        {% endif %}</td>
+      </tr>
+    {% endfor %}
+  </table>
+  <p style="position:sticky; bottom:0; background:var(--surface); padding:.5rem 0">
+    <button type="submit">Save — ticked = multi-work, rest = single-work</button>
+  </p>
+</form>
+
+<script>
+function filterRows(q) {
+  q = (q || '').trim().toLowerCase();
+  document.querySelectorAll('.ed-row').forEach(r =>
+    r.style.display = (!q || r.dataset.title.includes(q)) ? '' : 'none');
+}
+</script>
+{% endblock %}

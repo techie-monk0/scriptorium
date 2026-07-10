@@ -1,0 +1,204 @@
+{# ── Reusable WORK detail card ─────────────────────────────────────────────
+   The full, editable work view — fields, authors, editions + ALL their holdings,
+   subjects, title/aliases, merge, delete. Rendered both as the `/work/<wid>` page
+   body AND as the `/work/<wid>/card` fragment the book browser injects inline
+   (Review→Works etc.), so the SAME rich detail shows wherever a work appears —
+   no page jump. Forms post to the existing /work/<wid>/* endpoints; inside the
+   browser shell, non-destructive ones re-render this card in place. The JS the
+   buttons call lives in _work_card_js.html (included once per page). #}
+
+{# Card header: the work's name + its authors, shown wherever the card renders
+   (full /work/<id> page and the inline browse/review panes) — never a bare
+   'Work #N' when the work is titled. Authors link to their person pages. #}
+<header class="work-card-head">
+  <h2 style="margin:.1rem 0">{{ title }}</h2>
+  <p class="hint" style="margin:.1rem 0 .6rem">
+    {% for c in contributors %}<a href="/person/{{ c[0] }}">{{ c[2] }}</a>{% if c[1] != 'author' %} <small>({{ c[1] }})</small>{% endif %}{% if not loop.last %}, {% endif %}{% else %}<span class="stub">no authors linked</span>{% endfor %}
+  </p>
+</header>
+
+<h3>Fields</h3>
+<form method="post" action="/work/{{ w[0] }}/edit">
+  <p><label>Original lang.   <input name="original_language" value="{{ w[2] or '' }}" size="8"></label>
+     <label>Era              <input name="era"              value="{{ w[3] or '' }}" size="14"></label></p>
+  <p><label>Canonical system <input name="canonical_system" value="{{ w[4] or '' }}" size="9"
+              placeholder="toh / derge / bdrc / wikidata"></label>
+     <label>Canonical id     <input name="canonical_number" value="{{ w[5] or '' }}" size="14"
+              placeholder="bdrc:<id> / toh:<id> / …"></label></p>
+  <p><label>Notes<br><textarea name="notes" cols="50" rows="3">{{ w[6] or '' }}</textarea></label></p>
+  {# Tradition: the work's Buddhist lineage. Free-text box; the datalist offers the
+     config-driven vocabulary (vocab.json `_tradition`) as suggestions. Defaults from
+     the authors' lineage (else the library default) but is user-overridable here. #}
+  <p><label>Tradition <input name="tradition" value="{{ w[7] or '' }}" list="tradition-opts-wk"
+              placeholder="e.g. Gelug"></label></p>
+  <datalist id="tradition-opts-wk">
+    {% for t in traditions %}<option value="{{ t }}">{% endfor %}
+  </datalist>
+  {# Genre + tenet: controlled-vocab selects (catalogue.contracts.fields). Tenet lists the
+     Madhyamaka superset nodes alongside the leaves — a work may be tagged with the coarse
+     class when the specific school is unknown. #}
+  <p><label>Genre
+      <select name="genre">
+        <option value="">—</option>
+        {% for gopt in genre_opts %}<option {% if w[8] == gopt %}selected{% endif %}>{{ gopt }}</option>{% endfor %}
+      </select></label>
+     <label>Tenet system
+      <select name="tenet_system">
+        <option value="">—</option>
+        {% for topt in tenet_opts %}<option {% if w[9] == topt %}selected{% endif %}>{{ topt }}</option>{% endfor %}
+      </select></label></p>
+  <button type="submit">Save</button>
+</form>
+
+<h3>Root / commentary</h3>
+<p class="stub">Is this work a root text, a commentary, or neither? A commentary also names
+  the ROOT text it explains (stored as <i>commentary&nbsp;on</i>). An edition can hold several
+  root↔commentary pairs — each commentary names its own root.</p>
+{# Two mutually-exclusive checkboxes set work_type = 'root' | 'commentary' | none. The
+   hidden work_type is filled by wkToggleType, which also unchecks the sibling. #}
+<form method="post" action="/work/{{ w[0] }}/set-type" class="work-type-form" style="margin:.3rem 0">
+  <input type="hidden" name="work_type">
+  <label style="margin-right:1rem"><input type="checkbox" class="wk-type-cb"
+      onchange="wkToggleType(this, {{ w[0] }}, 'root')"
+      {% if w[1] == 'root' %}checked{% endif %}> Root text</label>
+  <label><input type="checkbox" class="wk-type-cb"
+      onchange="wkToggleType(this, {{ w[0] }}, 'commentary')"
+      {% if w[1] == 'commentary' %}checked{% endif %}> Commentary</label>
+</form>
+{% if w[1] == 'commentary' %}
+  {# Commentary → the root-text box, active only while 'Commentary' is checked. #}
+  <div class="comm-root" style="margin:.2rem 0 .2rem 1.4rem; border-left:3px solid var(--card-border); padding-left:.6rem">
+    {% if commentary_root %}
+      <p style="margin:.2rem 0">📖 Commentary on
+        <a href="/work/{{ commentary_root.id }}"><code>#{{ commentary_root.id }}</code> {{ commentary_root.title }}</a>
+        <form method="post" action="/work/{{ w[0] }}/commentary-of/clear" style="display:inline"
+              onsubmit="return confirm('Clear this commentary→root link? (Both works are kept.)');">
+          <button type="submit">✕ clear</button></form></p>
+    {% else %}
+      <form method="post" action="/work/{{ w[0] }}/commentary-of" class="set-root-form"
+            style="display:flex; gap:.4rem; align-items:flex-start; flex-wrap:wrap; margin:.2rem 0">
+        <input type="hidden" name="work_id">
+        <div class="root-host"></div>
+        <button type="button" onclick="mountRootPicker(this, {{ w[0] }})">+ pick the root text this explains…</button>
+      </form>
+    {% endif %}
+  </div>
+{% endif %}
+{% if commentaries %}
+  <p class="stub" style="margin:.3rem 0">Commentaries on this work:
+    {% for c in commentaries %}<a href="/work/{{ c.id }}"><code>#{{ c.id }}</code> {{ c.title }}</a>{% if not loop.last %}, {% endif %}{% endfor %}</p>
+{% endif %}
+
+<h3>Authors</h3>
+<p class="stub">Authors live on the WORK (translators are per-edition, shown below).</p>
+<table>
+  <tr><th>role</th><th>person</th><th></th></tr>
+  {% for c in contributors %}
+    <tr><td>{{ c[1] }}</td>
+        <td><a href="/person/{{ c[0] }}">{{ c[2] }}</a></td>
+        <td>
+          <form method="post" action="/work/{{ w[0] }}/author/remove" style="display:inline"
+                onsubmit="return confirm('Remove {{ c[2] }} ({{ c[1] }}) from this work?');">
+            <input type="hidden" name="pid"  value="{{ c[0] }}">
+            <input type="hidden" name="role" value="{{ c[1] }}">
+            <button type="submit">remove</button>
+          </form>
+        </td></tr>
+  {% else %}
+    <tr><td colspan="3" class="stub">No authors linked yet.</td></tr>
+  {% endfor %}
+</table>
+<h4 style="margin:.4rem 0 .2rem">Add an author</h4>
+<form method="post" action="/work/{{ w[0] }}/author/add" class="add-author-form"
+      style="display:flex; gap:.4rem; align-items:flex-start; flex-wrap:wrap; margin:.4rem 0">
+  <label>Role
+    <select name="role">
+      {% for r in ('author', 'attributed', 'compiler', 'reviser') %}<option value="{{ r }}">{{ r }}</option>{% endfor %}
+    </select>
+  </label>
+  <input type="hidden" name="pid">
+  <input type="hidden" name="new_author_name">
+  <div class="author-host"></div>
+  <button type="button" class="add-author-btn" onclick="mountAuthorPicker(this)">+ pick a person…</button>
+</form>
+
+<h3>Editions &amp; holdings</h3>
+{% from '_edition_link.html' import edition_link %}
+{% for e in editions %}
+  <p style="margin:.4rem 0 .1rem">{{ edition_link(e.id, e.title or ('edition ' ~ e.id)) }}
+     {% if e.translator_id %}· trans. <a href="/person/{{ e.translator_id }}">{{ e.translator_name }}</a>{% endif %}
+     {% if e.locator %}· <small>{{ e.locator }}</small>{% endif %}</p>
+  <ul class="works" style="margin:.1rem 0 .4rem">
+    {% for h in e.holdings %}
+      <li>{{ h.holding_type or h.form or 'copy' }} #{{ h.id }}
+        {% if h.has_file %}
+          <button type="button" onclick="openHolding({{ h.id }}, '{{ h.ext or '' }}')">open ↗</button>
+        {% else %}<span class="stub">(no file)</span>{% endif %}
+      </li>
+    {% else %}
+      <li class="stub">no holdings</li>
+    {% endfor %}
+  </ul>
+{% else %}
+  <p class="stub">This work isn't linked to any edition yet.</p>
+{% endfor %}
+
+<h3>Subjects</h3>
+{% with kind = 'work', pid = w[0], suggestion = none %}
+  {% include '_subjects_card.html' %}
+{% endwith %}
+
+<h3>Title &amp; aliases</h3>
+<p class="stub">The <b>★ primary</b> alias is the display title. Rename in place (Save),
+  Make primary to promote one, or delete.</p>
+<table>
+  <tr><th></th><th>id</th><th>text</th><th>scheme</th><th></th></tr>
+  {% for a in aliases if a[2] != 'filename' %}
+    <tr>
+      <td>{% if a[0] == primary_alias_id %}<span title="display title"
+              style="color:#2a7;font-weight:600;white-space:nowrap">★ primary</span>{% endif %}</td>
+      <td>{{ a[0] }}</td>
+      <td>
+        <form method="post" action="/work/{{ w[0] }}/alias/{{ a[0] }}/rename" style="display:flex;gap:.3rem">
+          <input name="text" value="{{ a[1] }}" size="32" required>
+          <button type="submit">Save</button>
+        </form>
+      </td>
+      <td>{{ a[2] }}</td>
+      <td style="white-space:nowrap">
+        {% if a[0] != primary_alias_id %}
+          <form method="post" action="/work/{{ w[0] }}/alias/{{ a[0] }}/primary" style="display:inline">
+            <button type="submit" title="make this the display title">★ primary</button>
+          </form>
+        {% endif %}
+        <button type="button" onclick="cardInlinePost(this, '/work/{{ w[0] }}/alias/{{ a[0] }}/delete',
+                'Delete this alias{% if a[0] == primary_alias_id %} — the current display title{% endif %}?')">delete</button>
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="5" class="stub">No aliases yet.</td></tr>
+  {% endfor %}
+</table>
+<form method="post" action="/work/{{ w[0] }}/alias/add" style="margin:.3rem 0">
+  <label>Text <input name="text" size="36" required></label>
+  <label>scheme <select name="scheme">{% for s in schemes %}<option>{{ s }}</option>{% endfor %}</select></label>
+  <button type="submit">Add alias</button>
+</form>
+
+<details style="margin-top:.6rem">
+  <summary>Merge / dedup &amp; delete</summary>
+  <p class="stub" style="margin:.4rem 0 .2rem">Fold this work (#{{ w[0] }}) into another (re-points every
+    edition link / alias / relationship, then deletes this one — reversible).</p>
+  <div style="margin:.3rem 0">
+    <button type="button" id="merge-target-btn"
+            onclick="wkMountMergePicker(this, {{ w[0] }})">🔎 search for a work to merge into…</button>
+    <span class="wk-merge-host"></span>
+  </div>
+  <button type="button" onclick="wkLoadMergeCandidates({{ w[0] }}, this)">find duplicate-title candidates</button>
+  <div class="wk-merge-cands stub" style="margin:.3rem 0"></div>
+  <hr style="margin:.7rem 0">
+  <button type="button" class="danger" style="color:#a00"
+          data-editions='[{% for e in editions %}{"id": {{ e.id }}, "title": {{ (e.title or ("edition " ~ e.id)) | tojson }}}{% if not loop.last %}, {% endif %}{% endfor %}]'
+          onclick="wkConfirmDelete({{ w[0] }}, this)">Delete work #{{ w[0] }}</button>
+  <div class="wk-del-msg" style="margin-top:.4rem"></div>
+</details>

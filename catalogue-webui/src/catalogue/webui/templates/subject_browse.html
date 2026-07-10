@@ -1,0 +1,65 @@
+{% extends "_base.html" %}
+{% block title %}{{ page.subject.leaf_label }}{% endblock %}
+{% block body %}
+{# Canonical subject browse page — the target of every subject link (shelves, search,
+   book detail). Books are DESCENDANT-INCLUSIVE (a topic rolls up its sub-topics; a
+   series lists its volumes in order). Tiles reuse the shared Shelf component, so the
+   art matches the home shelves and the PWA. #}
+<link rel="stylesheet" href="/static/css/shelf.css">
+<style>
+  .subj-crumbs { font-size: .85rem; color: var(--muted); margin: .3rem 0 .2rem; }
+  .subj-crumbs a { color: var(--muted); text-decoration: none; }
+  .subj-crumbs a:hover { text-decoration: underline; }
+  .subj-head { display: flex; align-items: baseline; gap: .6rem; flex-wrap: wrap; margin: .2rem 0; }
+  .subj-head h1 { margin: 0; }
+  .subj-head .kindtag { font-size: .8rem; color: var(--muted); }
+  .subj-children { display: flex; flex-wrap: wrap; gap: .4rem; margin: .7rem 0 1.1rem; }
+  .subj-children a {
+    display: inline-flex; gap: .4rem; align-items: center; text-decoration: none;
+    padding: .3rem .75rem; border-radius: 999px; background: var(--surface);
+    border: 1px solid var(--border); color: var(--fg); font-size: .85rem;
+  }
+  .subj-children a:hover { border-color: var(--muted); }
+  .subj-children a .n { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .subj-empty { margin: 2rem 0; color: var(--muted); }
+</style>
+
+<nav class="subj-crumbs">
+  <a href="/search">Subjects</a>
+  {% for c in page.crumbs %} <span>/</span> <a href="/subject/{{ c.id }}">{{ c.leaf_label }}</a>{% endfor %}
+  <span>/</span> <span>{{ page.subject.leaf_label }}</span>
+</nav>
+
+<div class="subj-head">
+  <h1>{{ page.subject.leaf_label }}</h1>
+  {% if page.subject.kind == 'series' %}<span class="kindtag">series</span>{% endif %}
+  <span class="kindtag">{{ page.n_books }} book{{ '' if page.n_books == 1 else 's' }}{% if page.subject.kind != 'series' and page.children %} · incl. sub-subjects{% endif %}</span>
+</div>
+
+{% if page.children %}
+<div class="subj-children">
+  {% for ch in page.children %}
+    <a href="/subject/{{ ch.id }}">{{ ch.leaf_label }} <span class="n">{{ ch.n_books_total }}</span></a>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if page.books %}
+  <div id="subj-books" class="tile-grid"></div>
+  <script type="application/json" id="subj-data">{{ page | tojson }}</script>
+  <script src="/static/js/shelf.js"></script>
+  <script>
+    (function () {
+      var d = JSON.parse(document.getElementById('subj-data').textContent);
+      var host = document.getElementById('subj-books');
+      var href = function (eid) { return '/edition/' + eid + '/read'; };
+      (d.books || []).forEach(function (b) {
+        host.appendChild(Shelf.tile(b, { art: 'cover', hrefFor: href }));
+      });
+      Shelf.enhance(host);
+    })();
+  </script>
+{% else %}
+  <p class="subj-empty">No books filed here yet.</p>
+{% endif %}
+{% endblock %}

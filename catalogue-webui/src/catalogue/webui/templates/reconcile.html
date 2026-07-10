@@ -1,0 +1,250 @@
+{% extends "_base.html" %}
+{% block title %}Reconcile library{% endblock %}
+{% set labels = {
+  'content_changed': 'Re-OCR / text edited in place',
+  'new': 'New file', 'new_maybe_reocr': 'New file — maybe a re-OCR of…',
+  'content_match': 'Same text as an existing copy', 'missing': 'File missing',
+  'offline': 'File offline (not downloaded)'} %}
+{% block body %}
+{% from '_edition_link.html' import edition_link %}
+
+{# ── Auto-relinked moved files (silent repoints this visit) — with one Undo. ── #}
+{% if relinked %}
+<div class="relink-box">
+  <b>✓ Auto-relinked {{ relinked|length }} moved file{{ 's' if relinked|length != 1 }}</b>
+  {% if undo_token %}
+    <form method="post" action="/reconcile/relink/undo" style="display:inline;margin-left:.5rem">
+      <input type="hidden" name="token" value="{{ undo_token }}">
+      <button class="lnk">↩ Undo</button></form>
+  {% endif %}
+  {% for r in relinked %}
+    <div style="font-size:.82em;word-break:break-all;margin:.2rem 0 0">
+      {{ edition_link(r.edition_id) }} <span class="stub">holding #{{ r.holding_id }}</span>
+      → <code>{{ r.new_path }}</code></div>
+  {% endfor %}
+  <style>
+    .relink-box { border:1px solid #2a7; background:#f0fff6; border-radius:6px;
+      padding:.5rem .8rem; margin:0 0 1rem }
+    .relink-box .lnk { border:none;background:none;cursor:pointer;color:#06c;font-size:.85em }
+    .relink-box code { font-size:.82em;color:var(--subtle-fg) }
+    @media (prefers-color-scheme: dark) { .relink-box {
+      background:rgba(0,160,90,.15); border-color:#2a7 } }
+  </style>
+</div>
+{% endif %}
+
+{# ── Broken links — AT THE TOP, in red. Computed live every visit (cheap: one stat
+   per holding, no walk). A holding whose file is gone, or an edition with no holding
+   at all. ── #}
+{% if broken and (broken.gone or broken.orphans) %}
+<div class="broken-box">
+  <h2 class="broken-hd">⚠ Broken links ({{ broken.gone|length + broken.orphans|length }})</h2>
+  {% if broken.gone %}
+    <p class="stub" style="margin:.3rem 0">File recorded but gone on disk (deleted/renamed) —
+      re-link via a scan, or remove the holding:</p>
+    {% for b in broken.gone %}
+      <div style="margin:.25rem 0;word-break:break-all">
+        {{ edition_link(b.edition_id) }} <span class="stub">holding #{{ b.holding_id }}</span><br>
+        <code>{{ b.path }}</code>
+        <form method="post" action="/holding/{{ b.holding_id }}/delete" style="display:inline"
+              onsubmit="return confirm('Remove this broken holding record? (does not touch any file)')">
+          <button class="lnk danger">Remove holding</button></form>
+        {% for s in b.suggestions or [] %}
+          <div style="margin:.15rem 0 .15rem 1rem">
+            <span class="stub">found at</span> <code>{{ s }}</code>
+            <form method="post" action="/reconcile/relink" style="display:inline">
+              <input type="hidden" name="holding_id" value="{{ b.holding_id }}">
+              <input type="hidden" name="path" value="{{ s }}">
+              <button class="lnk relink">Re-link →</button></form>
+          </div>
+        {% endfor %}
+      </div>
+    {% endfor %}
+  {% endif %}
+  {% if broken.orphans %}
+    <p class="stub" style="margin:.5rem 0 .3rem">Editions with no file at all (nothing to open):</p>
+    {% for o in broken.orphans %}
+      <div style="margin:.2rem 0">{{ edition_link(o.edition_id, o.title or ('edition ' ~ o.edition_id)) }}</div>
+    {% endfor %}
+  {% endif %}
+  <style>
+    .broken-box { border:2px solid #c00; background:#fff3f3; border-radius:6px;
+      padding:.6rem .9rem; margin:0 0 1.2rem }
+    .broken-box .broken-hd { margin:.1rem 0 .3rem; color:#c00 }
+    .broken-box .lnk.danger { border:none;background:none;cursor:pointer;color:#a00;
+      font-size:.85em;margin-left:.5rem }
+    .broken-box .lnk.relink { border:none;background:none;cursor:pointer;color:#06c;
+      font-size:.85em;margin-left:.4rem }
+    .broken-box code { font-size:.82em;color:var(--subtle-fg) }
+    @media (prefers-color-scheme: dark) { .broken-box {
+      background:rgba(180,0,0,.15); border-color:#e06666 }
+      .broken-box .broken-hd { color:#ff8a8a } }
+  </style>
+</div>
+{% endif %}
+
+<h1>Reconcile library ↔ catalogue</h1>
+<p class="stub">Scan the library folder; moved &amp; annotation-only changes are applied
+  automatically, the rest are proposed below for one-click confirmation.
+  Broken links (files gone on disk, editions with no file) are flagged in red above.
+  ({{ resolved }} resolved so far.)</p>
+
+<form method="post" action="/reconcile/run" style="margin:1rem 0"
+      onsubmit="this.querySelector('.scan-btn').disabled=true;
+                this.querySelector('.scan-status').hidden=false;">
+  {% if scan_error %}
+    <div style="background:#fdecea; color:#900; border:1px solid #f5c2c0; padding:.4rem .6rem; margin:.4rem 0">⚠ {{ scan_error }}</div>
+  {% endif %}
+  {% if mount_roots and mount_roots|length > 1 %}
+    <p class="stub" style="margin:.2rem 0">Library roots ({{ mount_roots|length }}):
+      {% for mr in mount_roots %}<code style="word-break:break-all">{{ mr }}</code>{% if not loop.last %}, {% endif %}{% endfor %}
+      — <a href="/settings">manage in Settings</a>.</p>
+    <label>Folders to scan, one per line, as <b>full absolute paths</b> (relative paths are
+      ambiguous with multiple roots; blank = every root):<br>
+      <textarea name="roots" rows="2" cols="70" placeholder="(blank = every library root)"></textarea></label><br>
+  {% else %}
+    <p class="stub" style="margin:.2rem 0">Mount root:
+      <code style="word-break:break-all">{{ mount_root or '(not set)' }}</code>
+      — <a href="/settings">change in Settings</a>.</p>
+    <label>Sub-folders to scan, one per line, <b>relative to the mount root</b>
+      (blank = the whole library):<br>
+      <textarea name="roots" rows="2" cols="70" placeholder="(blank = entire library)"></textarea></label><br>
+  {% endif %}
+  <button type="submit" class="scan-btn">Scan now</button>
+  <span class="scan-status stub" hidden>
+    <span class="scan-spinner" aria-hidden="true"></span>
+    Scanning the library — this can take a while. Don't close this page…
+  </span>
+  {% if last %}<span class="stub">last run: {{ last }}</span>{% endif %}
+  <style>
+    .scan-btn[disabled] { opacity:.5; cursor:progress }
+    .scan-status { margin-left:.6rem }
+    .scan-spinner { display:inline-block; width:.85em; height:.85em; vertical-align:-.1em;
+      border:2px solid var(--card-border); border-top-color:var(--fg);
+      border-radius:50%; animation:scan-spin .7s linear infinite }
+    @keyframes scan-spin { to { transform:rotate(360deg) } }
+  </style>
+</form>
+
+{% if items %}
+<div id="rc-bulk">
+  <label><input type="checkbox" id="rc-all"> Select all</label>
+  <span id="rc-count" class="stub">tick items to act on several at once</span>
+  <span id="rc-actions"></span>
+</div>
+<form id="rc-bulk-form" method="post" action="/reconcile/bulk" style="display:none"></form>
+<style>
+  #rc-bulk { position:sticky; top:0; z-index:5; display:flex; align-items:center; gap:.8rem;
+    flex-wrap:wrap; background:var(--surface); border:1px solid var(--card-border);
+    border-radius:6px; padding:.5rem .8rem; margin:.5rem 0 }
+  #rc-actions { display:flex; gap:.4rem; flex-wrap:wrap }
+  .rc-bulk-btn { font:inherit; padding:.3rem .7rem; border:1px solid var(--btn-border);
+    border-radius:6px; background:var(--btn-bg); color:var(--btn-fg); cursor:pointer }
+  .rc-pick { margin-right:.45rem; vertical-align:middle }
+</style>
+{% endif %}
+
+{% for it in items %}
+  <div style="border:1px solid var(--card-border);background:var(--surface);border-radius:6px;padding:.6rem .8rem;margin:.5rem 0">
+    <div><input type="checkbox" class="rc-check rc-pick" data-id="{{ it.id }}" data-kind="{{ it.kind }}">
+      <b>{{ labels.get(it.kind, it.kind) }}</b>
+      {% if it.detail %}<span class="stub">— {{ it.detail }}</span>{% endif %}</div>
+    <div style="font-size:.85rem;word-break:break-all;color:var(--subtle-fg)">
+      <a href="/reconcile/file?path={{ it.path | urlencode }}" target="_blank" rel="noopener"
+         title="Open this file in the viewer">{{ it.path }}</a></div>
+    {% if it.kind == 'content_changed' and it.holding_id %}
+      <div style="font-size:.85rem">↔ catalogued file it may replace:
+        <a href="/holding/{{ it.holding_id }}/file" target="_blank" rel="noopener">open in viewer</a>
+        {% if it.edition_id %}
+          · <a href="/edition/{{ it.edition_id }}" target="_blank" rel="noopener">edition record</a>{% endif %}
+      </div>
+    {% endif %}
+
+    {% if it.candidates %}
+      <form method="post" action="/reconcile/{{ it.id }}/apply" style="margin-top:.4rem">
+        <label>Match:
+          <select name="target_edition_id">
+            {% for c in it.candidates %}
+              <option value="{{ c.edition_id }}">{{ c.title }} ({{ c.score }}, {{ c.why|join('+') }})</option>
+            {% endfor %}
+          </select>
+        </label>
+        <button name="action" value="replace">Replace that copy</button>
+        <button name="action" value="add_copy">Add as another copy</button>
+        <button name="action" value="distinct">It's a new book</button>
+        <button name="action" value="ignore">Ignore</button>
+      </form>
+    {% else %}
+      <form method="post" action="/reconcile/{{ it.id }}/apply" style="margin-top:.4rem">
+        {% if it.kind == 'content_changed' %}<button name="action" value="accept">Accept new text</button>
+        {% elif it.kind == 'new' %}<button name="action" value="distinct">Catalogue as new</button>
+        {% elif it.kind == 'missing' %}<button name="action" value="remove">Remove holding</button>{% endif %}
+        <button name="action" value="ignore">Ignore</button>
+      </form>
+    {% endif %}
+  </div>
+{% else %}
+  <p class="stub">Nothing pending — run a scan.</p>
+{% endfor %}
+
+<script>
+// Bulk-select: tick rows (or Select all), then apply ONE action common to every
+// selected item. The per-kind action sets mirror the server's target-free actions;
+// the buttons shown are the INTERSECTION across the selection (Ignore is always in).
+(function(){
+  const BULK = {
+    new: ['distinct','ignore'], new_maybe_reocr: ['distinct','ignore'],
+    content_match: ['distinct','ignore'], content_changed: ['accept','ignore'],
+    missing: ['remove','ignore'], offline: ['ignore'],
+  };
+  const LABEL = {distinct:'Catalogue as new', accept:'Accept new text',
+                 remove:'Remove holding', ignore:'Ignore'};
+  const ORDER = ['distinct','accept','remove','ignore'];
+  const bar = document.getElementById('rc-bulk');
+  if (!bar) return;
+  const countEl = document.getElementById('rc-count');
+  const actionsEl = document.getElementById('rc-actions');
+  const allEl = document.getElementById('rc-all');
+  const checks = () => Array.from(document.querySelectorAll('.rc-check'));
+  const picked = () => checks().filter(c => c.checked);
+
+  function common(sel){
+    let set = null;
+    sel.forEach(c => {
+      const acts = new Set(BULK[c.dataset.kind] || ['ignore']);
+      set = (set === null) ? acts : new Set([...set].filter(a => acts.has(a)));
+    });
+    return set ? ORDER.filter(a => set.has(a)) : [];
+  }
+  function apply(action, sel){
+    if (!confirm(`${LABEL[action]} — apply to ${sel.length} selected item(s)?`)) return;
+    const f = document.getElementById('rc-bulk-form');
+    f.innerHTML = '';
+    const a = document.createElement('input');
+    a.type = 'hidden'; a.name = 'action'; a.value = action; f.appendChild(a);
+    sel.forEach(c => { const i = document.createElement('input');
+      i.type = 'hidden'; i.name = 'item_id'; i.value = c.dataset.id; f.appendChild(i); });
+    f.submit();
+  }
+  function render(){
+    const sel = picked();
+    actionsEl.innerHTML = '';
+    if (!sel.length){ countEl.textContent = 'tick items to act on several at once';
+      allEl.checked = false; return; }
+    countEl.textContent = sel.length + ' selected';
+    common(sel).forEach(act => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'rc-bulk-btn'; b.textContent = LABEL[act];
+      b.onclick = () => apply(act, sel);
+      actionsEl.appendChild(b);
+    });
+    allEl.checked = sel.length === checks().length;
+  }
+  document.addEventListener('change', e => {
+    if (e.target.classList.contains('rc-check')) render();
+    else if (e.target.id === 'rc-all'){ checks().forEach(c => c.checked = allEl.checked); render(); }
+  });
+  render();
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,73 @@
+{# Entity cross-navigation for one edition (library.edition_links payload).
+   The FRBR multiplicity made visible: author → their works, translator → their
+   editions, work → its other editions/translations (volume sets grouped once).
+   Read-only links; editing happens in the cards below it. #}
+<style>
+  .xlinks { font-size: .9rem; }
+  .xlinks h4 { margin: .6rem 0 .2rem; font-size: .82rem; text-transform: uppercase;
+               letter-spacing: .03em; color: var(--muted); }
+  .xlinks ul { list-style: none; margin: 0; padding: 0; }
+  .xlinks li { margin: .15rem 0; }
+  .xlinks a { color: var(--link); text-decoration: none; }
+  .xlinks a:hover { text-decoration: underline; }
+  .xlinks .n { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .xlinks .set { border-left: 3px solid #cfe2ff; padding-left: .5rem; margin: .2rem 0; }
+  .xlinks .vol { color: var(--subtle-fg); }
+  .xlinks .here { background: var(--nav-hover); border-radius: 3px; padding: 0 .25rem; color: var(--subtle-fg); }
+  .xlinks .none { color: var(--muted); font-style: italic; }
+</style>
+<div class="xlinks">
+  <h4>Authors</h4>
+  {% if links.authors %}
+    <ul>
+    {% for a in links.authors %}
+      <li><a href="/person/{{ a.person_id }}">{{ a.name }}</a>
+        <span class="n">· {{ a.n_works }} work{{ '' if a.n_works == 1 else 's' }}</span></li>
+    {% endfor %}
+    </ul>
+  {% else %}<p class="none">No author recorded.</p>{% endif %}
+
+  <h4>Translators</h4>
+  {% if links.translators %}
+    <ul>
+    {% for t in links.translators %}
+      <li><a href="/person/{{ t.person_id }}">{{ t.name }}</a>
+        <span class="n">· {{ t.n_editions }} edition{{ '' if t.n_editions == 1 else 's' }}</span></li>
+    {% endfor %}
+    </ul>
+  {% else %}<p class="none">No translator recorded.</p>{% endif %}
+
+  <h4>Works &amp; their other editions</h4>
+  <ul>
+  {% for w in links.works %}
+    <li>
+      <a href="/work/{{ w.work_id }}">{{ w.title }}</a>
+      {% if w.groups %}
+        {% for grp in w.groups %}
+          {% if grp.is_set %}
+            <div class="set">volume set:
+              {% for v in grp.volumes %}
+                <div class="vol">
+                  {% if v.is_current %}<span class="here">this book</span>{% else %}<a href="/library?eid={{ v.id }}">{{ v.title }}</a>{% endif %}
+                  {% if v.volume %}<span class="n">({{ v.volume }})</span>{% endif %}
+                  {% if v.translators %}<span class="n">— {{ v.translators | join(', ') }}</span>{% endif %}
+                </div>
+              {% endfor %}
+            </div>
+          {% else %}
+            <div class="vol">↳ also in
+              <a href="/library?eid={{ grp.edition.id }}">{{ grp.edition.title }}</a>
+              {% if grp.edition.language %}<span class="n">[{{ grp.edition.language }}]</span>{% endif %}
+              {% if grp.edition.translators %}<span class="n">— tr. {{ grp.edition.translators | join(', ') }}</span>{% endif %}
+            </div>
+          {% endif %}
+        {% endfor %}
+      {% else %}
+        <span class="none">— only edition of this work</span>
+      {% endif %}
+    </li>
+  {% else %}
+    <li class="none">No contained works linked yet.</li>
+  {% endfor %}
+  </ul>
+</div>

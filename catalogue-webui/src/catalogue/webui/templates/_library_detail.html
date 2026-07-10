@@ -1,0 +1,47 @@
+{# Universal inline editor for one book, shown in the /library detail pane.
+   Stacks the existing [data-card-url] fragments (the book browser fetches +
+   re-renders each independently) plus the entity cross-links card — the FRBR
+   navigation payoff. Expects `item` = a library.browser_row dict. #}
+<h2>{% with eid = item.id %}{% include '_edition_title.html' %}{% endwith %}
+  <button type="button" class="detail-star" data-eid="{{ item.id }}"
+          aria-pressed="{{ 'true' if item.id in (starred_ids | default([])) else 'false' }}"
+          aria-label="Star" title="Star this book">★</button></h2>
+{% set cat_id = item.id %}{% include '_cat_id.html' %}
+<div class="meta">{{ item.subtitle }}</div>
+
+{# Read-only three-layer summary: Edition Basics + "Works In This Edition" + holdings.
+   The same partials the review pane edits, here read-only (lazy-fetched fragment). #}
+<div class="edition-card" data-card-url="/edition/{{ item.id }}/works-summary">
+  <p class="hint">Loading…</p>
+</div>
+
+<h3>Connections <span class="hint">(authors · translators · other editions)</span></h3>
+<div class="edition-card" data-card-url="/edition/{{ item.id }}/links">
+  <p class="hint">Loading connections…</p>
+</div>
+
+{# Editing is gated by `editable`: the Search page (/library) renders this read-only
+   (browse + the read-only summary above only). The editable cards appear only on the
+   working surface. The read-only summary already links to the Review page to edit. #}
+{% if editable | default(false) %}
+{# All editing lives under one collapsed section — Browse stays read-first; expand
+   to edit. Cards inside a closed <details> are fetched lazily on first open. #}
+<details class="edit-details" style="margin-top:1rem">
+  <summary style="cursor:pointer; font-weight:600; color:var(--fg); font-size:1.05rem">✎ Edit details</summary>
+
+  <h3>Title &amp; edition</h3>
+  <div class="edition-card" data-card-url="/edition/{{ item.id }}/card">
+    <p class="hint">Loading edition record…</p>
+  </div>
+
+  <h3>Works &amp; contributors</h3>
+  <div class="edition-card" data-card-url="/edition/{{ item.id }}/works">
+    <p class="hint">Loading works…</p>
+  </div>
+
+  <h3>Verdict</h3>
+  <div class="edition-card" data-card-url="/edition/{{ item.id }}/review-card">
+    <p class="hint">Loading verdict…</p>
+  </div>
+</details>
+{% endif %}

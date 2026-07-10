@@ -1,0 +1,9 @@
+{% extends "_base.html" %}
+{% block title %}Person #{{ p[0] }}{% endblock %}
+{% block body %}
+<p><a href="/search?person={{ p[1] | urlencode }}">← search</a></p>
+<h1>{{ p[1] }}</h1>
+{% set cat_id = p[0] %}{% include '_cat_id.html' %}
+{% include '_person_card.html' %}
+{% include '_person_card_js.html' %}
+{% endblock %}

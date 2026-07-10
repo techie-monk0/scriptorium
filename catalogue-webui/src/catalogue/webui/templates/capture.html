@@ -1,0 +1,131 @@
+{% extends "_base.html" %}
+{% from '_edition_link.html' import edition_link %}
+{% block title %}Capture{% endblock %}
+{% block body %}
+<h1>Capture</h1>
+
+{% if error %}
+  <p style="color:#a00"><strong>{{ error }}</strong></p>
+{% endif %}
+
+{% if saved %}
+  <p style="background:#efe;padding:0.5rem">
+    <strong>Saved staging #{{ saved }}.</strong>
+    {% if metadata and metadata.title %}
+      → <em>{{ metadata.title }}</em>
+      {% if metadata.authors %} — {{ metadata.authors|join(', ') }}{% endif %}
+      {% if metadata.publishers %} ({{ metadata.publishers|join(', ') }}{% if metadata.publish_date %}, {{ metadata.publish_date }}{% endif %}){% endif %}
+    {% elif isbn and isbn_valid %}
+      → ISBN <code>{{ isbn }}</code> recorded; no Open Library record — desktop will resolve.
+    {% elif isbn %}
+      → invalid ISBN-13 checksum; stored raw for manual resolution.
+    {% endif %}
+    <a href="/staging/{{ saved }}">review</a>
+  </p>
+{% endif %}
+
+<p class="stub">
+  Tip: a Bluetooth barcode scanner acts as a keyboard — the ISBN field below
+  is auto-focused, and scanners emit a trailing Enter, so a scan goes
+  straight in and submits. Manual typing works the same way. <strong>iPhone
+  alternative:</strong> install <em>Barcode to PC</em> (open source, LAN-only,
+  free) and use its keystroke mode — your phone's camera scans, the ISBN is
+  typed in here, and Enter submits. For a sit-down batch, use its CSV mode
+  and <a href="/capture/import">bulk-import here</a>.
+</p>
+
+<form method="post" action="/capture" enctype="multipart/form-data" autocomplete="off">
+  <p>
+    <label>ISBN-13<br>
+      <input name="isbn" autofocus inputmode="numeric"
+             autocapitalize="off" autocorrect="off" spellcheck="false"
+             size="20">
+    </label>
+  </p>
+  <p>
+    <label>Photo (optional, falls back when no ISBN)<br>
+      <input type="file" name="photo" accept="image/*" capture="environment">
+    </label>
+  </p>
+  <p>
+    <label>Note<br>
+      <textarea name="note" rows="2" cols="40"></textarea>
+    </label>
+  </p>
+  <p><button type="submit">Save</button></p>
+</form>
+
+{% macro scan_table(rows, action_label, show_added_as=False) %}
+  <table style="border-collapse:collapse;width:100%">
+    <thead>
+      <tr style="text-align:left;border-bottom:1px solid var(--border,#ccc)">
+        <th style="padding:0.3rem 0.5rem">Captured</th>
+        <th style="padding:0.3rem 0.5rem">ISBN</th>
+        <th style="padding:0.3rem 0.5rem">Title</th>
+        {% if show_added_as %}<th style="padding:0.3rem 0.5rem">Added as</th>{% endif %}
+        <th style="padding:0.3rem 0.5rem">OCR (pages sent)</th>
+        <th style="padding:0.3rem 0.5rem"></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr style="border-bottom:1px solid var(--border,#eee);vertical-align:top">
+        <td style="padding:0.3rem 0.5rem;white-space:nowrap">
+          {{ r.captured_at or '—' }}
+          {% if r.status != 'raw' %}<br><small class="stub">{{ r.status }}</small>{% endif %}
+        </td>
+        <td style="padding:0.3rem 0.5rem;white-space:nowrap">
+          {% if r.isbn %}<code>{{ r.isbn }}</code>{% else %}<span class="stub">—</span>{% endif %}
+        </td>
+        <td style="padding:0.3rem 0.5rem">
+          {% if r.title %}{{ r.title }}{% else %}<span class="stub">—</span>{% endif %}
+        </td>
+        {% if show_added_as %}
+        <td style="padding:0.3rem 0.5rem">
+          {% if r.editions %}
+            {% for e in r.editions %}
+              {{ edition_link(e.id, e.title) }}
+              {% if e.forms %}<small class="stub">({{ e.forms|join(', ') }})</small>{% endif %}
+              {% if not loop.last %}<br>{% endif %}
+            {% endfor %}
+          {% else %}<span class="stub">—</span>{% endif %}
+        </td>
+        {% endif %}
+        <td style="padding:0.3rem 0.5rem">
+          {% if r.ocr %}
+            <details>
+              <summary>{{ r.ocr.split('\n')[0][:80] }}{% if r.ocr|length > 80 %}…{% endif %}</summary>
+              <pre style="white-space:pre-wrap;margin:0.3rem 0;font-size:0.85em">{{ r.ocr }}</pre>
+            </details>
+          {% else %}<span class="stub">—</span>{% endif %}
+        </td>
+        <td style="padding:0.3rem 0.5rem"><a href="/staging/{{ r.id }}">{{ action_label }}</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endmacro %}
+
+{% if not_in_catalogue %}
+<section style="margin-top:2rem">
+  <h2>Scanned — not in the catalogue</h2>
+  <p class="stub">
+    Phone captures whose ISBN/CIP did not match anything we already hold. Each
+    keeps the ISBN, any OCR text that was sent, and the time it was captured.
+  </p>
+  {{ scan_table(not_in_catalogue, 'resolve') }}
+</section>
+{% endif %}
+
+{% if added %}
+<section style="margin-top:2rem">
+  <h2>Added</h2>
+  <p class="stub">
+    Phone captures that were not in the catalogue when scanned but have since
+    been added — either resolved here or catalogued independently (their ISBN
+    now matches a held edition).
+  </p>
+  {{ scan_table(added, 'view', show_added_as=True) }}
+</section>
+{% endif %}
+{% endblock %}

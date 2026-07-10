@@ -1,0 +1,27 @@
+{# THE standard way to link to an edition record. Renders the record link AND the
+   "📖↗ open the file" icon beside it, so a viewer affordance always travels with
+   the link — no caller has to remember it (the recurring "no way to open the book
+   from here" gap). Self-resolving: it looks up the edition's best holding via the
+   `edition_open` template helper, so callers need only the edition id.
+
+   Usage:  {% from '_edition_link.html' import edition_link %}
+           {{ edition_link(e.id) }}                  → "<title-or-edition N> 📖↗"
+           {{ edition_link(e.id, e.title) }}         → custom label
+           {{ edition_link(e.id, e.title, true) }}   → open the record in a new tab
+
+   For pane HEADINGS where the open-control data is already in scope (`item`), use
+   _edition_title.html instead — same result, no extra holding lookup. #}
+{% macro edition_link(eid, label=None, new_tab=False) -%}
+{%- set _lbl = label if label is not none else ('edition ' ~ eid) -%}
+{# Multi-volume set member → show its volume number with the title (operator's
+   request). Guard against a label that already carries '· vol. N'. #}
+{%- set _vol = edition_volume(eid) -%}
+{%- if _vol and not _lbl.endswith(' · vol. ' ~ _vol) -%}{%- set _lbl = _lbl ~ ' · vol. ' ~ _vol -%}{%- endif -%}
+{%- if eid -%}
+<a class="edition-link" href="/edition/{{ eid }}"{% if new_tab %} target="_blank" rel="noopener"{% endif %}>{{ _lbl }}</a>
+{%- set item = edition_open(eid) -%}
+{%- with icon_only = True %}{% include '_open_control.html' %}{% endwith %}
+{%- else -%}
+<span class="edition-link">{{ _lbl }}</span>
+{%- endif -%}
+{%- endmacro %}

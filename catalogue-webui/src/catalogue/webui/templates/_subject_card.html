@@ -1,0 +1,17 @@
+{# Lazy fragment: the works + editions a subject tags. #}
+{% if not tagged.works and not tagged.editions %}
+  <p class="hint">Tags nothing — safe to delete.</p>
+{% else %}
+  {% if tagged.works %}
+  <p style="margin:.3rem 0 .1rem"><b>Works</b></p>
+  <ul class="works">
+    {% for w in tagged.works %}<li><a href="/work/{{ w.id }}">{{ w.title }}</a></li>{% endfor %}
+  </ul>
+  {% endif %}
+  {% if tagged.editions %}
+  <p style="margin:.4rem 0 .1rem"><b>Editions</b></p>
+  <ul class="works">
+    {% for e in tagged.editions %}<li><a href="/library?eid={{ e.id }}">{{ e.title }}</a></li>{% endfor %}
+  </ul>
+  {% endif %}
+{% endif %}

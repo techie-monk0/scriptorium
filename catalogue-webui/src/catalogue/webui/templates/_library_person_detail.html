@@ -1,0 +1,15 @@
+{# A person in the detail pane. `editable` ⇒ the full editable person card
+   (/person/<id>/card); read-only (Search page) ⇒ a header only (their works &
+   editions are already listed as left-pane sections). Expects `item` = {id, title, subtitle}. #}
+<h2>{{ item.title }}</h2>
+{% set cat_id = item.id %}{% include '_cat_id.html' %}
+<div class="meta">{{ item.subtitle }}</div>
+{% if editable | default(false) %}
+<div class="edition-card" data-card-url="/person/{{ item.id }}/card">
+  <p class="hint">Loading person…</p>
+</div>
+{% else %}
+<p class="hint">Their works and editions are listed on the left.{% if can_edit() %} To edit this person
+  (fields, aliases, authority binding, merge/dedup), open their
+  <a href="/person/{{ item.id }}">person page</a>.{% endif %}</p>
+{% endif %}

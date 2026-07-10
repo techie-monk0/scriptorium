@@ -1,0 +1,392 @@
+{% extends "_base.html" %}
+{% block title %}Settings{% endblock %}
+{% block body %}
+<h1>Settings</h1>
+
+{% if error %}
+  <div style="background:#fdecea; color:#900; border:1px solid #f5c2c0; padding:.4rem .6rem; margin:.4rem 0; font-weight:bold">⚠ {{ error }}</div>
+{% endif %}
+{% if info %}
+  <div style="background:#fff3cd; color:#664d03; border:1px solid #ffe69c; padding:.4rem .6rem; margin:.4rem 0">{{ info }}</div>
+{% endif %}
+{% if repoint_summary %}
+  <div style="background:#e6f4ea; color:#1e4620; border:1px solid #b7dfc1; padding:.5rem .7rem; margin:.4rem 0">
+    ✓ Re-pointed to the new location.
+    <b>{{ repoint_summary.repointed }}</b> files moved over;
+    {{ repoint_summary.bytes_changed }} had rewritten bytes re-hashed;
+    {{ repoint_summary.pending_dropped }} stale “new” items and
+    {{ repoint_summary.sweep_state_cleared }} stale scan-cache rows cleared.
+    {% if repoint_summary.missing %}<br><b>{{ repoint_summary.missing|length }} not found</b> at the new root (left re-pointed — check the path).{% endif %}
+    Nothing to review — <a href="/reconcile">a Scan</a> will now read clean.
+  </div>
+{% endif %}
+
+{# Library mount roots can relocate/corrupt the whole catalogue, so this section's PROTOCOL is
+   'local' — shown ONLY on the machine running the catalogue (localhost), omitted entirely on a
+   phone / remote device. The same protocol layer gates the nav. See [[sensitive-settings-localhost-only]]. #}
+{% if protocol_visible('local') %}
+<section style="border:1px solid var(--card-border);background:var(--surface);border-radius:8px;padding:1rem;margin:1rem 0">
+  <h2 style="margin-top:0">Library mount roots</h2>
+  <p class="stub">The on-disk folder(s) your books live under. Everything that scans the
+    library or shows a file path resolves to one of these. Add a folder for each place your
+    books live; if a folder ever moves — a cloud client re-syncs to a renamed folder, a drive
+    remounts elsewhere — <b>repoint</b> it here instead of re-importing.</p>
+
+  {% if pending %}
+    {# A repoint was requested — confirm how to handle it before touching the DB. #}
+    <div style="border:1px solid var(--border); border-radius:6px; margin:.6rem 0; padding:.6rem .8rem">
+      <p>Move {% if pending.root_id %}this root{% else %}the mount root{% endif %} to:<br>
+        <code style="word-break:break-all">{{ pending.new_root }}</code></p>
+      <p class="stub">Found <b>{{ pending.present }}</b> of <b>{{ pending.matched }}</b>
+        catalogued files at the new location{% if pending.missing %};
+        <b>{{ pending.missing }} not found</b> there{% endif %}.</p>
+      {% if pending.sample_missing %}
+        <details style="margin:.3rem 0 .6rem">
+          <summary class="stub">{{ pending.missing }} not found — examples</summary>
+          <ul class="stub">{% for m in pending.sample_missing %}
+            <li style="word-break:break-all">{{ m }}</li>{% endfor %}</ul>
+        </details>
+      {% endif %}
+      <p><b>Is this the same library that just moved, or a different set of files?</b></p>
+      <form method="post" action="/settings/mount-root/apply" style="display:inline-block; margin:.2rem .4rem .2rem 0">
+        <input type="hidden" name="new_root" value="{{ pending.new_root }}">
+        {% if pending.root_id %}<input type="hidden" name="root_id" value="{{ pending.root_id }}">{% endif %}
+        <input type="hidden" name="mode" value="repoint">
+        <button type="submit">Same files just moved — re-point (no re-scan)</button>
+      </form>
+      <form method="post" action="/settings/mount-root/apply" style="display:inline-block">
+        <input type="hidden" name="new_root" value="{{ pending.new_root }}">
+        {% if pending.root_id %}<input type="hidden" name="root_id" value="{{ pending.root_id }}">{% endif %}
+        <input type="hidden" name="mode" value="rescan">
+        <button type="submit">Different / changed content — set &amp; re-scan</button>
+      </form>
+      <p class="stub" style="margin-top:.6rem">Re-point keeps your catalogue and just updates
+        where each file lives (it snapshots the DB first, then prefix-swaps paths and re-hashes
+        the bytes now on disk — same as a “files moved, nothing changed”). Re-scan sets the root
+        and sends you to Scan to ingest the location fresh.</p>
+      <p><a class="stub" href="/settings">Cancel</a></p>
+    </div>
+  {% endif %}
+
+  {% if roots %}
+    <table style="width:100%; border-collapse:collapse">
+      {% for r in roots %}
+      <tr style="border-top:1px solid var(--card-border)">
+        <td style="padding:.45rem .3rem; word-break:break-all">
+          <code>{{ r.path }}</code><br>
+          <span class="stub">{{ r.count }} file{{ '' if r.count == 1 else 's' }}
+            · folder→subject: <b>{{ 'on' if r.derive_subject else 'off' }}</b></span>
+        </td>
+        {% if is_local %}
+        <td style="padding:.45rem .3rem; white-space:nowrap; text-align:right; vertical-align:top">
+          <form method="post" action="/settings/roots/{{ r.id }}/derive" style="display:inline">
+            <input type="hidden" name="value" value="{{ 0 if r.derive_subject else 1 }}">
+            <button type="submit" class="linkish">{{ 'subjects off' if r.derive_subject else 'subjects on' }}</button>
+          </form>
+          · <button type="button" class="linkish"
+                    onclick="var x=document.getElementById('rp-{{ r.id }}'); x.hidden=!x.hidden">repoint…</button>
+          · <button type="button" class="linkish folders-btn" data-root-id="{{ r.id }}">folders…</button>
+          · <form method="post" action="/settings/roots/{{ r.id }}/remove" style="display:inline"
+                  onsubmit="return confirm('Remove this root from the catalogue?')">
+              <button type="submit" class="linkish danger"{{ ' disabled' if r.count else '' }}
+                      title="{{ 'Repoint or clear its files first' if r.count else 'Remove this root' }}">remove</button>
+            </form>
+        </td>
+        {% endif %}
+      </tr>
+      {% if is_local %}
+      <tr id="rp-{{ r.id }}" hidden><td colspan="2" style="padding:0 .3rem .6rem">
+        <form method="post" action="/settings/mount-root" class="root-form">
+          <input type="hidden" name="root_id" value="{{ r.id }}">
+          <span class="stub">Moved on disk? Point this root at its new folder (files re-hashed, catalogue kept):</span><br>
+          <input type="text" name="new_root" size="56" placeholder="/new/absolute/path"
+                 style="font-family:monospace; max-width:100%">
+          <button type="button" class="browse-btn">Browse…</button>
+          <button type="submit">Repoint…</button>
+        </form>
+      </td></tr>
+      <tr id="ex-{{ r.id }}" hidden><td colspan="2" style="padding:0 .3rem .6rem">
+        <p class="stub" style="margin:.2rem 0 .4rem">Everything under this root is scanned by
+          default. <b>Uncheck</b> a folder to keep it — and everything beneath it — out of every
+          future scan. Re-check to include it again.</p>
+        <div class="folder-tree" data-root-id="{{ r.id }}"></div>
+      </td></tr>
+      {% endif %}
+      {% endfor %}
+    </table>
+  {% else %}
+    <p class="stub">No library roots configured yet.</p>
+  {% endif %}
+
+  {% if is_local %}
+    {# Folder exclusions only affect FUTURE scans; this clears what was ingested before they
+       existed. Global across roots; snapshots the DB first. JS keeps the count live as folders
+       are toggled. #}
+    <div id="excl-purge" {{ 'hidden' if not excluded_count }}
+         style="margin-top:.7rem; background:#fff3cd; color:#664d03; border:1px solid #ffe69c;
+                border-radius:6px; padding:.45rem .7rem">
+      <b><span id="excl-count">{{ excluded_count }}</span></b>
+      already-catalogued file(s) sit under excluded folders.
+      <form method="post" action="/settings/exclusions/purge" style="display:inline"
+            onsubmit="return confirm('Remove ' + document.getElementById('excl-count').textContent
+                       + ' catalogued file(s) under excluded folders? The DB is snapshotted first.')">
+        <button type="submit" class="linkish danger">Remove them…</button>
+      </form>
+      <span class="stub">Future scans already skip these folders.</span>
+    </div>
+  {% endif %}
+
+  {% if is_local %}
+    <form method="post" action="/settings/roots/add" class="root-form"
+          style="margin-top:.8rem; border-top:1px solid var(--card-border); padding-top:.7rem">
+      <b>Add a library root</b><br>
+      <label class="stub">Folder (full absolute path):<br>
+        <input type="text" name="path" size="56" placeholder="/Users/you/Library"
+               style="font-family:monospace; max-width:100%"></label>
+      <button type="button" class="browse-btn">Browse…</button><br>
+      <label style="display:inline-block; margin:.45rem 0">
+        <input type="checkbox" name="derive_subject" value="1" checked>
+        Derive subjects from this root's folder names</label><br>
+      <button type="submit">Add root</button>
+    </form>
+    <style>
+      .linkish { background:none; border:none; color:var(--link, #36c); cursor:pointer;
+                 padding:0; font:inherit; text-decoration:underline }
+      .linkish[disabled] { color:var(--muted); cursor:not-allowed; text-decoration:none }
+      .linkish.danger:not([disabled]) { color:#b00 }
+      .folder-tree ul { margin:.2rem 0; padding:0 }
+      .folder-tree li { list-style:none; line-height:1.5 }
+      .tree-exp { background:none; border:none; cursor:pointer; font:inherit; color:var(--muted);
+                  width:1.3em; padding:0; text-align:left }
+      .tree-exp[disabled] { cursor:default; opacity:.35 }
+    </style>
+    <script>
+    // Localhost-only native folder picker: ask the server to pop a Finder dialog and
+    // drop the chosen absolute path into this form's text input.
+    document.querySelectorAll('.browse-btn').forEach(function (b) {
+      b.addEventListener('click', async function () {
+        var inp = b.closest('.root-form').querySelector('input[type=text]');
+        var old = b.textContent; b.disabled = true; b.textContent = 'Choose in Finder…';
+        try {
+          var j = await (await fetch('/settings/browse', { method: 'POST' })).json();
+          if (j.path && inp) inp.value = j.path;
+        } catch (e) { /* dialog cancelled or unavailable */ }
+        finally { b.disabled = false; b.textContent = old; }
+      });
+    });
+    </script>
+
+    <script>
+    // Per-root folder exclusion tree. Drill-down is lazy: each folder's children are
+    // fetched only when expanded. A checked box = included (default); unchecking POSTs
+    // an `under` exclusion that prunes the whole subtree from future scans.
+    (function () {
+      function api(url, opts) { return fetch(url, opts).then(function (r) { return r.json(); }); }
+
+      function setCount(n) {
+        var box = document.getElementById('excl-purge');
+        var cnt = document.getElementById('excl-count');
+        if (cnt) cnt.textContent = n;
+        if (box) box.hidden = !n;
+      }
+
+      function render(ul, rootId, data) {
+        ul.innerHTML = '';
+        if (!data.children.length) {
+          var empty = document.createElement('li');
+          empty.className = 'stub'; empty.textContent = '(no subfolders)';
+          ul.appendChild(empty);
+          return;
+        }
+        data.children.forEach(function (c) {
+          var li = document.createElement('li');
+
+          var exp = document.createElement('button');
+          exp.type = 'button'; exp.className = 'tree-exp';
+          exp.textContent = c.has_children ? '▸' : ' ';
+          exp.disabled = !c.has_children;
+
+          var cb = document.createElement('input');
+          cb.type = 'checkbox'; cb.checked = !c.excluded; cb.disabled = c.locked;
+
+          var lbl = document.createElement('label');
+          lbl.style.cursor = c.locked ? 'default' : 'pointer';
+          lbl.appendChild(cb);
+          lbl.appendChild(document.createTextNode(' ' + c.name));
+          if (c.locked) {
+            var note = document.createElement('span');
+            note.className = 'stub'; note.textContent = ' — excluded by a parent';
+            lbl.appendChild(note);
+          }
+
+          var sub = document.createElement('ul');
+          sub.style.marginLeft = '1.3rem'; sub.hidden = true; sub.dataset.loaded = '';
+
+          exp.addEventListener('click', function () {
+            if (sub.hidden) {
+              sub.hidden = false; exp.textContent = '▾';
+              if (sub.dataset.loaded !== '1') {
+                api('/settings/roots/' + rootId + '/folders?path=' + encodeURIComponent(c.path))
+                  .then(function (d) { render(sub, rootId, d); sub.dataset.loaded = '1'; });
+              }
+            } else { sub.hidden = true; exp.textContent = '▸'; }
+          });
+
+          cb.addEventListener('change', function () {
+            cb.disabled = true;
+            api('/settings/roots/' + rootId + '/exclude', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: 'path=' + encodeURIComponent(c.path) + '&excluded=' + (cb.checked ? 0 : 1)
+            }).then(function (d) {
+              cb.disabled = false;
+              setCount(d.excluded_count);
+              // descendants inherit the new state — collapse + force a fresh reload
+              sub.hidden = true; sub.dataset.loaded = '';
+              exp.textContent = c.has_children ? '▸' : ' ';
+            }).catch(function () { cb.checked = !cb.checked; cb.disabled = false; });
+          });
+
+          li.appendChild(exp); li.appendChild(lbl); li.appendChild(sub);
+          ul.appendChild(li);
+        });
+      }
+
+      document.querySelectorAll('.folders-btn').forEach(function (b) {
+        b.addEventListener('click', function () {
+          var id = b.dataset.rootId;
+          var row = document.getElementById('ex-' + id);
+          row.hidden = !row.hidden;
+          var host = row.querySelector('.folder-tree');
+          if (!row.hidden && host.dataset.loaded !== '1') {
+            host.innerHTML = '<span class="stub">Loading…</span>';
+            api('/settings/roots/' + id + '/folders').then(function (d) {
+              host.innerHTML = '';
+              var ul = document.createElement('ul');
+              host.appendChild(ul);
+              render(ul, id, d);
+              host.dataset.loaded = '1';
+            });
+          }
+        });
+      });
+    })();
+    </script>
+  {% endif %}
+</section>
+{% endif %}
+
+{# Trash folder: where a deleted book's file is MOVED (not unlinked) when you tick
+   "move file to Trash" on a delete. A real folder inside the synced library, so the
+   move is recoverable. Localhost-only — it's a server-side path picked via Finder. #}
+{% if protocol_visible('local') %}
+<section style="border:1px solid var(--card-border);background:var(--surface);border-radius:8px;padding:1rem;margin:1rem 0">
+  <h2 style="margin-top:0">Trash folder</h2>
+  <p class="stub">When you delete a book and choose to remove its file, the file is
+    <b>moved here</b> rather than permanently erased, so a mistaken delete can be undone
+    by hand. Keep it inside your synced library if you want it backed up.</p>
+  {% if is_local %}
+    <form method="post" action="/settings/trash-dir" class="root-form" id="trash-form">
+      <label class="stub">Folder (full absolute path):<br>
+        <input type="text" name="path" size="56" value="{{ trash_dir }}"
+               placeholder="/Users/you/Library/Trash"
+               style="font-family:monospace; max-width:100%"></label>
+      <button type="button" class="browse-btn">Browse…</button><br>
+      <button type="submit" style="margin-top:.5rem">Save trash folder</button>
+    </form>
+    <script>
+    // Wire this section's Browse button independently (the mount-roots picker script
+    // only sees forms that exist when IT runs). Reuses the localhost-only endpoint.
+    (function () {
+      var form = document.getElementById('trash-form');
+      if (!form) return;
+      var btn = form.querySelector('.browse-btn');
+      var inp = form.querySelector('input[type=text]');
+      btn.addEventListener('click', async function () {
+        var old = btn.textContent; btn.disabled = true; btn.textContent = 'Choose in Finder…';
+        try {
+          var j = await (await fetch('/settings/browse', { method: 'POST' })).json();
+          if (j.path && inp) inp.value = j.path;
+        } catch (e) { /* dialog cancelled or unavailable */ }
+        finally { btn.disabled = false; btn.textContent = old; }
+      });
+    })();
+    </script>
+  {% else %}
+    <p>Current: <code style="word-break:break-all">{{ trash_dir }}</code></p>
+  {% endif %}
+</section>
+{% endif %}
+
+{# Inbox folders: standalone drop folders (e.g. a top-level `Library/_INBOX/`),
+   scanned IN ADDITION to the library roots and walked FIRST, so freshly dropped books
+   are reviewable before a full-library scan finishes. A per-root `_inbox/` is detected
+   automatically and needs no entry. Localhost-only — server-side paths. #}
+{% if protocol_visible('local') %}
+<section style="border:1px solid var(--card-border);background:var(--surface);border-radius:8px;padding:1rem;margin:1rem 0">
+  <h2 style="margin-top:0">Inbox folders</h2>
+  <p class="stub">New books are dropped here, then a <b>Scan</b> ingests them. Inbox folders
+    are scanned <b>first</b>, so a fresh drop shows up in Review within seconds instead of
+    after the whole library; on review, a book is filed OUT of here onto its subject shelf.
+    This is separate from your library roots — list each inbox folder explicitly (a folder
+    is an inbox only if it's listed here).</p>
+  {% if inbox_dirs %}
+    <ul style="list-style:none;padding:0;margin:.3rem 0">
+      {% for d in inbox_dirs %}
+      <li style="margin:.2rem 0">
+        <code style="word-break:break-all">{{ d }}</code>
+        {% if is_local %}
+        · <form method="post" action="/settings/inbox-dirs/remove" style="display:inline"
+                onsubmit="return confirm('Stop scanning this inbox folder?')">
+            <input type="hidden" name="path" value="{{ d }}">
+            <button type="submit" class="linkish danger">remove</button>
+          </form>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="stub">No inbox folders configured — add the folder where new books land.</p>
+  {% endif %}
+  {% if is_local %}
+    <form method="post" action="/settings/inbox-dirs/add" class="root-form" id="inbox-form">
+      <label class="stub">Add inbox folder (full absolute path):<br>
+        <input type="text" name="path" size="56"
+               placeholder="/Users/you/…/Library/_INBOX"
+               style="font-family:monospace; max-width:100%"></label>
+      <button type="button" class="browse-btn">Browse…</button><br>
+      <button type="submit" style="margin-top:.5rem">Add inbox folder</button>
+    </form>
+    <script>
+    (function () {
+      var form = document.getElementById('inbox-form');
+      if (!form) return;
+      var btn = form.querySelector('.browse-btn');
+      var inp = form.querySelector('input[type=text]');
+      btn.addEventListener('click', async function () {
+        var old = btn.textContent; btn.disabled = true; btn.textContent = 'Choose in Finder…';
+        try {
+          var j = await (await fetch('/settings/browse', { method: 'POST' })).json();
+          if (j.path && inp) inp.value = j.path;
+        } catch (e) { /* dialog cancelled or unavailable */ }
+        finally { btn.disabled = false; btn.textContent = old; }
+      });
+    })();
+    </script>
+  {% endif %}
+</section>
+{% endif %}
+
+<section style="border:1px solid var(--card-border);background:var(--surface);border-radius:8px;padding:1rem;margin:1rem 0">
+  <h2 style="margin-top:0">Device preferences</h2>
+  <p class="stub">Per-device display settings (stored on this device only). <b>Theme</b> follows
+    your OS on “Auto”. <b>Shelf appearance</b>: <b>Spines</b> stand books up like a real bookshelf
+    (many more fit on a phone); <b>Covers</b> shows the wide front-cover art. These are rendered by
+    the SAME shared frontend layer the PWA uses, so the controls match across devices.</p>
+  {# Converged onto LibraryUI.settings (theme + shelf-art). #}
+  <div id="settings-host"></div>
+  <script>
+    LibraryUI.settings(document.getElementById('settings-host'), LibraryWeb.adapter());
+  </script>
+</section>
+{% endblock %}

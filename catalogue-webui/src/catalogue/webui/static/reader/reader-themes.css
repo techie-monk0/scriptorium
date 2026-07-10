@@ -1,0 +1,36 @@
+/* GENERATED from theme/palette.json by `python -m catalogue.webui.theme.gen` — DO NOT edit by hand.
+ * In-book reader themes (Apple Books style: White/Sepia/Gray/Night). Selected at runtime with
+ * <body data-reader-theme="…">; kept separate from the app palette (html[data-theme]).
+ * Change values in palette.json `reading_themes` and regenerate — do not hand-edit. */
+[data-reader-theme="white"] {
+  color-scheme: light;
+  --reader-bg: #ffffff;
+  --reader-fg: #11151b;
+  --reader-chrome-bg: #f2f3f5;
+  --reader-chrome-fg: #11151b;
+  --reader-accent: #1856c5;
+}
+[data-reader-theme="sepia"] {
+  color-scheme: light;
+  --reader-bg: #f4ecd8;
+  --reader-fg: #5b4636;
+  --reader-chrome-bg: #e8ddc4;
+  --reader-chrome-fg: #5b4636;
+  --reader-accent: #9a6b3f;
+}
+[data-reader-theme="gray"] {
+  color-scheme: light;
+  --reader-bg: #d9d9de;
+  --reader-fg: #1b1b1f;
+  --reader-chrome-bg: #c7c7cd;
+  --reader-chrome-fg: #1b1b1f;
+  --reader-accent: #3a4452;
+}
+[data-reader-theme="night"] {
+  color-scheme: dark;
+  --reader-bg: #0c0d10;
+  --reader-fg: #c9ccd1;
+  --reader-chrome-bg: #1b1b1f;
+  --reader-chrome-fg: #c9ccd1;
+  --reader-accent: #7db4ff;
+}

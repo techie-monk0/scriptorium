@@ -1,0 +1,41 @@
+{
+  "contract": "catalogue.external_read",
+  "version": 1,
+  "description": "The stable surface external tools (BuddhistLLM, ocr_pipeline) read for edition identity. Normative prose: docs/access/external_tool_dependency_contract.md. This descriptor is language-neutral on purpose: a consumer verifies against it WITHOUT importing catalogue code. The same version is stamped into every DB as schema_meta.external_read_contract_version.",
+  "identity_key": "pub_id",
+  "version_field": "content_hash",
+  "views": {
+    "v_holding_files": {
+      "purpose": "Per-holding file rows carrying edition identity + version, for external handoff. Excludes holdings with no file_path.",
+      "columns": {
+        "edition_id": "internal catalogue edition integer — NOT a stable external key; use pub_id",
+        "pub_id": "stable opaque UUID — the external identity key (S1: write-once, never rebinds)",
+        "file_path": "current catalogue path of the holding file (look up live; never store as a key)",
+        "content_hash": "version token for derived-artifact staleness (never a join key)",
+        "text_status": "OCR/text provenance status code",
+        "provenance_kind": "how the holding's text was produced"
+      },
+      "required": ["edition_id", "pub_id", "file_path", "content_hash"]
+    }
+  },
+  "resolve": {
+    "table": "edition",
+    "purpose": "Follow a stored pub_id to its canonical live edition (S2 forwarding). A consumer that resolves is robust to merges/withdrawals; a producer may snapshot pub_id and defer resolution to the consumer.",
+    "columns": {
+      "pub_id": "identity key to look up",
+      "superseded_by": "forwarding pointer to the winning edition id on merge/withdraw; NULL when this row is canonical",
+      "deleted_at": "tombstone timestamp; NULL when live",
+      "title": "live display title"
+    },
+    "required": ["pub_id", "superseded_by", "deleted_at"]
+  },
+  "guarantees": {
+    "S1": "A pub_id is write-once and never resolves to an unrelated edition (no rebind, no id reuse).",
+    "S2": "A pub_id always resolves; merges/withdrawals leave a forwarding pointer via edition.superseded_by.",
+    "S3": "Consumer discipline: store only pub_id (identity) + content_hash (version); look everything else up live by pub_id."
+  },
+  "handshake": {
+    "how": "A consumer reads schema_meta.external_read_contract_version from the DB it already connects to, confirms it is >= the version it was built for, and (tolerant reader) confirms the columns it needs are present via PRAGMA table_info. No shared code, no extra file.",
+    "compatibility": "The read surface grows ADDITIVELY within a major version: new columns may appear, so consumers must select named columns and ignore extras. Removing/renaming a column or weakening a guarantee bumps this version."
+  }
+}

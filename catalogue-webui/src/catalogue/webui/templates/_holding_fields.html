@@ -1,0 +1,54 @@
+{# Editable fields for ONE holding (this physical/electronic copy). The book
+   browser fetches this into the detail pane and re-fetches it after an inline
+   save. Expects: h = (id, edition_id, form, text_status, holding_type,
+   shelf_location, ocr_quality_score, notes); plus option lists text_statuses,
+   forms, holding_types (open vocabularies — adding a code to catalogue/vocab.json
+   surfaces a new <option> here). #}
+{% if file_missing %}
+  <div class="broken-banner">⚠ <b>Broken link</b> — the recorded file is not on disk
+    (deleted or renamed): <code>{{ file_path }}</code>.<br>
+    Re-link or remove it on the <a href="/reconcile">Scan page</a>.</div>
+  <style>
+    .broken-banner { background:#fff3f3; border:1px solid #e0a0a0; color:#a00;
+      border-radius:6px; padding:.45rem .6rem; margin:0 0 .6rem; font-size:.9em;
+      word-break:break-all }
+    @media (prefers-color-scheme: dark) { .broken-banner {
+      background:rgba(180,0,0,.15); border-color:rgba(220,120,120,.5); color:#f3b0b0 } }
+  </style>
+{% endif %}
+<form method="post" action="/holding/{{ h[0] }}/edit">
+  <p>
+    <label>Format
+      <select name="holding_type">
+        <option value="">—</option>
+        {% for t in holding_types %}
+          <option value="{{ t }}" {{ 'selected' if t == h[4] else '' }}>{{ t }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Medium
+      <select name="form">
+        <option value="">—</option>
+        {% for f in forms %}
+          <option value="{{ f }}" {{ 'selected' if f == h[2] else '' }}>{{ f }}</option>
+        {% endfor %}
+      </select>
+    </label>
+  </p>
+  <p>
+    <label>Text status
+      <select name="text_status">
+        <option value="">—</option>
+        {% for s in text_statuses %}
+          <option value="{{ s }}" {{ 'selected' if s == h[3] else '' }}>{{ s }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>OCR score
+      <input name="ocr_quality_score" size="6"
+             value="{{ h[6] if h[6] is not none else '' }}"></label>
+  </p>
+  <p><label>Shelf location <input name="shelf_location" value="{{ h[5] or '' }}"></label></p>
+  <p><label>Notes<br><textarea name="notes" cols="40" rows="2">{{ h[7] or '' }}</textarea></label></p>
+  <button type="submit">Save copy</button>
+</form>

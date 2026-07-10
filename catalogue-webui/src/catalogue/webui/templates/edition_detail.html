@@ -1,0 +1,9 @@
+{% extends "_base.html" %}
+{% block title %}Edition #{{ e[0] }}{% endblock %}
+{% block body %}
+<p><a href="/library">← library</a></p>
+<h1>{{ display_title(e[1], edition_volume(e[0])) }} <small>#{{ e[0] }}</small></h1>
+{% include '_edition_card.html' %}
+{% include '_typeahead.html' %}
+{% include '_edition_card_js.html' %}
+{% endblock %}

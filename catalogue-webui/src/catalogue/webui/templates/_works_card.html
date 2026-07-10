@@ -1,0 +1,35 @@
+{# Works-curation card for a promoted edition. Renders the SHARED widget
+   (_works_curation.html) from a WorksDraft; POST re-applies it via
+   catalogue_review.apply_draft. Expects: eid, draft, structures. #}
+{% from '_works_curation.html' import works_fields %}
+<form method="post" action="/edition/{{ eid }}/works">
+  <p><label>Structure
+    <select name="structure">
+      {% for s in structures %}
+        <option value="{{ s }}" {{ 'selected' if s == draft.structure else '' }}>{{ s or '(derive from included)' }}</option>
+      {% endfor %}
+    </select>
+    <span class="hint">— derived from how many works are included; set
+      “collection_unsegmented” only for an undistinguished container</span>
+  </label></p>
+
+  {{ works_fields(draft, picker=True) }}
+
+  <button type="submit">Save works &amp; contributors</button>
+</form>
+
+{# Attach an EXISTING catalogue work (e.g. another translation of the same text)
+   by searching, mirroring the person picker. The pick server-attaches via
+   /edition/<eid>/work/add (a direct edition_work insert — it does NOT touch the
+   work's own authors), then the card refreshes to show it. To create a NEW work
+   instead, fill the blank row above. #}
+<div class="add-existing-work" style="margin-top:.6rem; border-top:1px dashed var(--border); padding-top:.5rem">
+  <h4 style="margin:.2rem 0">Add another work</h4>
+  <form method="post" action="/edition/{{ eid }}/work/add" class="attach-work-form">
+    <input type="hidden" name="work_id" value="">
+  </form>
+  <button type="button" onclick="bbMountWorkSearch(this, {{ eid }})">🔍 Search the catalogue…</button>
+  <div class="work-search-host"></div>
+  <p class="hint">Attaches an existing work to this book. Save your edits above
+    first — attaching reloads this card.</p>
+</div>

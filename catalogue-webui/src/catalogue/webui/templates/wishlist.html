@@ -1,0 +1,128 @@
+{% extends "_base.html" %}
+{% block title %}Wishlist{% endblock %}
+{% block body %}
+<h1>Wishlist</h1>
+<p class="muted">Books you want but don't own yet. Add by title/author or ISBN; the catalogue figures
+out the edition. A book it can't identify is kept and flagged so you can fix it later.</p>
+
+{% if can_edit() %}
+<form id="wl-add" style="margin:1rem 0;display:flex;flex-wrap:wrap;gap:.5rem;align-items:flex-end">
+  <label>Title<br><input name="title" placeholder="e.g. Being and Time" style="min-width:16rem"></label>
+  <label>Author<br><input name="author" placeholder="optional"></label>
+  <span style="align-self:center">or</span>
+  <label>ISBN<br><input name="isbn" placeholder="978…" inputmode="numeric"></label>
+  <button type="submit">Add to wishlist</button>
+  <span id="wl-msg" class="muted" role="status"></span>
+</form>
+{% endif %}
+
+<div id="wl-host">Loading…</div>
+
+{# Tier-3 web renderer: paint the SHARED LibraryCore.wishlistVM (the same VM the PWA + iOS use).
+   Composition (grouping, badges, card fields) lives in Tier-2; this only paints + wires actions. #}
+<script>
+(function () {
+  var host = document.getElementById('wl-host');
+  var canEdit = {{ can_edit() | tojson }};
+
+  var rawById = {};   // raw items by id, so a 'suspected' card can read its candidate editions
+
+  function card(c) {
+    var el = document.createElement('div');
+    el.className = 'wl-card';
+    el.style.cssText = 'display:flex;flex-wrap:wrap;gap:.75rem;padding:.6rem;border:1px solid var(--border,#ccc);border-radius:.5rem;margin:.4rem 0';
+    var cover = c.cover_url
+      ? '<img src="' + c.cover_url + '" alt="" loading="lazy" style="width:48px;height:64px;object-fit:cover;border-radius:3px" onerror="this.style.visibility=\'hidden\'">'
+      : '<div style="width:48px;height:64px;background:var(--border,#eee);border-radius:3px"></div>';
+    var meta = [c.by, c.publisher, c.year].filter(Boolean).join(' · ');
+    var badge = c.badge ? '<span class="wl-badge" style="font-size:.72rem;padding:.05rem .4rem;border-radius:1rem;background:var(--accent-soft,#eef);margin-left:.4rem">' + c.badge + '</span>' : '';
+    var del = canEdit ? '<button data-del="' + c.id + '" title="Remove" style="margin-left:auto;align-self:flex-start">✕</button>' : '';
+    el.innerHTML = cover +
+      '<div style="flex:1;min-width:60%"><div><strong>' + escapeHtml(c.title) + '</strong>' + badge + '</div>' +
+      '<div class="muted" style="font-size:.85rem">' + escapeHtml(meta) + '</div></div>' + del;
+    if (c.status === 'suspected' && canEdit) el.appendChild(suspectActions(c.id));
+    return el;
+  }
+
+  // "You might already own this" — list the candidate editions; confirm one (= you own it) or
+  // decline (keep it on the wishlist). Drives the PATCH confirm_owned / decline_suspected actions.
+  function suspectActions(id) {
+    var raw = rawById[id] || {}, cands = raw.candidates || [];
+    var wrap = document.createElement('div');
+    wrap.style.cssText = 'flex-basis:100%;border-top:1px dashed var(--border,#ccc);margin-top:.4rem;padding-top:.4rem';
+    wrap.innerHTML = '<div class="muted" style="font-size:.82rem;margin-bottom:.3rem">Might already be in your library — is it one of these?</div>';
+    cands.forEach(function (e) {
+      var b = document.createElement('button');
+      b.textContent = '✓ ' + (e.title || ('edition #' + e.id)) + (e.forms && e.forms.length ? ' (' + e.forms.join(', ') + ')' : '');
+      b.style.cssText = 'margin:.15rem .3rem .15rem 0';
+      b.onclick = function () { act('confirm', { id: id, editionId: e.id }).then(load); };
+      wrap.appendChild(b);
+    });
+    var no = document.createElement('button');
+    no.textContent = 'No, different book';
+    no.onclick = function () { act('decline', { id: id }).then(load); };
+    wrap.appendChild(no);
+    return wrap;
+  }
+
+  // The ONLY backend seam: execute a SHARED LibraryCore.wishlistRequest descriptor. No endpoint or
+  // HTTP verb is written here, so web/PWA/iOS issue identical requests (Tier-2 owns the command path).
+  function exec(req) {
+    var opts = { method: req.method, headers: { 'Accept': 'application/json' } };
+    if (req.body) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(req.body); }
+    return fetch(req.path, opts);
+  }
+  function act(action, opts) { return exec(LibraryCore.wishlistRequest(action, opts)); }
+
+  function escapeHtml(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; }
+
+  function render(payload) {
+    rawById = {};
+    (payload.items || []).forEach(function (it) { rawById[it.id] = it; });
+    var vm = LibraryCore.wishlistVM(payload, {});
+    host.innerHTML = '';
+    if (vm.empty) { host.innerHTML = '<p class="muted">Your wishlist is empty.</p>'; return; }
+    vm.groups.forEach(function (g) {
+      var h = document.createElement('h2');
+      h.textContent = g.title + ' (' + g.cards.length + ')';
+      h.style.cssText = 'font-size:1rem;margin:1.2rem 0 .3rem';
+      host.appendChild(h);
+      g.cards.forEach(function (c) { host.appendChild(card(c)); });
+    });
+  }
+
+  function load() {
+    act('list').then(function (r) { return r.json(); }).then(render)
+      .catch(function () { host.innerHTML = '<p style="color:#a00">Could not load the wishlist.</p>'; });
+  }
+
+  host.addEventListener('click', function (e) {
+    var id = e.target && e.target.getAttribute && e.target.getAttribute('data-del');
+    if (!id) return;
+    act('remove', { id: id }).then(load);
+  });
+
+  var form = document.getElementById('wl-add');
+  if (form) form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var msg = document.getElementById('wl-msg');
+    var body = { source: 'manual' };
+    var isbn = form.isbn.value.trim(), title = form.title.value.trim(), author = form.author.value.trim();
+    if (isbn) body.isbn = isbn; else if (title) { body.title = title; if (author) body.author = author; }
+    else { msg.textContent = 'Enter a title or an ISBN.'; return; }
+    msg.textContent = 'Adding…';
+    act('add', { body: body })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) {
+        // The user message comes from the SHARED mapper — identical wording on web/PWA/iOS.
+        msg.textContent = res.ok ? LibraryCore.wishlistAddMessage(res.j)
+                                 : 'Could not add (' + (res.j.error || 'error') + ').';
+        if (res.ok) { form.reset(); load(); }
+      })
+      .catch(function () { msg.textContent = 'Network error.'; });
+  });
+
+  load();
+})();
+</script>
+{% endblock %}

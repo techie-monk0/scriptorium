@@ -1,0 +1,39 @@
+{# ONE shared subjects datalist for the whole page. Include ONCE at page level on any
+   page that renders a subject autocomplete input (the work picker's new-work form, the
+   editable Edition Basics subjects, …). Every such input uses list="nw-subj-opts", so a
+   single datalist serves them all — instead of re-emitting one datalist (with every
+   subject as <option>) PER picker PER row. The book-browser renders every row's detail
+   eagerly, so a per-row datalist meant thousands of duplicate <option> nodes, which made
+   Safari's input focus/layout pathologically slow (Chrome tolerated it). #}
+{# Two namespaces: topical subjects (nw-subj-opts) and Series/Collections (nw-series-opts),
+   kept separate so a series never autocompletes into a topic picker (or vice-versa). #}
+<datalist id="nw-subj-opts">{% for s in subject_names('topic') %}<option value="{{ s }}">{% endfor %}</datalist>
+<datalist id="nw-series-opts">{% for s in subject_names('series') %}<option value="{{ s }}">{% endfor %}</datalist>
+{# Existing person names for the BULK "add author" autocomplete (single-row author add
+   uses the alias-aware Typeahead picker instead; bulk types once + applies to all). #}
+<datalist id="nw-person-opts">{% for p in person_names() %}<option value="{{ p }}">{% endfor %}</datalist>
+<script>
+// Keep the shared datalists LIVE: these <option> lists are rendered once at page load,
+// but subjects/series are added in-place via AJAX card refreshes (no reload). Without
+// this, a subject you just created on one book wouldn't autocomplete for any OTHER book
+// until you reloaded. So whenever an add form is submitted, fold its typed name into the
+// right datalist immediately. Capture phase → runs even when the book-browser fetch-
+// intercepts the submit.
+(function () {
+  function addOption(listId, val) {
+    var dl = document.getElementById(listId); if (!dl) return;
+    var v = (val || '').trim(); if (!v) return;
+    for (var i = 0; i < dl.options.length; i++)
+      if (dl.options[i].value.toLowerCase() === v.toLowerCase()) return;   // already listed
+    var o = document.createElement('option'); o.value = v; dl.appendChild(o);
+  }
+  document.addEventListener('submit', function (e) {
+    var f = e.target;
+    if (!f || !f.action || !/\/subjects\/[^/]+\/\d+\/add(\?|$)/.test(f.action)) return;
+    var nameEl = f.querySelector('input[name="name"]'); if (!nameEl) return;
+    var kindEl = f.querySelector('input[name="subject_kind"]');
+    addOption(kindEl && kindEl.value === 'series' ? 'nw-series-opts' : 'nw-subj-opts',
+              nameEl.value);
+  }, true);
+})();
+</script>

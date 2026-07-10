@@ -1,0 +1,26 @@
+{# ── Shared Review tab strip ───────────────────────────────────────────────
+   Renders the one tabbed Review surface across its four pages. A page opts in
+   by passing `review_tab` ('books' | 'works' | 'people' | 'subjects'); the
+   matching tab is highlighted. Counts come from the lazy `review_counts()`
+   context global. #}
+{% if review_tab %}
+{% set rc = review_counts() %}
+{# The SAME search module as the Search page (/library), reused here so you can
+   search works / titles / people from any Review queue. Self-contained: it mounts
+   its own fields and (on submit / pick) runs the search over on /library. #}
+{% include '_search_pane.html' %}
+<style>
+  .rtabs { display: flex; gap: .4rem; flex-wrap: wrap; margin: .2rem 0 .6rem; }
+  .rtabs a { padding: .4rem .8rem; border: 1px solid var(--border); border-radius: 8px; text-decoration: none;
+             color: var(--fg); background: var(--btn-bg); font-size: .92rem; }
+  .rtabs a.active { background: var(--nav-active-bg); color: var(--nav-active-fg); border-color: var(--nav-active-bg); }
+  .rtabs a .n { font-variant-numeric: tabular-nums; opacity: .7; }
+  .rtabs a.active .n { opacity: .85; }
+</style>
+<nav class="rtabs" aria-label="Review sections">
+  <a href="/works/detect/single" class="{{ 'active' if review_tab == 'books' }}">Books <span class="n">{{ rc.books }}</span></a>
+  <a href="/works/incomplete" class="{{ 'active' if review_tab == 'works' }}">Works <span class="n">{{ rc.works }}</span></a>
+  <a href="/picker/person" class="{{ 'active' if review_tab == 'people' }}">People <span class="n">{{ rc.people }}</span></a>
+  <a href="/review/subjects" class="{{ 'active' if review_tab == 'subjects' }}">Subjects <span class="n">{{ rc.subjects }}</span></a>
+</nav>
+{% endif %}

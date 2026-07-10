@@ -1,0 +1,591 @@
+{# ── Sectioned Review pane (the /library left pane) ───────────────────────────
+   A self-contained master-detail browser that hosts MULTIPLE typed sections under
+   ONE detail pane — distinct from the single-list `_book_browser.html` (which still
+   drives /review, /holdings, /works/detect, /picker UNCHANGED). It is built fresh
+   here, reusing _book_browser's CSS + the same inline-card editing contract, so the
+   detail fragments (edition / work / person cards) behave identically.
+
+   Caller provides:
+     panes        — [{key, label, seltype, rows}]. seltype ∈ edition|work|person.
+                    Each row = a master-row dict (id, title, subtitle, done, seltype,
+                    holding_id, has_file, file_ext). First pane = the search candidates;
+                    later panes = the selected entity's decomposition (works / editions / authors).
+     sel_type/sel_id — the entity M to auto-open (its detail + its decomposition).
+     searched_type   — type of the candidate pane (drives select-all's default scope).
+     bt/wt/pe         — current search fields, preserved in each row's drill-in link.
+
+   Selection model: ↑/↓/click = open a row inline (fast preview + edit). The `›` link
+   on a row DRILLS IN — navigates to that entity's canonical URL so the server re-
+   decomposes around it (multi-pick and single-match share one code path). Bulk
+   selection (checkboxes) is SINGLE-TYPE: ticking a row of one type clears the others;
+   the bulk bar shows that type's actions (editions wired; works/people are selection-
+   only for now). #}
+<style>
+  .bb-wide { position: relative; left: 50%; transform: translateX(-50%); width: min(1280px, 96vw); }
+  .md { display: grid; grid-template-columns: 340px 1fr; gap: 1rem; align-items: start; }
+  .bb-left { min-width: 0; }
+  .master { list-style: none; margin: 0; padding: 0; max-height: calc(100vh - 2rem);
+            overflow-y: auto; border: 1px solid var(--card-border); border-radius: 6px;
+            background: var(--surface); position: sticky; top: 1rem; align-self: start; }
+  .master .group-hdr { display: flex; align-items: center; gap: .4rem; padding: .4rem .6rem;
+            background: var(--surface-2); color: var(--fg);
+            font-weight: bold; border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 1;
+            cursor: pointer; user-select: none; }
+  .master .group-hdr:hover { background: var(--nav-hover); }
+  .master .group-hdr .n { opacity: .65; font-weight: normal; font-variant-numeric: tabular-nums; }
+  .master .group-hdr .sec-caret { display: inline-block; width: 1.1em; color: var(--muted); flex: none; }
+  .master .group-hdr .sec-label { flex: 1 1 auto; min-width: 0; }
+  /* Per-section select-all, right-justified in the header (editable mode only). */
+  .master .group-hdr .sec-selall { flex: none; display: inline-flex; align-items: center; gap: .25rem;
+            font-weight: normal; font-size: .78rem; color: var(--muted); cursor: pointer; }
+  .master .group-hdr .sec-selall input { cursor: pointer; margin: 0; }
+  .master .group-hdr .sec-selall.seldim { opacity: .4; }
+  .master .row { display: flex; align-items: baseline; gap: .2rem; padding: .4rem .6rem;
+            border-bottom: 1px solid var(--border); cursor: pointer; outline: none; }
+  .master .row:hover { background: var(--nav-hover); }
+  .master .row.sel { background: var(--nav-active-bg); color: var(--nav-active-fg); }
+  .master .row.sel .sub { color: #cdd; }
+  .master .row.done .badge { color: #2a7; }
+  .master .row.sel.done .badge { color: #9f9; }
+  /* While a bulk type is active, rows of OTHER types are dimmed + their boxes disabled
+     (JS-toggled class, never `:has()` — see _book_browser's perf note). */
+  .master .row.seldim { opacity: .4; }
+  .master .badge { display: inline-block; width: 1.1em; font-weight: 700; flex: none; }
+  .master .row .bb-check { margin-right: .15rem; flex: none; cursor: pointer; }
+  .master .row.sel .bb-check { accent-color: #9cf; }
+  .master .rowmain { min-width: 0; flex: 1 1 auto; }
+  .master .ttl { font-weight: 600; }
+  .master .sub { display: block; font-size: .82rem; color: var(--muted); }
+  .master .bb-drill { flex: none; text-decoration: none; color: var(--link); font-weight: 700;
+            padding: 0 .25rem; border-radius: 4px; }
+  .master .bb-drill:hover { background: var(--nav-active-bg); color: var(--nav-active-fg); }
+  .master .detail-src { display: none; }
+  .detail { border: 1px solid var(--card-border); border-radius: 6px; padding: 1rem; min-height: 50vh;
+            background: var(--surface); position: sticky; top: 1rem; }
+  .detail h2 { margin-top: 0; }
+  .detail .meta { color: var(--subtle-fg); font-size: .9rem; margin: .2rem 0 1rem; }
+  .detail h2 .edition-title { text-decoration: none; color: inherit; }
+  .detail h2 .edition-title:hover { text-decoration: underline; }
+  .hint { color: var(--muted); font-size: .82rem; }
+  .bb-saved { animation: bb-flash 1.2s ease-out; }
+  @keyframes bb-flash { from { background: #e6f7ee; } to { background: transparent; } }
+  #bb-toast { position: fixed; top: 1rem; right: 1rem; z-index: 9999; pointer-events: none;
+    background: #1c7a3e; color: #fff; font-weight: 600; padding: .4rem .85rem; border-radius: 6px;
+    box-shadow: 0 2px 10px rgba(0,0,0,.22); opacity: 0; transform: translateY(-8px);
+    transition: opacity .14s ease, transform .14s ease; }
+  #bb-toast.show { opacity: 1; transform: none; }
+  .ta-spin { display: inline-block; width: .85em; height: .85em; margin-right: .3rem; vertical-align: -2px;
+    border: 2px solid #cdd6e6; border-top-color: #2456b8; border-radius: 50%; animation: ta-spin .7s linear infinite; }
+  @keyframes ta-spin { to { transform: rotate(360deg); } }
+  /* ── Single-type bulk bar ── */
+  .bb-selbar { display: flex; gap: .8rem; margin: .4rem 0 .8rem; align-items: center; flex-wrap: wrap;
+            padding: .4rem .6rem; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); }
+  .bb-selbar.empty { opacity: .65; }
+  .bb-selbar #bb-selcount { font-variant-numeric: tabular-nums; }
+  .bb-selbar .bb-seltype { font-weight: 700; text-transform: capitalize; }
+  .bb-selbar select, .bb-selbar button, .bb-selbar input { padding: .3rem .6rem; font: inherit; }
+  .bb-selbar button { cursor: pointer; }
+  .bb-selbar button[disabled] { cursor: default; opacity: .5; }
+  .bb-bulk { display: inline-flex; gap: .4rem; align-items: center; }
+  .bb-bulk .danger { color: #a00; }
+  /* The edition action host shows only when editions are the active selection. */
+  #bb-bulk-actions[data-type-active="0"] { display: none; }
+  #bb-bulk-note { color: var(--subtle-fg); font-size: .85rem; }
+  .bb-modal { position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 60;
+            display: flex; align-items: center; justify-content: center; }
+  .bb-modal .card { background: var(--surface); color: var(--fg); border-radius: 10px; padding: 1rem 1.4rem;
+            max-width: 32rem; box-shadow: 0 8px 30px rgba(0,0,0,.25); }
+  .bb-modal p { white-space: pre-wrap; margin: 0 0 1rem; }
+  .bb-modal-actions { display: flex; gap: .6rem; justify-content: flex-end; flex-wrap: wrap; }
+  .bb-modal-actions button { padding: .35rem .9rem; border: 1px solid var(--btn-border); border-radius: 6px;
+            background: var(--btn-bg); color: var(--btn-fg); cursor: pointer; font: inherit; }
+  .bb-modal-actions button.primary { background: #2d6cdf; border-color: #2d6cdf; color: #fff; }
+  @media (max-width: 768px) {
+    .bb-wide { left: auto; transform: none; width: 100%; }
+    .md { grid-template-columns: 1fr; }
+    .md > * { position: static !important; }
+    .master { max-height: 50vh; }
+    .detail { min-height: auto; }
+  }
+</style>
+
+{# editable ⇒ the working mode (bulk select + inline editing); read-only ⇒ the Search
+   page (browse + decompose, NO changes, NO bulk). Same module, two modes. #}
+{% set rp_editable = rp_editable | default(false) %}
+{% if rp_editable %}
+{# Selection bar: select-all + count + active-type label, then the edition action host
+   (reused _bulk_edition_actions.html populates it) and a note for the other types. #}
+<div class="bb-selbar empty" id="bb-selbar" data-default-type="{{ searched_type }}">
+  <span id="bb-selcount" class="hint">0 selected</span>
+  <span id="bb-bulk-actions" data-type-active="0"></span>
+  <span id="bb-bulk-note"></span>
+</div>
+{% endif %}
+
+<div class="md">
+  <div class="bb-left">
+    <ul class="master" id="master">
+      {% set ns = namespace(idx=0) %}
+      {% for pane in panes %}
+        <li class="group-hdr" data-sec-key="{{ pane.key }}"
+            data-default-open="{{ '1' if pane.key == 'candidates' else '0' }}">
+          <span class="sec-caret">▾</span>
+          <span class="sec-label">{{ pane.label }} <span class="n">({{ pane.rows|length }})</span></span>
+          {% if rp_editable %}<label class="sec-selall" title="select all in this section"
+                 onclick="event.stopPropagation()"><input type="checkbox" class="bb-secall"
+                 data-sec-key="{{ pane.key }}" data-seltype="{{ pane.seltype }}"> all</label>{% endif %}
+        </li>
+        {% for item in pane.rows %}
+          {% set st = item.seltype %}
+          {% set pfx = 'e' if st == 'edition' else ('w' if st == 'work' else 'p') %}
+          {% set qkey = 'eid' if st == 'edition' else ('wid' if st == 'work' else 'pid') %}
+          <li class="row {% if item.done %}done{% endif %}" id="i{{ pfx }}{{ item.id }}"
+              data-idx="{{ ns.idx }}" data-seltype="{{ st }}" data-id="{{ item.id }}"
+              data-sec-key="{{ pane.key }}" tabindex="0">
+            {% if rp_editable %}<input type="checkbox" class="bb-check" data-id="{{ item.id }}" data-seltype="{{ st }}"
+                   title="select for a bulk operation" onclick="event.stopPropagation()">{% endif %}
+            <span class="badge">{{ '✓' if item.done else '·' }}</span>
+            <span class="rowmain">
+              <span class="ttl">{{ item.title }}</span>
+              <span class="sub">{{ item.subtitle }}</span>
+            </span>
+            {% if st == 'edition' %}<button type="button" class="row-star" data-eid="{{ item.id }}"
+                 aria-pressed="{{ 'true' if item.id in starred_ids else 'false' }}"
+                 aria-label="Star" title="Star" onclick="event.stopPropagation()">★</button>{% endif %}
+            <a class="bb-drill" title="show this entity's works / editions"
+               href="{{ url_for(endpoint, book_title=(bt or None), work_title=(wt or None), person=(pe or None), subject=(su or None), **{qkey: item.id}) }}">›</a>
+            {% set detail_template = '_library_detail.html' if st == 'edition'
+                 else ('_library_work_detail.html' if st == 'work' else '_library_person_detail.html') %}
+            <template class="detail-src">{% with item = item, editable = rp_editable %}{% include detail_template %}{% endwith %}</template>
+          </li>
+          {% set ns.idx = ns.idx + 1 %}
+        {% endfor %}
+      {% endfor %}
+      {% if not panes or not panes[0].rows %}
+      <li class="stub" style="padding:.6rem; list-style:none">No matches. Try fewer fields{% if rp_editable %}, or + Add book{% endif %}.</li>
+      {% endif %}
+    </ul>
+  </div>
+  <div class="detail" id="detail"><p class="stub">Select a row — use ↑ / ↓, or click. Press <kbd>›</kbd> to drill into a row's works &amp; editions.</p></div>
+</div>
+
+<script>
+(function () {
+  const master = document.getElementById('master');
+  const detail = document.getElementById('detail');
+  if (!master || !detail) return;
+  const rows = Array.from(master.querySelectorAll('.row'));
+  let sel = -1;
+  const cardCache = {};
+
+  // ── Lazy inline cards ([data-card-url]) — fetched on demand + cached ──
+  function fillCards() {
+    detail.querySelectorAll('[data-card-url]').forEach(el => {
+      if (el.dataset.filled === '1') return;
+      const det = el.closest('details');
+      if (det && !det.open) return;
+      const url = el.getAttribute('data-card-url');
+      if (cardCache[url] != null) { el.innerHTML = cardCache[url]; el.dataset.filled = '1'; return; }
+      fetch(url).then(r => r.ok ? r.text() : Promise.reject(r.status))
+        .then(html => { cardCache[url] = html; el.innerHTML = html; el.dataset.filled = '1'; })
+        .catch(() => { el.innerHTML = '<p class="hint">Could not load record.</p>'; });
+    });
+  }
+  detail.addEventListener('toggle', e => { if (e.target.open) fillCards(); }, true);
+
+  // ── Unsaved-edit guard (per inline card) ──
+  detail.addEventListener('input',  e => markDirty(e.target));
+  detail.addEventListener('change', e => markDirty(e.target));
+  function markDirty(el) {
+    const card = el.closest && el.closest('[data-card-url]');
+    if (card && card.dataset.dirty !== '1') card.dataset.dirty = '1';
+  }
+  function isDirty() { return !!detail.querySelector('[data-card-url][data-dirty="1"]'); }
+  function clearDirty() { detail.querySelectorAll('[data-card-url][data-dirty]').forEach(c => delete c.dataset.dirty); }
+  function bbFieldChanged(el) {
+    if (el.disabled) return false;
+    const t = (el.type || '').toLowerCase();
+    if (['hidden', 'submit', 'button', 'reset', 'file'].includes(t)) return false;
+    if (t === 'checkbox' || t === 'radio') return el.checked !== el.defaultChecked;
+    if (el.tagName === 'SELECT') return Array.from(el.options).some(o => o.selected !== o.defaultSelected);
+    return el.value !== el.defaultValue;
+  }
+  function changedFieldLabels() {
+    const out = [];
+    detail.querySelectorAll('[data-card-url][data-dirty="1"]').forEach(card => {
+      let hit = false;
+      card.querySelectorAll('input, select, textarea').forEach(el => {
+        if (bbFieldChanged(el)) hit = true;
+      });
+      if (hit) out.push('unsaved edits');
+    });
+    return out;
+  }
+  window.bbDirtyFields = changedFieldLabels;
+  window.bbIsDirty = isDirty;
+  function okToDiscard() {
+    if (!isDirty()) return true;
+    return window.confirm('You have unsaved changes that will be lost. Discard them?');
+  }
+  window.addEventListener('beforeunload', e => { if (isDirty()) { e.preventDefault(); e.returnValue = ''; } });
+
+  // ── Collapsible sections (Works / Editions / People / …) ─────────────────
+  // Default: ONLY the section matching the searched type — the candidate pane,
+  // marked data-default-open — is expanded; every other section starts collapsed.
+  // This is re-derived on each render (every search), so a search always opens just
+  // the box you typed in. Clicking a header folds/unfolds it for the current view.
+  let collapsed = new Set();
+  master.querySelectorAll('.group-hdr').forEach(h => {
+    if (h.dataset.defaultOpen !== '1') collapsed.add(h.dataset.secKey);
+  });
+  function applyCollapse() {
+    master.querySelectorAll('.group-hdr').forEach(h => {
+      const car = h.querySelector('.sec-caret');
+      if (car) car.textContent = collapsed.has(h.dataset.secKey) ? '▸' : '▾';
+    });
+    rows.forEach(r => { r.style.display = collapsed.has(r.dataset.secKey) ? 'none' : ''; });
+  }
+  function expandSection(k) { if (collapsed.delete(k)) applyCollapse(); }
+  master.querySelectorAll('.group-hdr').forEach(h => {
+    h.addEventListener('click', () => {
+      const k = h.dataset.secKey;
+      if (collapsed.has(k)) collapsed.delete(k); else collapsed.add(k);
+      applyCollapse();
+    });
+  });
+
+  // ── Row selection (inline detail preview) ──
+  function select(idx) {
+    if (!rows.length) return;
+    idx = Math.max(0, Math.min(idx, rows.length - 1));
+    if (idx === sel) return;
+    if (sel >= 0 && !okToDiscard()) return;
+    if (sel >= 0 && rows[sel]) rows[sel].classList.remove('sel');
+    sel = idx;
+    rows[sel].classList.add('sel');
+    expandSection(rows[sel].dataset.secKey);   // a hidden (folded) selection reveals its section
+    rows[sel].scrollIntoView({ block: 'nearest' });
+    detail.innerHTML = rows[sel].querySelector('.detail-src').innerHTML;
+    fillCards();
+    try { history.replaceState(null, '', '#' + rows[sel].id); } catch (e) {}
+  }
+  // Next/prev VISIBLE row — skips rows hidden under a folded section. Clamps.
+  function stepRow(from, dir) {
+    let i = from;
+    for (let n = 0; n < rows.length; n++) {
+      i += dir;
+      if (i < 0 || i >= rows.length) return from;
+      if (rows[i].style.display !== 'none') return i;
+    }
+    return from;
+  }
+  rows.forEach((r, i) => r.addEventListener('click', () => select(i)));
+  applyCollapse();   // reflect persisted fold state on load (before the initial select)
+
+  // Drill-in (`›`) navigates to re-decompose around that entity; guard unsaved edits first.
+  master.querySelectorAll('.bb-drill').forEach(a => {
+    a.addEventListener('click', e => {
+      e.stopPropagation();
+      if (!okToDiscard()) { e.preventDefault(); return; }
+      clearDirty();
+    });
+  });
+
+  // ── Toast + modal (shared API the detail fragments call) ──
+  let _toastTimer = null;
+  function bbToast(msg) {
+    let el = document.getElementById('bb-toast');
+    if (!el) { el = document.createElement('div'); el.id = 'bb-toast';
+               el.setAttribute('aria-live', 'polite'); document.body.appendChild(el); }
+    el.textContent = msg || 'Saved ✓';
+    el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
+    clearTimeout(_toastTimer); _toastTimer = setTimeout(() => el.classList.remove('show'), 1600);
+  }
+  window.bbToast = bbToast;
+  function bbChoose(message, buttons) {
+    return new Promise(resolve => {
+      const ov = document.createElement('div'); ov.className = 'bb-modal';
+      const box = document.createElement('div'); box.className = 'card';
+      const p = document.createElement('p'); p.textContent = message;
+      const row = document.createElement('div'); row.className = 'bb-modal-actions';
+      let done = false;
+      const finish = k => { if (done) return; done = true;
+        document.removeEventListener('keydown', onKey, true); ov.remove(); resolve(k); };
+      (buttons || []).forEach(b => {
+        const btn = document.createElement('button');
+        btn.textContent = b.label; if (b.primary) btn.className = 'primary';
+        btn.addEventListener('click', () => finish(b.key)); row.appendChild(btn);
+      });
+      box.appendChild(p); box.appendChild(row); ov.appendChild(box);
+      ov.addEventListener('click', e => { if (e.target === ov) finish(null); });
+      const onKey = e => { if (e.key === 'Escape') { e.stopPropagation(); finish(null); } };
+      document.addEventListener('keydown', onKey, true);
+      document.body.appendChild(ov);
+      (row.querySelector('button.primary') || row.querySelector('button') || {}).focus?.();
+    });
+  }
+  window.bbChoose = bbChoose;
+  function bbCopyName(btn) {
+    const text = btn.getAttribute('data-copy') || '';
+    const done = () => { const old = btn.textContent; btn.textContent = '✓'; btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = old; btn.classList.remove('copied'); }, 900); };
+    if (navigator.clipboard && navigator.clipboard.writeText)
+      navigator.clipboard.writeText(text).then(done).catch(() => {});
+  }
+  window.bbCopyName = bbCopyName;
+
+  // ── Resolve a row by entity (numeric) id, preferring the active/selected type ──
+  const _pfx = { edition: 'e', work: 'w', person: 'p' };
+  function _row(id) {
+    if (id == null) return sel >= 0 ? rows[sel] : null;
+    const types = [activeType, (sel >= 0 ? rows[sel].dataset.seltype : null), 'edition', 'work', 'person'];
+    for (const t of types) { if (!t) continue;
+      const el = document.getElementById('i' + _pfx[t] + id); if (el) return el; }
+    return null;
+  }
+  function _flash() { detail.classList.add('bb-saved'); setTimeout(() => detail.classList.remove('bb-saved'), 1200); }
+
+  // ── In-pane card editing: a non-destructive form inside an inline card submits via
+  //    fetch and re-renders just that card (editing never navigates away). ──
+  function saveCardForm(form) {
+    const card = form.closest('[data-card-url]');
+    if (!card) return Promise.reject(new Error('not an inline-card form'));
+    const url = card.getAttribute('data-card-url');
+    const body = new FormData(form);
+    card.style.opacity = '.5';
+    return fetch(form.action, { method: 'POST', body: body, redirect: 'manual' })
+      .then(() => { delete cardCache[url]; return fetch(url).then(r => r.text()); })
+      .then(html => { cardCache[url] = html; card.innerHTML = html; card.dataset.filled = '1';
+        delete card.dataset.dirty; card.style.opacity = '';
+        card.classList.add('bb-saved'); setTimeout(() => card.classList.remove('bb-saved'), 1200);
+        bbToast('Saved ✓'); syncDetail();
+        document.dispatchEvent(new CustomEvent('bb:cardrendered', { detail: { card: card, url: url } })); })
+      .catch(err => { card.innerHTML = '<p class="hint">Save failed.</p>'; throw err; });
+  }
+  function saveAllDirty() {
+    const forms = new Set();
+    detail.querySelectorAll('[data-card-url][data-dirty="1"]').forEach(card => {
+      card.querySelectorAll('input, select, textarea').forEach(el => {
+        if (!bbFieldChanged(el)) return;
+        const f = el.form || el.closest('form');
+        if (f && card.contains(f)) forms.add(f);
+      });
+    });
+    return Promise.all(Array.from(forms).map(f => saveCardForm(f)));
+  }
+  window.bbSaveAllDirty = saveAllDirty;
+  detail.addEventListener('submit', e => {
+    const form = e.target;
+    const destructive = /\/delete$/.test(new URL(form.action, location).pathname);
+    const card = form.closest('[data-card-url]');
+    if (card && !destructive) { e.preventDefault(); saveCardForm(form).catch(() => {}); return; }
+    if (form.closest('[data-bb-refresh]')) {
+      e.preventDefault();
+      if (!okToDiscard()) return;
+      const body = new FormData(form);
+      fetch(form.action, { method: 'POST', body: body, redirect: 'manual' })
+        .then(() => { clearDirty(); return refreshDetail(); })
+        .then(() => bbToast('Saved ✓')).catch(() => {});
+      return;
+    }
+    clearDirty();
+  });
+
+  // ── Snapshot-consistency helpers (same contract as _book_browser) ──
+  let refreshing = false;
+  function refreshDetail(id) {
+    const row = _row(id);
+    if (!row || refreshing) return Promise.resolve();
+    refreshing = true;
+    const showing = row.classList.contains('sel');
+    return fetch(location.href).then(r => r.text()).then(html => {
+      const fresh = new DOMParser().parseFromString(html, 'text/html').getElementById(row.id);
+      if (!fresh) { location.reload(); return; }
+      ['ttl', 'sub'].forEach(c => { const cur = row.querySelector('.' + c), nxt = fresh.querySelector('.' + c);
+        if (cur && nxt) cur.textContent = nxt.textContent; });
+      const wasDone = fresh.classList.contains('done');
+      row.classList.toggle('done', wasDone);
+      const fb = fresh.querySelector('.badge'), b = row.querySelector('.badge');
+      if (fb && b) b.textContent = fb.textContent;
+      const src = row.querySelector('.detail-src'), freshSrc = fresh.querySelector('.detail-src');
+      if (src && freshSrc) src.innerHTML = freshSrc.innerHTML;
+      if (showing && freshSrc) {
+        freshSrc.content.querySelectorAll('[data-card-url]').forEach(c => delete cardCache[c.getAttribute('data-card-url')]);
+        detail.innerHTML = freshSrc.innerHTML; fillCards(); _flash();
+      }
+    }).catch(() => { location.reload(); }).finally(() => { refreshing = false; });
+  }
+  // Refresh MANY rows in ONE page fetch. refreshDetail() single-flights (a `refreshing`
+  // guard), so calling it in a loop (e.g. bulk detect) silently drops every row after the
+  // first — this is the "only the first row updates in the left pane" bug. This syncs each
+  // listed row's title/subtitle/badge/cached detail to the server's current state.
+  function refreshRows(ids) {
+    if (!ids || !ids.length) return Promise.resolve();
+    return fetch(location.href).then(r => r.text()).then(html => {
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      ids.forEach(id => {
+        const row = _row(id); if (!row) return;
+        const fresh = doc.getElementById(row.id); if (!fresh) return;
+        ['ttl', 'sub'].forEach(c => { const cur = row.querySelector('.' + c), nxt = fresh.querySelector('.' + c);
+          if (cur && nxt) cur.textContent = nxt.textContent; });
+        row.classList.toggle('done', fresh.classList.contains('done'));
+        const fb = fresh.querySelector('.badge'), b = row.querySelector('.badge');
+        if (fb && b) b.textContent = fb.textContent;
+        const src = row.querySelector('.detail-src'), fsrc = fresh.querySelector('.detail-src');
+        if (src && fsrc) {
+          src.innerHTML = fsrc.innerHTML;
+          if (row.classList.contains('sel')) {                 // currently open → re-render it
+            fsrc.content.querySelectorAll('[data-card-url]').forEach(
+              c => delete cardCache[c.getAttribute('data-card-url')]);
+            detail.innerHTML = fsrc.innerHTML; fillCards(); _flash();
+          }
+        }
+      });
+    }).catch(() => { location.reload(); });
+  }
+  window.bbRefreshRows = refreshRows;
+  function resolveRow(id, html) {
+    const row = _row(id);
+    if (!row) return;
+    const showing = row.classList.contains('sel');
+    const prior = showing ? detail.innerHTML
+      : (row.querySelector('.detail-src') ? row.querySelector('.detail-src').innerHTML : '');
+    const kept = document.createElement('div'); kept.innerHTML = prior;
+    kept.querySelectorAll('.picker-actions, .bb-resolved').forEach(e => e.remove());
+    const composed = '<div class="bb-resolved">' + html + '</div>' + kept.innerHTML;
+    row.classList.add('done');
+    const b = row.querySelector('.badge'); if (b) b.textContent = '✓';
+    const src = row.querySelector('.detail-src'); if (src) src.innerHTML = composed;
+    if (showing) { detail.innerHTML = composed; _flash(); }
+  }
+  function syncDetail(id) {
+    const row = _row(id);
+    if (!row || !row.classList.contains('sel')) return;
+    const src = row.querySelector('.detail-src'); if (src) src.innerHTML = detail.innerHTML;
+  }
+  window.bbRefreshDetail = refreshDetail;
+  window.bbResolveRow = resolveRow;
+  window.bbSyncDetail = syncDetail;
+
+  // ── Open a non-PDF file in the OS default reader (for _open_control.html) ──
+  window.openNative = function (hid, el) {
+    const label = el.innerHTML; el.style.opacity = '.6';
+    fetch('/holding/' + hid + '/open', { method: 'POST' }).then(r => {
+      el.style.opacity = '';
+      if (r.status === 202) { const oi = el.querySelector('.oi'); if (oi) oi.textContent = '📥 downloading…';
+        if (window.bbToast) window.bbToast('File is online-only in kDrive — download triggered; retry shortly.');
+        setTimeout(() => { el.innerHTML = label; }, 4000);
+      } else if (r.ok) { const oi = el.querySelector('.oi'); if (oi) oi.textContent = '✓ opened';
+        setTimeout(() => { el.innerHTML = label; }, 1500);
+      } else if (r.status === 501) { window.open('/holding/' + hid + '/file', '_blank');
+      } else { const oi = el.querySelector('.oi'); if (oi) oi.textContent = '✗ failed'; }
+    }).catch(() => { el.style.opacity = ''; });
+  };
+
+  // ── Single-type bulk selection ───────────────────────────────────────────
+  const selbar  = document.getElementById('bb-selbar');
+  const selcount = document.getElementById('bb-selcount');
+  const actionHost = document.getElementById('bb-bulk-actions');
+  const noteHost   = document.getElementById('bb-bulk-note');
+  const secAlls = Array.from(master.querySelectorAll('.bb-secall'));   // per-section select-all boxes
+  const NOUN = { edition: 'book', work: 'work', person: 'person' };
+  let activeType = null;
+  function checks() { return Array.from(master.querySelectorAll('.bb-check')); }
+  function activeChecks() { return checks().filter(c => c.dataset.seltype === activeType); }
+  function rowKey(c) { const li = c.closest('.row'); return li ? li.dataset.secKey : null; }
+  function secChecks(k) { return checks().filter(c => rowKey(c) === k); }
+  // Ticking a type clears the others (single-type rule) + dims their rows.
+  function enforceType() {
+    const ticked = checks().filter(c => c.checked);
+    activeType = ticked.length ? ticked[0].dataset.seltype : null;
+    checks().forEach(c => {
+      const off = activeType && c.dataset.seltype !== activeType;
+      if (off && c.checked) c.checked = false;
+      c.disabled = !!off;
+      const li = c.closest('.row'); if (li) li.classList.toggle('seldim', !!off);
+    });
+  }
+  function bbSelectedIds() { return activeChecks().filter(c => c.checked).map(c => c.dataset.id); }
+  window.bbSelectedIds = bbSelectedIds;
+  window.bbClearSelection = () => { checks().forEach(c => c.checked = false); refreshSel(); };
+  function refreshSel() {
+    enforceType();
+    const ids = bbSelectedIds();
+    if (selcount) selcount.textContent = ids.length + (activeType ? ' ' + NOUN[activeType] : '') + (ids.length === 1 ? '' : 's') + ' selected';
+    if (selbar) selbar.classList.toggle('empty', ids.length === 0);
+    // Edition ops live in the reused host; show it only when editions are active.
+    if (actionHost) actionHost.dataset.typeActive = (activeType === 'edition') ? '1' : '0';
+    if (noteHost) noteHost.textContent =
+      (activeType && activeType !== 'edition' && ids.length)
+        ? `(bulk actions for ${NOUN[activeType]}s coming soon — selection is ready)` : '';
+    // Each section's select-all: checked iff all its live boxes are ticked, indeterminate
+    // if some; disabled + dimmed when a different type holds the active selection.
+    secAlls.forEach(sa => {
+      const off = activeType && sa.dataset.seltype !== activeType;
+      sa.disabled = !!off;
+      const lbl = sa.closest('.sec-selall'); if (lbl) lbl.classList.toggle('seldim', !!off);
+      const live = secChecks(sa.dataset.secKey).filter(c => !c.disabled);
+      sa.checked = live.length > 0 && live.every(c => c.checked);
+      sa.indeterminate = !sa.checked && live.some(c => c.checked);
+    });
+    if (window.bbOnSelectionChange) window.bbOnSelectionChange(ids);
+  }
+  window.bbRefreshSelection = refreshSel;
+  if (selbar) {
+    master.addEventListener('change', e => {
+      if (e.target.classList && e.target.classList.contains('bb-check')) refreshSel();
+    });
+    // Per-section select-all: tick/untick every row in that section. Ticking a section
+    // of a different type than the current selection switches type (clears the rest).
+    secAlls.forEach(sa => sa.addEventListener('change', () => {
+      const k = sa.dataset.secKey, t = sa.dataset.seltype, want = sa.checked;
+      if (want && activeType && activeType !== t) checks().forEach(c => { c.checked = false; });
+      secChecks(k).forEach(c => { c.disabled = false; c.checked = want; });
+      refreshSel();
+    }));
+  }
+
+  // ── Keyboard-shortcut legend (the Help button and the ? key both toggle it) ──
+  function toggleLegend() {
+    const cur = document.getElementById('bb-legend');
+    if (cur) { cur.remove(); return; }
+    const items = [['↑ / ↓', 'move between rows'], ['␣ space', 'tick the row for a bulk action'],
+      ['›', "drill into a row's works & editions"], ['↵', 'open the selected book'],
+      ['?', 'this help (Esc closes)']]
+      .map(x => `<li><kbd>${x[0]}</kbd><span>${x[1]}</span></li>`).join('');
+    const el = document.createElement('div'); el.id = 'bb-legend';
+    el.innerHTML = `<div class="card"><b>Keyboard shortcuts</b><ul>${items}</ul></div>`;
+    el.addEventListener('click', () => el.remove());
+    document.body.appendChild(el);
+  }
+  window.bbToggleLegend = toggleLegend;
+
+  // ── Keyboard nav (↑/↓/j/k move; Enter opens the file; ? toggles help) ──
+  document.addEventListener('keydown', e => {
+    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) {
+      if (e.key === 'Escape') document.activeElement.blur();
+      return;
+    }
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const legend = document.getElementById('bb-legend');
+    if (e.key === '?') { e.preventDefault(); toggleLegend(); return; }
+    if (legend) { if (e.key === 'Escape') legend.remove(); return; }
+    if (e.key === 'ArrowDown' || e.key === 'j') { e.preventDefault(); select(stepRow(sel, +1)); return; }
+    if (e.key === 'ArrowUp'   || e.key === 'k') { e.preventDefault(); select(stepRow(sel, -1)); return; }
+    if (e.key === 'Enter' && sel >= 0) { const o = detail.querySelector('.bookopen'); if (o) o.click(); return; }
+    if ((e.key === ' ' || e.key === 'Spacebar') && sel >= 0) {
+      const cb = rows[sel].querySelector('.bb-check');
+      if (cb && !cb.disabled) { e.preventDefault(); cb.checked = !cb.checked; refreshSel(); }
+    }
+  });
+
+  // ── Initial selection: M (sel_type/sel_id), else the hash, else the first row ──
+  let start = -1;
+  {% if sel_type and sel_id %}
+  start = rows.findIndex(r => r.id === 'i{{ 'e' if sel_type == 'edition' else ('w' if sel_type == 'work' else 'p') }}{{ sel_id }}');
+  {% endif %}
+  if (start < 0) { const m = location.hash.match(/^#i[ewp]\d+$/); if (m) start = rows.findIndex(r => '#' + r.id === m[0]); }
+  if (start < 0 && rows.length) start = 0;
+  if (start >= 0) select(start);
+})();
+</script>

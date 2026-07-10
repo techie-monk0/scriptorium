@@ -1,0 +1,17 @@
+{# Standard pane heading for an edition: the title as a LINK to the edition page,
+   followed by the 📖↗ icon that opens the book file. This is the standard across
+   every detail pane and list — the title navigates, the icon opens.
+   Expects:
+     item       — open-control row (holding_id, has_file, file_ext) + .title fallback
+     eid        — edition id to link to; falsy renders the title as plain text
+                  (e.g. an unpromoted proposal with no edition yet)
+     open_label — optional label override (defaults to item.title) #}
+{% set _lbl = (open_label if open_label is defined else item.title) or '' %}
+{# A multi-volume set member shows its volume number with the title (operator's request).
+   display_title() is the ONE shared rule (catalogue.domain.library), also used by the
+   device replica — so web + PWA + native format the volume identically; it no-ops with
+   no volume and is idempotent if the label already carries the suffix. #}
+{% set _lbl = display_title(_lbl, edition_volume(eid)) %}
+{%- if eid %}<a class="edition-title" href="/edition/{{ eid }}">{{ _lbl }}</a>
+{%- else %}<span class="edition-title">{{ _lbl }}</span>{% endif %}
+{%- with icon_only = True %}{% include '_open_control.html' %}{% endwith %}

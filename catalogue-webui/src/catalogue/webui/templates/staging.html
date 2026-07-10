@@ -1,0 +1,17 @@
+{% extends "_base.html" %}
+{% block title %}Staging{% endblock %}
+{% block body %}
+<h1>Capture staging</h1>
+<p class="stub">Phone uploads land here (Step 3b); desktop resolves them into editions/holdings.</p>
+<table>
+  <tr><th>id</th><th>form</th><th>raw_isbn</th><th>note</th><th>created</th></tr>
+  {% for r in rows %}
+    <tr>
+      <td><a href="/staging/{{ r[0] }}">{{ r[0] }}</a></td>
+      <td>{{ r[1] }}</td><td>{{ r[2] or '' }}</td><td>{{ r[3] or '' }}</td><td>{{ r[4] }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="5" class="stub">Nothing pending.</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

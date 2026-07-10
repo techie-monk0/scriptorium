@@ -1,0 +1,65 @@
+{# Shared bulk "✓ Mark all reviewed" action for the review worklists (Books single +
+   multi, Works-needing-review). The page turns on `bulk_select` (so the shell renders
+   the select-all bar + per-row checkboxes) and defines `window.BB_REVIEW` with the
+   per-id review endpoint; this script fills the shell's #bb-bulk-actions host and loops
+   the ticked rows, retiring each through the SAME bbResolveRow the single-item button
+   uses (so a bulk-reviewed row greys, badges ✓ and keeps its details exactly like a
+   one-at-a-time review). Persons get their bulk "mark reviewed" through the picker's own
+   server-side bulk bar (picker.html) instead, so they don't include this. #}
+<script>
+(function () {
+  const cfg = window.BB_REVIEW;
+  // Top-right slot when the bar has rows (#bb-bulk-primary); else the single host.
+  const host = document.getElementById('bb-bulk-primary')
+    || document.getElementById('bb-bulk-actions');
+  if (!cfg || !host) return;                       // not a review page / bulk off
+  host.innerHTML = '<button type="button" id="bbreviewall" disabled>'
+    + (cfg.buttonLabel || '✓ Mark all reviewed') + '</button>';
+  const btn = document.getElementById('bbreviewall');
+  // The shell calls this on every checkbox change — enable Apply only on a non-empty pick.
+  window.bbOnSelectionChange = ids => { btn.disabled = ids.length === 0; };
+
+  async function reviewOne(id) {
+    // Returns {err} on failure, else {filing} (the server's auto-file result, if any).
+    let r;
+    try {
+      r = await (await fetch(cfg.endpoint(id), {method: 'POST',
+        headers: {'X-Requested-With': 'fetch', 'Content-Type': 'application/json'},
+        body: JSON.stringify(cfg.body || {})})).json();
+    } catch (e) { return {err: 'network'}; }
+    if (r && r.error) return {err: r.error};
+    // Retire the row like the single-item button: grey + ✓ badge + keep details (and
+    // the hidden snapshot, so arrowing back shows the banner, not dead action buttons).
+    if (window.bbResolveRow) window.bbResolveRow(id, cfg.done ? cfg.done(id)
+      : '<h2>✓ Reviewed</h2><p>#' + id + ' marked reviewed.</p>');
+    const cb = document.querySelector('#i' + id + ' .bb-check');
+    // Untick it; disable only where reviewed rows aren't kept selectable for OTHER bulk ops
+    // (e.g. add-to-series). When they are (BB_INCLUDE_REVIEWED), leave it enabled.
+    if (cb) { cb.checked = false; if (!window.BB_INCLUDE_REVIEWED) cb.disabled = true; }
+    return {filing: r ? r.filing : null};
+  }
+
+  btn.addEventListener('click', async () => {
+    // Mark-reviewed only acts on NOT-yet-reviewed rows: when reviewed rows are selectable
+    // for other bulk ops, ticking one and pressing this must not re-stamp it.
+    const ids = (window.bbSelectedIds ? window.bbSelectedIds() : []).map(Number)
+      .filter(id => { const r = document.getElementById('i' + id); return r && !r.classList.contains('done'); });
+    if (!ids.length) return;
+    if (!confirm(cfg.confirm ? cfg.confirm(ids.length)
+                             : 'Mark ' + ids.length + ' item(s) reviewed?')) return;
+    btn.disabled = true;
+    let ok = 0; const failed = []; const results = [];
+    for (const id of ids) {
+      const res = await reviewOne(id);
+      if (res.err) failed.push('#' + id + ': ' + res.err);
+      else { ok++; results.push({id: id, filing: res.filing}); }
+    }
+    if (window.bbClearSelection) window.bbClearSelection();
+    if (window.bbToast) window.bbToast(ok + ' marked reviewed'
+      + (failed.length ? ', ' + failed.length + ' failed' : ' ✓'));
+    if (failed.length) alert('Some could not be marked:\n' + failed.join('\n'));
+    // Ambiguous destinations are asked about first, then ONE popup lists every move.
+    if (window.FilingUX) await window.FilingUX.finish(results);
+  });
+})();
+</script>

@@ -1,0 +1,40 @@
+{% extends "_base.html" %}
+{% block title %}Review queue{% endblock %}
+{% block body %}
+<div class="bb-wide">
+<h1>Review auto-detected editions/works</h1>
+
+<div class="bb-tabs">
+  <a class="bb-tab {% if not current_type %}active{% endif %}" href="/review-queue?status={{ current_status }}">all</a>
+  {% for t in types %}
+    <a class="bb-tab {% if t == current_type %}active{% endif %}"
+       href="/review-queue?type={{ t }}&status={{ current_status }}">
+      {{ t }}{% if type_counts.get(t) %} ({{ type_counts[t] }}){% endif %}
+    </a>
+  {% endfor %}
+</div>
+
+<form method="get" action="/review-queue" style="margin:.6rem 0">
+  <label>Status
+    <select name="status" onchange="this.form.submit()">
+      {% for s in ('pending', 'resolved') %}
+        <option value="{{ s }}" {% if s == current_status %}selected{% endif %}>{{ s }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  {% if current_type %}<input type="hidden" name="type" value="{{ current_type }}">{% endif %}
+  <noscript><button type="submit">Filter</button></noscript>
+</form>
+<table>
+  <tr><th>id</th><th>item_type</th><th>status</th></tr>
+  {% for it in items %}
+    <tr>
+      <td><a href="/review-queue/{{ it.id }}">{{ it.id }}</a></td>
+      <td>{{ it.item_type }}</td><td>{{ it.status }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="3" class="stub">Nothing matches.</td></tr>
+  {% endfor %}
+</table>
+</div>
+{% endblock %}

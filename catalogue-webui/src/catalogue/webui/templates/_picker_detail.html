@@ -1,0 +1,107 @@
+{# Detail pane for one provisional entry under /picker (master-detail).
+   Keyboard (see ? legend): 1–9 highlight a candidate · ↵/b bind · / search box ·
+   f refetch · a alias · m merge · s split · o org · c confirm-local · x delete.
+   Candidates auto-load ~400ms after you land here (cached on revisit).
+   Expects `item` (id/title/current/aliases/label) and `kind` from the page. #}
+<div class="picker-head">
+  <div class="picker-name">
+    <h2 class="pname">{{ item.title }}</h2>
+    <button type="button" class="copy-btn" title="Copy name to clipboard"
+            data-copy="{{ item.title }}" onclick="bbCopyName(this)">⧉</button>
+    {% if kind == 'person' %}
+    <button type="button" class="rename-btn" title="Edit name (rename)"
+            onclick="renamePerson({{ item.id }})">✎</button>
+    <a href="/person/{{ item.id }}/treasuryoflives" target="_blank" rel="noopener"
+       class="rename-btn" style="text-decoration:none"
+       title="Search Treasury of Lives for this person's biography">📜</a>
+    {% endif %}
+  </div>
+  {% set cat_id = item.id %}{% include '_cat_id.html' %}
+  {% if kind == 'person' %}
+  <div class="picker-actions">
+    <button type="button" class="pa-btn" data-key="c"
+            data-key-label="create new (keep as a new local person, no authority match)"
+            onclick="confirmLocal({{ item.id }})">Create new</button>
+    <button type="button" class="pa-btn danger" data-key="x" data-key-label="delete record"
+            onclick="deletePerson({{ item.id }})">Delete record</button>
+    <button type="button" class="pa-btn" data-key="m"
+            data-key-label="merge into another person"
+            onclick="mergePerson({{ item.id }})">Merge…</button>
+    {% if ',' in item.title %}
+    <button type="button" class="pa-btn" data-key="s" data-key-label="split by comma"
+            onclick="splitPerson({{ item.id }})">Split…</button>
+    {% endif %}
+    {% if item.current %}
+    <button type="button" class="pa-btn" data-key="u" data-key-label="unbind (clear authority)"
+            onclick="unbindPerson({{ item.id }})">Unbind</button>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+<div class="meta">
+  #{{ item.id }} ·
+  current: {% if item.current %}<code>{{ item.current }}</code>{% else %}<span class="hint">unbound</span>{% endif %}
+</div>
+{% if kind == 'person' and item.notes %}
+<div class="picker-notes" style="margin:.5rem 0;padding:.5rem .7rem;background:#fffdf0;border:1px solid #e6dca0;border-radius:6px;white-space:pre-wrap;font-size:.9rem;line-height:1.35">
+  <strong>📝 Notes</strong>
+  <a href="/person/{{ item.id }}" target="_blank" rel="noopener"
+     class="hint" style="float:right;font-size:.85em" title="edit on the person page">edit ↗</a>
+  <div>{{ item.notes }}</div>
+</div>
+{% endif %}
+{% if kind == 'person' and item.suggested %}
+{# A picked-but-unconfirmed authority id from the add-person form. Accepting it runs
+   bind + on-bind dedup (the SAME path as picking a candidate), so a duplicate of an
+   already-bound record is merged/flagged here rather than created. #}
+<div class="picker-suggestion" style="margin:.5rem 0;padding:.5rem .7rem;background:#eef6ff;border:1px solid #b9d6f2;border-radius:6px;font-size:.9rem;line-height:1.4">
+  <strong>💡 Suggested binding</strong> <code>{{ item.suggested }}</code>
+  <span class="hint">— chosen when this person was added, not yet confirmed.</span>
+  <div style="margin-top:.4rem">
+    <button type="button" class="pa-btn"
+            data-cand='[{{ item.suggested|tojson }}, "suggested", {{ item.title|tojson }}]'
+            onclick="bindCand('person', {{ item.id }}, this)">Accept &amp; dedup</button>
+  </div>
+</div>
+{% endif %}
+
+{% if kind == 'person' %}
+<h3>known aliases</h3>
+<div class="picker-aliases">
+  {% for a in item.aliases %}<span class="pill">{{ a }}</span> {% else %}<span class="hint">none</span>{% endfor %}
+</div>
+<form method="post" action="/picker/person/{{ item.id }}/alias" class="alias-add"
+      onsubmit="addAliasInline({{ item.id }}, this); return false">
+  <input name="text" class="alias-input" size="26"
+         placeholder="add alias (transliteration / ordinal / variant)">
+  <select name="scheme">
+    {% for s in ['english', 'iast', 'wylie', 'thl', 'phonetic', 'bo', 'sa', 'other'] %}
+      <option value="{{ s }}">{{ s }}</option>{% endfor %}
+  </select>
+  <button type="submit">+ alias</button>
+  <button type="button" class="alias-search"
+          title="Search authorities for this spelling (does not add the alias)"
+          onclick="searchAlias('person', {{ item.id }})">search</button>
+</form>
+{% endif %}
+
+{% if kind == 'person' %}
+<details open class="person-works-wrap">
+  <summary>Works by this contributor</summary>
+  <div class="edition-card" data-card-url="/picker/person/{{ item.id }}/works">
+    <p class="hint">loading works…</p>
+  </div>
+</details>
+<details open class="person-books-wrap">
+  <summary>Books with this contributor</summary>
+  <div class="edition-card" data-card-url="/picker/person/{{ item.id }}/books">
+    <p class="hint">loading books…</p>
+  </div>
+</details>
+{% endif %}
+
+<h3>Authority candidates
+  <span class="hint">(auto-load on pause · <kbd>f</kbd> refetch · <kbd>?</kbd> keys)</span></h3>
+<div class="cands" data-cand-url="/picker/{{ kind }}/{{ item.id }}/candidates">
+  <p class="hint">Pause here and candidates load automatically…</p>
+</div>

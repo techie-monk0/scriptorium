@@ -1,0 +1,16 @@
+{# Lazy fragment: the works a contributor authored or translated (person review
+   pane). Each title links to /work/<id>. `works` = library.person_works rows —
+   the FRBR layer above _person_books (one row per work, not per edition). #}
+{% if works %}
+<p class="hint" style="margin:.2rem 0">{{ works|length }} work{{ '' if works|length == 1 else 's' }}:</p>
+<ul class="person-works">
+  {% for item in works %}
+    <li>
+      <a href="/work/{{ item.work_id }}">{{ item.title }}</a>
+      <span class="hint">— {{ item.roles | join(', ') }}</span>
+    </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="hint">No works link to this contributor yet.</p>
+{% endif %}

@@ -1,0 +1,8 @@
+{# Page-level JS for the person card (_person_card.html). Include ONCE on any page
+   that shows a person card (the full /person page, or a book-browser page that
+   injects /person/<pid>/card inline). Composes the shared modules — nothing
+   person-specific beyond the existing authority-search picker. #}
+{% include '_typeahead.html' %}
+{% include '_card_inline_js.html' %}        {# generic cardInlinePost / cardReload #}
+{% include '_merge_js.html' %}              {# shared merge/dedup widget driver #}
+{% include '_person_authority_js.html' %}   {# window.mountPersonAuthoritySearch #}

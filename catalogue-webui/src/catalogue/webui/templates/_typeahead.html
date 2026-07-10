@@ -1,0 +1,8 @@
+{# ── Reusable type-ahead picker shim ──────────────────────────────────────
+   The component now lives in a shared static file so the PWA (and a future
+   native UI) can load it without Jinja: catalogue/webui/static/js/typeahead.js
+   It defines `window.Typeahead` and injects its own styles once.
+
+   Include ONCE per page (`{% include '_typeahead.html' %}`) exactly as before —
+   this shim just loads the shared file. See typeahead.js for the usage docs. #}
+<script src="/static/js/typeahead.js"></script>

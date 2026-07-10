@@ -1,0 +1,59 @@
+{% extends "_base.html" %}
+{% block title %}Staging #{{ row[0] }}{% endblock %}
+{% block body %}
+<p><a href="/staging">← staging</a></p>
+<h1>Staging #{{ row[0] }}</h1>
+<ul>
+  <li>form: {{ row[1] }}</li>
+  <li>raw ISBN: {{ row[2] or '(none)' }}</li>
+  <li>image: {{ row[3] or '(none)' }}</li>
+  <li>note: {{ row[4] or '(none)' }}</li>
+  <li>status: <strong>{{ row[5] }}</strong></li>
+</ul>
+
+{% if metadata %}
+  <h3>Open Library lookup</h3>
+  <ul>
+    {% if metadata.title %}<li>title: <strong>{{ metadata.title }}</strong></li>{% endif %}
+    {% if metadata.authors %}<li>authors: {{ metadata.authors|join(', ') }}</li>{% endif %}
+    {% if metadata.publishers %}<li>publisher: {{ metadata.publishers|join(', ') }}</li>{% endif %}
+    {% if metadata.publish_date %}<li>date: {{ metadata.publish_date }}</li>{% endif %}
+  </ul>
+{% endif %}
+
+{% if row[5] in ('raw', 'pending') %}
+<h3>Resolve</h3>
+{% if notice %}<p class="warn">{{ notice }}</p>{% endif %}
+<form method="post" action="/staging/{{ row[0] }}/resolve">
+  {% if matches %}
+  <p>This book may already be in your catalogue. Confirm the match — <strong>nothing
+     new is added</strong>, the scan is just cleared — or add it as a new book:</p>
+  {% for m in matches %}
+    <label style="display:block; margin:.2rem 0">
+      <input type="radio" name="resolution" value="match:{{ m.id }}">
+      <strong>{{ m.title }}</strong>
+      <small>#{{ m.id }}{% if m.forms %} · {{ m.forms | join(', ') }}{% endif %}
+        · {{ 'already catalogued' if m.certain else 'possible match — check' }}</small>
+    </label>
+  {% endfor %}
+  {% endif %}
+  <label style="display:block; margin:.2rem 0">
+    <input type="radio" name="resolution" value="new">
+    {% if matches %}None of these — add as a new book{% else %}Add as a new book{% endif %}
+  </label>
+  <p style="margin-left:1.6rem">(pre-filled from Open Library when available):
+    <label>Title <input name="title" value="{{ (metadata.title if metadata else '') or '' }}" size="40"></label>
+    <label>ISBN <input name="isbn" value="{{ row[2] or '' }}"></label>
+  </p>
+  <button type="submit">Resolve</button>
+</form>
+{% endif %}
+
+<h3>Delete</h3>
+<p>Remove this captured scan without adding anything to the catalogue — a mis-scan, a
+   book you decided not to add, or a stray tap.</p>
+<form method="post" action="/staging/{{ row[0] }}/discard"
+      onsubmit="return confirm('Delete this captured scan? Nothing is added to the catalogue.');">
+  <button type="submit">Delete this capture</button>
+</form>
+{% endblock %}

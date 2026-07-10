@@ -1,0 +1,34 @@
+{# ── Read-only Work Details (collapsed) ──────────────────────────────────────
+   Everything else about a work, hidden until expanded — on BOTH Browse and Review.
+   Expects `w` = a library.work_summary dict. Non-editable; editing is on /work/<id>. #}
+<details class="wd">
+  <summary>Work details</summary>
+  <div class="wd-body">
+    {% if w.native.sanskrit %}
+    <p class="wb-row"><span class="wb-lbl">Sanskrit</span> {{ w.native.sanskrit | join(' · ') }}</p>
+    {% endif %}
+    {% if w.native.tibetan %}
+    <p class="wb-row"><span class="wb-lbl">Tibetan</span> {{ w.native.tibetan | join(' · ') }}</p>
+    {% endif %}
+
+    {% if w.authority_links %}
+    <p class="wb-row"><span class="wb-lbl">Authority</span>
+      {% for L in w.authority_links %}<a href="{{ L.url }}" target="_blank" rel="noopener">{{ L.label }} ↗</a>{% if not loop.last %} · {% endif %}{% endfor %}</p>
+    {% elif w.canonical_system and w.canonical_number %}
+    <p class="wb-row"><span class="wb-lbl">Canonical</span> {{ w.canonical_system }}:{{ w.canonical_number }}</p>
+    {% endif %}
+
+    {% if w.aliases_other %}
+    <p class="wb-row"><span class="wb-lbl">Other titles</span>
+      {% for a in w.aliases_other %}{{ a.text }} <span class="hint">({{ a.scheme }})</span>{% if not loop.last %} · {% endif %}{% endfor %}</p>
+    {% endif %}
+
+    <p class="wb-row hint">
+      <span class="wb-lbl">More</span>
+      work <code>#{{ w.id }}</code>
+      {% if w.work_type %} · type: {{ w.work_type }}{% endif %}
+      {% if w.original_language %} · lang: {{ w.original_language }}{% endif %}
+      {% if w.era %} · era: {{ w.era }}{% endif %}
+    </p>
+  </div>
+</details>

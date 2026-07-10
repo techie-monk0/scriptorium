@@ -1,0 +1,201 @@
+{# Dry-run detection detail for one edition — read-only verification + apply.
+   Single and multi share the canonical/gloss block; multi adds the per-method
+   segmentation comparison. Expects: item (with item.det = the work_detection payload). #}
+{% set d = item.det %}
+{# Shared vars for the read-only/editable includes below (the edit card itself loads
+   separately via [data-card-url] and gets its own context from the route). #}
+{% set eid = item.id %}
+{% set kind = 'multi' if (item.kind == 'multi' or item.is_multi) else item.kind %}
+{% set works = item.works %}
+{% set holdings = item.holdings %}
+{% set editable = true %}
+{% from '_canonical_block.html' import canonical_block %}
+{% from '_work_picker.html' import work_picker with context %}
+{% macro undo_form(token) %}
+  <form method="post" action="/works/detect/undo" style="margin:.3rem 0"
+        onsubmit="return confirm('Undo this apply? Restores the edition to its exact pre-apply work-graph.');">
+    <input type="hidden" name="token" value="{{ token }}">
+    <button type="submit" data-key="u" data-key-label="undo this apply">↩ Undo</button>
+  </form>
+{% endmacro %}
+<div class="picker-head">
+  <div class="picker-name"><h2 style="margin:0">{% with eid = item.id %}{% include '_edition_title.html' %}{% endwith %}</h2></div>
+  {% set cat_id = item.id %}{% include '_cat_id.html' %}
+  {# action bar — same layout as the persons review pane (.picker-actions / .pa-btn) #}
+  <div class="picker-actions">
+    {% if item.kind == 'multi' or item.is_multi %}
+      {# MULTI-work: no single-apply. Its contained texts are curated by hand below, so
+         "✓ Mark reviewed" flips the detection done (leaves the backlog); ↺ unmarks a
+         manual review; ↩ Undo reverses an AI segmentation that was applied. #}
+      {% if item.undo_token %}
+      <button type="button" class="pa-btn" data-key="u" data-key-label="undo this apply"
+              onclick="undoWorks({{ item.undo_token }}, {{ item.id }})">↩ Undo</button>
+      {% elif item.done %}
+      <button type="button" class="pa-btn" data-key="s" data-key-label="unmark reviewed"
+              onclick="markReviewed({{ item.id }}, 0)">↺ Unmark reviewed</button>
+      {% else %}
+      <button type="button" class="pa-btn" data-key="s" data-key-label="mark reviewed &amp; go to next"
+              onclick="markReviewed({{ item.id }}, 1)">✓ Mark reviewed</button>
+      {% endif %}
+    {% elif not d.applied %}
+    <button type="button" class="pa-btn" data-key="s" data-key-label="apply &amp; go to next"
+            onclick="applyEdition({{ item.id }})">✓ Apply</button>
+    {% elif item.undo_token %}
+    <button type="button" class="pa-btn" data-key="u" data-key-label="undo this apply"
+            onclick="undoWorks({{ item.undo_token }}, {{ item.id }})">↩ Undo</button>
+    {% endif %}
+    <button type="button" class="pa-btn" data-key="m" data-key-label="merge into another edition"
+            onclick="mergeEdition({{ item.id }})">Merge…</button>
+    <button type="button" class="pa-btn danger" data-key="x" data-key-label="delete edition"
+            onclick="deleteEdition({{ item.id }})">Delete</button>
+  </div>
+</div>
+{# Volume number for a multi-volume set; 0 = no volume (a standalone book). #}
+<label class="volume-field" style="display:inline-block; margin:.35rem 1.2rem .35rem 0"
+       title="Volume number within a multi-volume set. 0 = no volume (a standalone book).">
+  <b>volume</b> <input type="number" min="0" step="1" value="{{ item.volume or 0 }}"
+         style="width:3.5rem" onchange="saveVolume({{ item.id }}, this)"></label>
+{# Reclassify the whole book: checked → multi-work (several texts), unchecked → single. #}
+<label class="multi-toggle" style="display:inline-block; margin:.35rem 0"
+       title="A book that holds several distinct texts. Checked → it's segmented/reviewed as multi-work instead of applied as a single work.">
+  <input type="checkbox" {% if item.is_multi %}checked{% endif %}
+         onchange="toggleMultiWork({{ item.id }}, this)"> <b>multi-work edition</b></label>
+{# Classical vs modern: checked → a canonical text (keeps a Work); unchecked → a modern book
+   (no Work, author on the edition). Only meaningful for a single-work edition. #}
+{% if not item.is_multi %}
+<label class="classical-toggle" data-has-authority="{{ '1' if item.has_authority_work else '' }}"
+       style="display:inline-block; margin:.35rem 0 .35rem 1.2rem"
+       title="A canonical classical text — a Skt/Tib work with identity beyond this book (in the Kangyur/Tengyur/Toh/BDRC). Unchecked = a modern book: no separate work, author goes on the edition.">
+  <input type="checkbox" {% if item.is_classical %}checked{% endif %}
+         onchange="toggleClassical({{ item.id }}, this)"> <b>classical work</b></label>
+{% endif %}
+<div class="meta">
+  <span class="pill">{{ d.determination or item.kind }}</span>
+  {% if d.determination == 'classical' %}
+    <span class="pill">conf. {{ ((d.confidence or 0)*100)|round|int }}%{% if d.source %} · {{ d.source }}{% endif %}</span>
+  {% endif %}
+</div>
+{% if (d.determination == 'classical' or item.kind == 'multi') %}
+  <p class="hint" style="background:#fffbe6; border:1px solid #f0e0a0; padding:.3rem .5rem">
+    ⓘ Can't read Tibetan/Sanskrit? Use the <b>84000/BDRC English title</b>, the rough
+    <b>gloss</b>, or the <b>read on 84000</b> link to confirm a match describes <i>this</i> book.</p>
+{% endif %}
+
+{% if item.kind != 'multi' and item.is_multi %}
+  <p class="hint" style="background:var(--surface-2); border:1px solid var(--border); padding:.3rem .5rem">
+    Marked <b>multi-work</b> — single-apply is off. Add or detach its contained texts in
+    <b>Works In This Edition</b> below, then <b>✓ Mark reviewed</b> (in the action bar) when
+    done. Uncheck <b>multi-work edition</b> to apply it as a single work instead.</p>
+{% endif %}
+{% if item.kind != 'multi' %}
+  {# ── SINGLE-work ── ONE unified card: editable fields + read-only detection facts. #}
+  {% if d.applied %}
+    <p style="color:#2a7"><b>✓ Applied</b> —
+      {% if d.determination == 'classical' %}linked to the canonical work; degenerate work dropped.
+      {% else %}author(s) moved to the edition; degenerate work dropped.{% endif %}
+      {% if item.undo_token %}<span class="hint">(↩ Undo in the action bar)</span>{% endif %}</p>
+  {% endif %}
+  <div data-card-url="/works/detect/{{ item.id }}/edit"></div>
+  {% if item.is_classical and ((d.title or {}).sanskrit or (d.title or {}).tibetan or (d.canonical or {}).number) %}
+  {# Read-only detection facts for a classical single — the native title + canonical /
+     84000 gloss links the operator verifies against the book. NOT part of Edition Basics
+     and NOT shown on Browse; once the canonical work is linked these live in its Work
+     Details. (For an unapplied placeholder the work doesn't carry them yet.) #}
+  <div class="detect-facts hint" style="background:#fffbe6; border:1px solid #f0e0a0;
+       border-radius:6px; padding:.3rem .5rem; margin:.4rem 0">
+    <b>Detected</b> — verify this matches the book:
+    {% if (d.title or {}).sanskrit %} <span class="hint">sa:</span> {{ d.title.sanskrit }}{% endif %}
+    {% if (d.title or {}).tibetan %} <span class="hint">bo:</span> {{ d.title.tibetan }}{% endif %}
+    {% if (d.canonical or {}).number %}<br>{{ canonical_block(d.canonical) }}{% endif %}
+  </div>
+  {% endif %}
+  {% if item.is_classical or item.is_multi %}
+  {# A classical single-work edition OR a single-detection edition re-marked multi-work
+     shows the read-only "Works In This Edition" section (Work Basics + collapsed Work
+     Details); editing happens on the work page via "✎ edit this work →". The add/link
+     picker is ABOVE the works — so a re-marked-multi book is curated right here, no jump
+     to the multi pane. Wrapped in data-bb-refresh so add/detach re-render in place.
+     A MODERN single edition is edition-only: no works section (its work is a degenerate
+     placeholder), just the editable basics above + holdings/preview below. #}
+  <div data-bb-refresh>
+    {% include '_add_work_picker.html' %}
+    {% include '_works_in_edition.html' %}
+  </div>
+  {% endif %}
+  {% include '_edition_extras.html' %}
+
+{% else %}
+  {# ── MULTI-work ── The book's OWN fields (stored title, authors, translators, subjects,
+     ISBN, holdings) use the SAME editable edition card as the single-work pane
+     (_detection_edit.html via /works/detect/<eid>/edit) — its single-work-only Works +
+     Commentary rows are hidden for multi, since the contained texts are edited below. #}
+  <div data-card-url="/works/detect/{{ item.id }}/edit"></div>
+  <p class="hint">{{ d.n_sections }} sections · {{ d.n_titles }} after dropping front/back.</p>
+  {% if d.applied %}<p style="color:#2a7"><b>✓ Applied</b> via <b>{{ d.applied_method }}</b>.</p>
+    {% if item.undo_token %}{{ undo_form(item.undo_token) }}{% endif %}{% endif %}
+
+  {# data-bb-refresh: every add / delete / detach / replace form below submits in place and
+     re-renders this pane (the shell's _book_browser.html submit delegate) — so editing a
+     multi-work book never navigates to the next one. Embedded work cards ([data-card-url])
+     still save themselves; unsaved card edits are guarded before any in-place refresh. #}
+  <div data-bb-refresh>
+  {# ➕ Add/link a work (above the works) — covers texts the segmentation MISSED, one
+     per pick — then the read-only "Works In This Edition" section (Work Basics +
+     collapsed Work Details; edit a work via its "✎ edit this work →" link). Same
+     partials the classical single-work pane uses. #}
+  {% include '_add_work_picker.html' %}
+  {% include '_works_in_edition.html' %}
+
+  {# ── The AI proposal to triage: per detected text, DELETE a bad detection, or REPLACE it
+     with an existing work (which then appears above). Nothing is created or matched here.
+     Shown only while the proposal still holds detected texts — once all are deleted/resolved
+     away there is nothing left to triage, so the whole section disappears. #}
+  {% set segns = namespace(total=0) %}
+  {% for name, m in (d.methods or {}).items() %}{% set segns.total = segns.total + (m.works or [])|length %}{% endfor %}
+  {% if segns.total %}
+  <h3>AI-detected texts <span class="hint">— delete a bad detection, or replace with an existing work</span>
+    <form method="post" style="display:inline; margin-left:.5rem"
+          action="/works/detect/{{ item.id }}/segments/clear"
+          onsubmit="return confirm('Delete ALL {{ segns.total }} AI-detected text(s) from the proposal? Any already resolved to a work are detached (the works themselves are kept).');">
+      <button type="submit">🗑 Delete all</button></form>
+  </h3>
+  {% for name, m in (d.methods or {}).items() %}
+    <h4 style="margin:.4rem 0 .2rem">{{ name }}
+      <span class="hint">({{ (m.works or [])|length }} found{% if m.model %} · {{ m.model }}{% endif %}{% if m.ok == false %} · failed: {{ m.error }}{% endif %})</span>
+    </h4>
+    {% for w in m.works or [] %}
+      {% set seg_q = 'method=%s&idx=%d'|format(name|urlencode, loop.index0) %}
+      <fieldset style="margin:.3rem 0; padding:.35rem .55rem; border:1px solid var(--border); border-radius:6px">
+        <b>{{ w.title }}</b>
+        {% if w.title_sanskrit %} · <span class="hint">sa:</span> {{ w.title_sanskrit }}{% endif %}
+        {% if w.title_tibetan %} · <span class="hint">bo:</span> {{ w.title_tibetan }}{% endif %}
+        {% if (w.canonical or {}).number %}<br>{{ canonical_block(w.canonical) }}{% endif %}
+        <br><span class="hint">authors:</span> {{ (w.authors or [])|join(', ') or '—' }}
+        <div style="margin-top:.3rem; padding-top:.3rem; border-top:1px dashed var(--border)">
+          {% if w.work_id %}
+            <span class="hint">✓ used → work</span> <code>#{{ w.work_id }}</code>
+            <span class="hint">(see “Works In This Edition” above)</span>
+            <form method="post" style="display:inline; margin-left:.4rem"
+                  action="/works/detect/{{ item.id }}/segment/delete?{{ seg_q }}">
+              <button type="submit">🗑 Delete</button></form>
+          {% elif not d.applied %}
+            <div style="display:flex; gap:.5rem; align-items:flex-start; flex-wrap:wrap">
+              <form method="post"
+                    action="/works/detect/{{ item.id }}/segment/delete?{{ seg_q }}"
+                    onsubmit="return confirm('Delete this detected text from the proposal? (A bad detection.)');">
+                <button type="submit">🗑 Delete</button></form>
+              <form method="post"
+                    action="/works/detect/{{ item.id }}/segment/link?{{ seg_q }}">
+                <input type="hidden" name="from_detection" value="1">
+                <button type="submit" title="Create a new work from this detection (title, native titles, canonical id, authors)">✚ Make this into new work</button></form>
+              {{ work_picker(item.id, '/works/detect/%d/segment/link?%s'|format(item.id, seg_q), 'Replace with an existing work', allow_new=False) }}
+            </div>
+          {% endif %}
+        </div>
+      </fieldset>
+    {% else %}<p class="hint">— no texts —</p>{% endfor %}
+  {% endfor %}
+  {% endif %}{# /segns.total — AI-detected section hidden when empty #}
+  </div>{# /data-bb-refresh #}
+  {% include '_edition_extras.html' %}
+{% endif %}

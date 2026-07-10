@@ -1,0 +1,72 @@
+{% extends "_base.html" %}
+{% block title %}Works{% endblock %}
+{% block body %}
+<h1>Works</h1>
+<p class="stub"><a href="/by-author">Full holdings list →</a></p>
+
+{# ── Add new, at the TOP ───────────────────────────────────────────────────── #}
+<h3 id="new-work">New work</h3>
+<form method="post" action="/works/new">
+  <p>
+    <label>Type
+      <select name="work_type">
+        <option value="">—</option>
+        {% for t in types %}<option>{{ t }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Original language <input name="original_language" size="8"></label>
+    <label>Genre
+      <select name="genre">
+        <option value="">—</option>
+        {% for gopt in genre_opts %}<option>{{ gopt }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Tenet system
+      <select name="tenet_system">
+        <option value="">—</option>
+        {% for topt in tenet_opts %}<option>{{ topt }}</option>{% endfor %}
+      </select>
+    </label>
+  </p>
+  <p>
+    <label>Seed alias (becomes the title) <input name="seed_alias" size="40"></label>
+    <label>scheme
+      <select name="scheme">
+        <option value="english">english</option>
+        <option value="iast">iast</option>
+        <option value="wylie">wylie</option>
+        <option value="phonetic">phonetic</option>
+      </select>
+    </label>
+  </p>
+  <p><label>Subjects <input name="subjects" size="40"
+        placeholder="comma-separated, e.g. Emptiness, Madhyamaka"></label>
+    <span class="stub">leave blank → tagged “Uncategorized” (must be set before review)</span></p>
+  <p><label>Notes <input name="notes" size="40"></label></p>
+  <button type="submit">Create</button>
+</form>
+
+{# ── Search (over EVERY alias, not just the display title) + full list ──────── #}
+<h3>All works</h3>
+<form method="get" action="/works" style="margin:.4rem 0">
+  <label>Search <input name="q" value="{{ q or '' }}" size="28"
+         placeholder="title or any alias…"></label>
+  <button type="submit">Search</button>
+  {% if q %}<a href="/works" style="margin-left:.4rem">clear</a>{% endif %}
+</form>
+<p class="stub">
+  {% if q %}{{ rows|length }} match{{ '' if rows|length == 1 else 'es' }} for “{{ q }}” (of {{ total }} works)
+  {% else %}{{ rows|length }} works{% endif %}.</p>
+<table>
+  <tr><th>id</th><th>label</th><th>language</th></tr>
+  {% for r in rows %}
+    <tr>
+      <td><a href="/work/{{ r[0] }}">{{ r[0] }}</a></td>
+      <td>{{ r[2] or '(no alias yet)' }}</td>
+      <td>{{ r[1] or '' }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="3" class="stub">{% if q %}No works match “{{ q }}”.{% else %}No works yet.{% endif %}</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

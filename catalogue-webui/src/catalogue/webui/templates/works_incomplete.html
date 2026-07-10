@@ -1,0 +1,63 @@
+{% extends "_base.html" %}
+{% block title %}Works needing review{% endblock %}
+{% block body %}
+<div class="bb-wide">
+{% include '_review_tabs.html' %}
+  <h1>Works needing review</h1>
+  <p class="stub">Works with incomplete data — missing a subject, an author, a canonical#
+    / native title, or a type. (Frictionless additions land here.) Fix each <b>right here</b>
+    in the pane, then <b>✓ Mark reviewed</b> to clear it. ↑/↓ to move.</p>
+  <p class="hint">{{ count }} work(s) need review.</p>
+
+  {% if not items %}
+    <p class="stub">🎉 Nothing incomplete — every work has its subject, author, identity and type.</p>
+  {% else %}
+    {% set detail_template = '_work_review_detail.html' %}
+    {% set empty_msg = 'No works need review.' %}
+    {% set bulk_select = true %}
+    {% include '_book_browser.html' %}
+  {% endif %}
+</div>
+
+<script>
+// ✓ Mark reviewed = set work.review_status='ok' and retire the row (the standard
+// resolve-keeps-details behaviour shows the work + an ↩ Undo, then advances).
+async function markWorkReviewed(wid) {
+  try {
+    const r = await (await fetch(`/work/${wid}/review`, {method: 'POST',
+      headers: {'X-Requested-With': 'fetch', 'Content-Type': 'application/json'},
+      body: JSON.stringify({status: 'ok'})})).json();
+    if (r && r.error) { alert(r.error); return; }
+  } catch (e) { alert('Could not mark reviewed.'); return; }
+  const undo = `<button type="button" class="pa-btn" data-key="u" data-key-label="undo"`
+    + ` onclick="undoWorkReview(${wid})">↩ Undo</button>`;
+  window.bbResolveRow(wid, `<h2>✓ Reviewed</h2><p>Work #${wid} marked complete. ${undo}</p>`
+    + `<p class="hint">Press <kbd>↓</kbd> for the next one.</p>`);
+  if (window.bbSelectNext) window.bbSelectNext();
+}
+async function undoWorkReview(wid) {
+  await fetch(`/work/${wid}/review`, {method: 'POST',
+    headers: {'X-Requested-With': 'fetch', 'Content-Type': 'application/json'},
+    body: JSON.stringify({status: null})});
+  location.reload();
+}
+</script>
+{% if items %}
+{# Bulk "✓ Mark all reviewed": sets review_status='ok' on each ticked work (the
+   same /work/<id>/review route the single Mark-reviewed button uses), retiring each
+   row through bbResolveRow. #}
+<script>
+window.BB_REVIEW = {
+  buttonLabel: '✓ Mark all reviewed',
+  confirm: n => `Mark ${n} work(s) reviewed?`,
+  endpoint: id => `/work/${id}/review`,
+  body: {status: 'ok'},
+  done: id => `<h2>✓ Reviewed</h2><p>Work #${id} marked complete. `
+    + `<button type="button" class="pa-btn" data-key="u" data-key-label="undo" `
+    + `onclick="undoWorkReview(${id})">↩ Undo</button></p>`,
+};
+</script>
+{% include '_bulk_mark_reviewed.html' %}
+{% endif %}
+{% include '_work_card_js.html' %}   {# globals the injected /work/<id>/card buttons call #}
+{% endblock %}

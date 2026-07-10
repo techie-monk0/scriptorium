@@ -1,0 +1,147 @@
+{# Page-level JS for the work card (_work_card.html). Include ONCE on any page that
+   shows a work card (the full /work page, or a book-browser page that injects
+   /work/<wid>/card inline). Defines globals the card's inline onclick handlers call —
+   so they work even when the card HTML is injected via innerHTML (scripts inside an
+   injected fragment don't run; these don't need to). Mirrors _edition_card_js.html. #}
+{% include '_typeahead.html' %}
+{% include '_card_inline_js.html' %}   {# generic cardInlinePost / cardReload #}
+<script>
+(function () {
+  if (window.__workCardJs) return;            // define once per page
+  window.__workCardJs = true;
+  const esc = s => window.Typeahead ? Typeahead.esc(s) : String(s == null ? '' : s);
+
+  // Open a holding in the OS reader; fall back to streaming the file inline.
+  window.openHolding = function (hid, ext) {
+    fetch('/holding/' + hid + '/open', { method: 'POST' })
+      .then(r => { if (!(r && r.ok)) window.open('/holding/' + hid + '/file', '_blank'); })
+      .catch(() => window.open('/holding/' + hid + '/file', '_blank'));
+  };
+
+  // Add-author picker: pick an existing person (fill pid + submit) or create a new one.
+  // The form submit is handled by the shell inline (re-renders the card) or navigates
+  // on the standalone page — either way the new author lands.
+  window.mountAuthorPicker = function (btn) {
+    const form = btn.closest('.add-author-form');
+    const host = form.querySelector('.author-host');
+    if (host.dataset.mounted) { const i = host.querySelector('input'); if (i) i.focus(); return; }
+    host.dataset.mounted = '1'; btn.style.display = 'none';
+    Typeahead.mount(host, {
+      searchUrl: q => `/picker/person/search?q=${encodeURIComponent(q)}`,
+      parse: j => j.matches,
+      render: m => `<code>#${m.id}</code> ${esc(m.name)}` + (m.dates ? ` <small>${esc(m.dates)}</small>` : ''),
+      onPick: m => { form.querySelector('input[name=pid]').value = m.id;
+                     form.querySelector('input[name=new_author_name]').value = '';
+                     form.requestSubmit ? form.requestSubmit() : form.submit(); },
+      placeholder: 'type a person name…', autofocus: true,
+      emptyHtml: q => `no match — <button type="button" class="lnk"`
+        + ` style="color:var(--link);border:0;background:none;cursor:pointer;font:inherit;padding:0"`
+        + ` onclick="wkCreateAuthor(this, '${esc(q)}')">➕ create &amp; link “${esc(q)}”</button>`,
+    });
+  };
+  window.wkCreateAuthor = function (lnk, name) {
+    const form = lnk.closest('.add-author-form');
+    form.querySelector('input[name=pid]').value = '';
+    form.querySelector('input[name=new_author_name]').value = name || '';
+    form.requestSubmit ? form.requestSubmit() : form.submit();
+  };
+
+  // Root text / Commentary checkboxes (mutually exclusive): set work_type to the box's
+  // type when ticked, or clear it when unticked; ticking one unticks the other. Submitting
+  // re-renders the card (so the commentary root-box appears/disappears) or navigates on
+  // the standalone /work page.
+  window.wkToggleType = function (cb, wid, type) {
+    const form = cb.closest('.work-type-form');
+    form.querySelector('input[name=work_type]').value = cb.checked ? type : '';
+    if (cb.checked) form.querySelectorAll('.wk-type-cb').forEach(o => { if (o !== cb) o.checked = false; });
+    form.requestSubmit ? form.requestSubmit() : form.submit();
+  };
+
+  // Root-text picker for the "Root / commentary" section: search existing works, and on
+  // pick fill the hidden work_id + submit → this work becomes a commentary on that root.
+  // Reuses Typeahead + /works/search (same as the merge picker), filtered off self.
+  window.mountRootPicker = function (btn, wid) {
+    const form = btn.closest('.set-root-form');
+    const host = form.querySelector('.root-host');
+    if (host.dataset.mounted) { const i = host.querySelector('input'); if (i) i.focus(); return; }
+    host.dataset.mounted = '1'; btn.style.display = 'none';
+    Typeahead.mount(host, {
+      searchUrl: q => `/works/search?q=${encodeURIComponent(q)}`,
+      parse: j => (j.matches || []).filter(m => m.kind === 'work' && m.work_id != wid),
+      render: m => `<code>#${m.work_id}</code> ${esc(m.title)}`
+        + (m.authors && m.authors.length ? ` <small>— ${esc(m.authors.join(', '))}</small>` : ''),
+      onPick: m => { form.querySelector('input[name=work_id]').value = m.work_id;
+                     form.requestSubmit ? form.requestSubmit() : form.submit(); },
+      placeholder: 'search the root text by title / alias…', autofocus: true,
+    });
+  };
+
+  function previewMerge(wid, into) {
+    fetch('/work/' + wid + '/merge?into=' + into).then(r => r.json()).then(plan => {
+      if (plan.error) { alert('Cannot merge: ' + plan.error); return; }
+      const n = (plan.editions_repointed || []).length, al = (plan.aliases_gained || []).length;
+      if (!confirm('Fold work#' + wid + ' "' + plan.dup.title + '"\nINTO work#' + into
+          + ' "' + plan.canon.title + '"\n\n' + n + ' edition(s) re-pointed, +' + al
+          + ' alias(es). Deletes work#' + wid + '. Proceed?')) return;
+      fetch('/work/' + wid + '/merge', { method: 'POST',
+        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ into: into }) })
+        .then(r => r.json()).then(res => {
+          if (res.error) { alert('Merge failed: ' + res.error); return; }
+          window.location = '/work/' + into;
+        });
+    });
+  }
+  window.wkLoadMergeCandidates = function (wid, btn) {
+    const box = btn.parentElement.querySelector('.wk-merge-cands');
+    box.textContent = 'Loading…';
+    fetch('/work/' + wid + '/merge/candidates').then(r => r.json()).then(cands => {
+      if (!cands.length) { box.textContent = 'No duplicate-title candidates.'; return; }
+      box.classList.remove('stub'); box.innerHTML = '';
+      cands.forEach(c => {
+        const row = document.createElement('div'); row.style.margin = '6px 0';
+        row.innerHTML = 'work#' + c.work_id + ' <strong>' + esc(c.title) + '</strong>'
+          + (c.authors && c.authors.length ? ' — ' + esc(c.authors.join(', ')) : '');
+        const b = document.createElement('button'); b.textContent = 'Preview merge →';
+        b.style.marginLeft = '8px'; b.onclick = () => previewMerge(wid, c.work_id);
+        row.appendChild(b); box.appendChild(row);
+      });
+    }).catch(() => { box.textContent = 'Could not load candidates.'; });
+  };
+  window.wkMountMergePicker = function (btn, wid) {
+    const host = btn.parentElement.querySelector('.wk-merge-host');
+    if (host.dataset.mounted) { const i = host.querySelector('input'); if (i) i.focus(); return; }
+    host.dataset.mounted = '1'; btn.style.display = 'none';
+    Typeahead.mount(host, {
+      searchUrl: q => `/works/search?q=${encodeURIComponent(q)}`,
+      parse: j => (j.matches || []).filter(m => m.kind === 'work' && m.work_id != wid),
+      render: m => `<code>#${m.work_id}</code> ${esc(m.title)}`
+        + (m.authors && m.authors.length ? ` <small>— ${esc(m.authors.join(', '))}</small>` : ''),
+      onPick: m => { host.innerHTML = ''; delete host.dataset.mounted; btn.style.display = '';
+                     previewMerge(wid, m.work_id); },
+      placeholder: 'search works by title / alias…', autofocus: true,
+    });
+  };
+  window.wkConfirmDelete = function (wid, btn) {
+    let eds = [];
+    try { eds = JSON.parse((btn && btn.getAttribute('data-editions')) || '[]'); } catch (e) {}
+    let msg = 'Delete work #' + wid + '? (reversible via the undo log)';
+    if (eds.length) {
+      msg += '\n\nThese ' + eds.length + ' edition(s) link to this work and will '
+           + 'NO LONGER have it:\n' + eds.map(e => '  • #' + e.id + '  ' + e.title).join('\n');
+    }
+    if (!confirm(msg)) return;
+    fetch('/work/' + wid + '/delete', { method: 'POST', headers: { 'X-Requested-With': 'fetch' } })
+      .then(r => r.json()).then(res => {
+        const msg = document.querySelector('.wk-del-msg');
+        if (res.blocking_editions) {
+          if (msg) msg.innerHTML = '<p style="color:#a00"><b>Can’t delete:</b> ' + esc(res.error)
+            + '. Change the work on those editions first.</p>';
+          return;
+        }
+        if (res.error) { if (msg) msg.innerHTML = '<p style="color:#a00">' + esc(res.error) + '</p>'; return; }
+        window.location = '/works';
+      })
+      .catch(() => alert('Delete failed — nothing was changed.'));
+  };
+})();
+</script>

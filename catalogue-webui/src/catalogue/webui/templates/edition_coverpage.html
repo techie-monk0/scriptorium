@@ -1,0 +1,15 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block body %}
+{# Interstitial before the reader: only the cover + a "Tap / click to read" prompt.
+   The whole cover links to the actual reader (/edition/<id>/read). #}
+<div style="text-align:center; margin:2rem auto; max-width:420px">
+  <a href="/edition/{{ eid }}/read" style="display:inline-block; text-decoration:none; color:inherit">
+    <img src="/edition/{{ eid }}/cover.jpg" alt="Cover of {{ title }}"
+         style="max-width:100%; height:auto; border-radius:6px; box-shadow:0 3px 16px rgba(0,0,0,.35)">
+    <p style="margin:1rem 0 .2rem; font-weight:600">{{ title }}</p>
+    <p class="stub" style="margin:.2rem; font-size:1.05rem">Tap / click to read</p>
+  </a>
+  <p style="margin-top:1.4rem"><a href="/by-author">← back</a></p>
+</div>
+{% endblock %}

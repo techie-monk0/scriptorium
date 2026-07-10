@@ -1,0 +1,29 @@
+{# ── Outstanding-review backlog as quick-jump buttons ─────────────────────────
+   A self-contained top-of-page module: one button per review queue (Books / Works /
+   People / Subjects), each badged with how many items still need review. Counts come
+   from the `review_counts()` context global (review_backlog_counts in routes/_shared).
+   Hrefs match the shared queue strip (_review_tabs.html). Drop this in anywhere.
+   `rv_active` ('books'|'works'|'people'|'subjects') optionally marks the current queue. #}
+{% set rc = review_counts() %}
+{% set rv_active = rv_active | default('') %}
+<style>
+  .rv-counts { display:flex; flex-wrap:wrap; gap:.4rem; align-items:center; }
+  .rv-counts .rv-counts-lbl { font-size:.8rem; color:var(--subtle-fg); margin-right:.1rem; }
+  .rv-counts a { display:inline-flex; gap:.4rem; align-items:center; padding:.3rem .7rem;
+                 border:1px solid var(--border); border-radius:6px; text-decoration:none;
+                 color:var(--fg); font-size:.9rem; background:var(--surface-2); }
+  .rv-counts a:hover { background:var(--nav-hover); }
+  .rv-counts a.active { background:var(--nav-active-bg); color:var(--nav-active-fg); border-color:var(--nav-active-bg); }
+  .rv-counts a .n { font-variant-numeric:tabular-nums; font-weight:700; min-width:1.4em;
+                    text-align:center; padding:0 .4rem; border-radius:10px;
+                    background:var(--nav-active-bg); color:var(--nav-active-fg); }
+  .rv-counts a.active .n { background:var(--surface); color:var(--fg); }
+  .rv-counts a .n.zero { background:transparent; color:var(--muted); font-weight:normal; }
+</style>
+<nav class="rv-counts" aria-label="Outstanding review queues">
+  <span class="rv-counts-lbl">To review:</span>
+  <a href="/works/detect/single" title="books with an unapplied detection" {{ 'class=active' if rv_active == 'books' }}>Books <span class="n{{ ' zero' if not rc.books }}">{{ rc.books }}</span></a>
+  <a href="/works/incomplete" title="works missing required fields" {{ 'class=active' if rv_active == 'works' }}>Works <span class="n{{ ' zero' if not rc.works }}">{{ rc.works }}</span></a>
+  <a href="/picker/person" title="unresolved people" {{ 'class=active' if rv_active == 'people' }}>People <span class="n{{ ' zero' if not rc.people }}">{{ rc.people }}</span></a>
+  <a href="/review/subjects" title="uncurated subjects" {{ 'class=active' if rv_active == 'subjects' }}>Subjects <span class="n{{ ' zero' if not rc.subjects }}">{{ rc.subjects }}</span></a>
+</nav>

@@ -1,0 +1,28 @@
+{# ── Shared merge / dedup widget ───────────────────────────────────────────
+   Fold THIS record into another of the same kind (re-points its links, deletes
+   it; reversible). One reusable widget for person / work / edition — configured
+   entirely by the caller via these vars (DRY); the JS lives in _merge_js.html.
+
+   Caller sets:
+     merge_kind        — 'person' | 'work' | 'edition' (label only)
+     merge_id          — this record's id
+     merge_search      — typeahead endpoint for the TARGET (JS appends &q=…)
+     merge_idfield     — field on each match holding the target id ('id'/'work_id'/'edition_id')
+     merge_labelfield  — field to show ('name'/'title')
+     merge_apply       — POST endpoint; receives form {into: <id>}
+     merge_after       — 'reload', or a URL prefix the target id is appended to
+     merge_filter      — optional: only matches whose .kind == this (e.g. 'work')
+     merge_keep_alias  — truthy → also POST keep_name_alias=1 (person) #}
+<details class="merge-widget" style="margin-top:.6rem"
+         data-merge-kind="{{ merge_kind }}" data-merge-id="{{ merge_id }}"
+         data-merge-search="{{ merge_search }}" data-merge-idfield="{{ merge_idfield }}"
+         data-merge-labelfield="{{ merge_labelfield }}" data-merge-apply="{{ merge_apply }}"
+         data-merge-after="{{ merge_after | default('reload') }}"
+         data-merge-filter="{{ merge_filter | default('') }}"
+         data-merge-keepalias="{{ '1' if merge_keep_alias else '' }}">
+  <summary style="cursor:pointer; font-weight:600; color:var(--fg)">🔀 Merge / dedup</summary>
+  <p class="stub" style="margin:.3rem 0">Fold THIS {{ merge_kind }} into another — re-points its
+    links and deletes this record (reversible). Search the target {{ merge_kind }}:</p>
+  <div class="merge-host"></div>
+  <div class="merge-msg" style="margin-top:.3rem"></div>
+</details>

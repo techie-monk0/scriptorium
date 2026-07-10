@@ -1,0 +1,51 @@
+{% extends "_base.html" %}
+{% block title %}{{ page.subject.leaf_label }}{% endblock %}
+{% block body %}
+{# Netflix-style subject page: the SAME shelf component as the home splash, one level
+   down — a scrollable cover/spine rail per sub-topic (the rail title drills deeper).
+   The chips + poster-grid variant is kept at ?view=grid. #}
+<link rel="stylesheet" href="/static/css/shelf.css">
+<style>
+  .subj-crumbs { font-size: .85rem; color: var(--muted); margin: .3rem 0 .2rem; }
+  .subj-crumbs a { color: var(--muted); text-decoration: none; }
+  .subj-crumbs a:hover { text-decoration: underline; }
+  .subj-head { display: flex; align-items: baseline; gap: .6rem; flex-wrap: wrap; margin: .2rem 0 .6rem; }
+  .subj-head h1 { margin: 0; }
+  .subj-head .kindtag { font-size: .8rem; color: var(--muted); }
+  .subj-empty { margin: 2rem 0; color: var(--muted); }
+</style>
+
+<nav class="subj-crumbs">
+  <a href="/search">Subjects</a>
+  {% for c in page.crumbs %} <span>/</span> <a href="/subject/{{ c.id }}">{{ c.leaf_label }}</a>{% endfor %}
+  <span>/</span> <span>{{ page.subject.leaf_label }}</span>
+</nav>
+
+<div class="subj-head">
+  <h1>{{ page.subject.leaf_label }}</h1>
+  {% if page.subject.kind == 'series' %}<span class="kindtag">series</span>{% endif %}
+  <span class="kindtag">{{ page.n_books }} book{{ '' if page.n_books == 1 else 's' }}</span>
+  <a class="kindtag" href="/subject/{{ page.subject.id }}?view=grid" style="margin-left:auto">grid view →</a>
+</div>
+
+{% if page.shelves %}
+  <div id="shelves"></div>
+  <script type="application/json" id="shelves-data">{{ page.shelves | tojson }}</script>
+  <script src="/static/js/shelf.js"></script>
+  <script>
+    (function () {
+      var shelves = JSON.parse(document.getElementById('shelves-data').textContent);
+      var host = document.getElementById('shelves');
+      var href = function (eid) { return '/edition/' + eid + '/read'; };
+      shelves.forEach(function (s) {
+        if (s.books && s.books.length)
+          host.appendChild(Shelf.render({ title: s.name, books: s.books, count: s.count,
+                                          moreUrl: s.more_url, hrefFor: href }));
+      });
+      Shelf.enhance(host);
+    })();
+  </script>
+{% else %}
+  <p class="subj-empty">No books filed here yet.</p>
+{% endif %}
+{% endblock %}

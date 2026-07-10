@@ -1,0 +1,7 @@
+{
+  "name": "catalogue-pwa",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Phase-0 shell — installable PWA front-end (service worker, app shell, offline content-index consumer). Consumes catalogue-webui over HTTP. Not a Python package; excluded from the uv workspace.",
+  "scripts": {}
+}

@@ -1,0 +1,131 @@
+{# ── Search pane (read-only) ──────────────────────────────────────────────────
+   The /library search bar as a standalone component: four diacritic-insensitive
+   typeahead fields (Book title / Work / Person / Subject). It only ISSUES queries —
+   typing in one field CLEARS the others (single-field is the normal path; the route
+   still AND-combines if 2+ arrive via a URL). Picking a Book/Work/Person candidate
+   deep-links that entity (?eid/?wid/?pid) so the Review pane decomposes it; picking a
+   Subject filters the book list (?subject=, prefix-inclusive); hitting Search lists all
+   candidates of the typed field's type. Expects `bt`, `wt`, `pe`, `su` in context. #}
+{# `endpoint` = which module URL the bar submits to (Search vs Review). Defaults to the
+   read-only Search page when an unrelated host (e.g. the queue-hub _review_tabs strip)
+   includes this pane without passing one. #}
+{% set sp_endpoint = endpoint | default('search', true) %}
+<style>
+  .lib-search { display:flex; gap:.8rem; flex-wrap:wrap; align-items:flex-end; margin:.6rem 0; }
+  .lib-field { display:flex; flex-direction:column; gap:.15rem; flex:1 1 14rem; min-width:0; }
+  .lib-field > label { font-size:.8rem; color:var(--subtle-fg); }
+  .lib-field .ta-host .ta-q { max-width:100%; }
+  .lib-field .ta-results { position:relative; }
+  .ta-type { display:inline-block; min-width:5rem; font-size:.7rem; font-weight:700;
+             text-transform:uppercase; letter-spacing:.03em; color:var(--link); margin-right:.35rem; }
+  .ta-results .cand-opt.sel .ta-type { color:#9cf; }
+  .ta-sub { color:var(--muted); font-size:.85em; margin-left:.35rem; }
+  .lib-btns { flex:1 1 100%; display:flex; align-items:center; gap:.6rem; margin-top:.1rem; }
+  .lib-btns button, .lib-btns .lib-btn {
+    font:inherit; padding:.4rem .9rem; border:1px solid var(--nav-active-bg); border-radius:6px;
+    background:var(--surface); color:var(--fg); cursor:pointer; text-decoration:none; line-height:1.2; }
+  .lib-btns button[type=submit] { background:var(--nav-active-bg); color:var(--nav-active-fg); }
+  .lib-btns .lib-help { margin-left:1.6rem; }
+  /* Keyboard-shortcut legend overlay (toggled by ? / the Help button). */
+  #bb-legend { position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 50;
+               display: flex; align-items: center; justify-content: center; }
+  #bb-legend .card { background: var(--surface); color: var(--fg); border-radius: 10px; padding: 1rem 1.4rem;
+                     min-width: 18rem; box-shadow: 0 8px 30px rgba(0,0,0,.25); }
+  #bb-legend ul { list-style: none; margin: .5rem 0 0; padding: 0; }
+  #bb-legend li { margin: .25rem 0; display: flex; gap: .6rem; }
+  #bb-legend li kbd { flex: none; min-width: 3.4em; text-align: center; }
+</style>
+<form method="get" action="{{ url_for(sp_endpoint) }}" id="lib-search" class="lib-search">
+  <input type="hidden" name="book_title" value="{{ bt }}">
+  <input type="hidden" name="work_title" value="{{ wt }}">
+  <input type="hidden" name="person"     value="{{ pe }}">
+  <input type="hidden" name="subject"    value="{{ su }}">
+  <div class="lib-field"><label>Book title</label><div class="ta-host" id="f-book"></div></div>
+  <div class="lib-field"><label>Work title</label><div class="ta-host" id="f-work"></div></div>
+  <div class="lib-field"><label>Person</label><div class="ta-host" id="f-person"></div></div>
+  <div class="lib-field"><label>Subject</label><div class="ta-host" id="f-subject"></div></div>
+  <div class="lib-btns">
+    <button type="submit">Search</button>
+    <a href="{{ url_for(sp_endpoint) }}" class="lib-btn" role="button">Clear</a>
+    <button type="button" class="lib-help" title="Keyboard shortcuts (press ?)"
+            onclick="window.bbToggleLegend && window.bbToggleLegend()">? Help</button>
+  </div>
+</form>
+<p class="stub" style="margin:-.2rem 0 .4rem">Type to autocomplete each field (diacritic-insensitive,
+  Sanskrit IAST + Wylie). Typing in one field clears the others; pick a candidate to see its works &amp; editions.</p>
+
+{# Self-contained: load the Typeahead module HERE so this pane mounts its input
+   fields no matter where it's included (Search page, Review page, …) and no
+   matter the include order. typeahead.js is idempotent. #}
+{% include '_typeahead.html' %}
+<script>
+// Field-scoped autocomplete for the Browse search (reuses the Typeahead module).
+// Each field suggests ONLY candidates of its own type; typing in one field clears the
+// other two; picking one deep-links that entity so the Review pane decomposes it.
+(function () {
+  const form = document.getElementById('lib-search');
+  const esc = s => Typeahead.esc(s);
+  // Deep-links stay on the CURRENT page (Search vs Review) so picking a candidate
+  // decomposes it without switching modes.
+  const BASE = {{ url_for(sp_endpoint) | tojson }};
+  const fields = [];   // {host, inp, hidden}
+  function clearOthers(keep) {
+    fields.forEach(f => {
+      const r = f.host.querySelector('.ta-results');
+      if (f.host === keep) return;
+      if (r) r.innerHTML = '';
+      if (f.inp) f.inp.value = '';            // the other fields' visible text…
+      if (f.hidden) f.hidden.value = '';      // …and their submitted values
+    });
+  }
+  function field(hostId, hiddenName, opts) {
+    const host = document.getElementById(hostId);
+    const hidden = form.querySelector(`input[name="${hiddenName}"]`);
+    const inp = Typeahead.mount(host, Object.assign({
+      parse: j => j.matches,
+      onPick: m => { opts.pick(m); },
+      // Enter ≡ the Search button: run the typed query (list all candidates of this
+      // field's type) rather than jumping to the top suggestion. Pick a specific
+      // candidate by clicking it. Other Typeahead mounts keep pick-the-first on Enter.
+      onEnter: () => { hidden.value = inp.value; form.requestSubmit(); },
+      placeholder: opts.placeholder, autofocus: false, minChars: 2,
+    }, opts));
+    // Pre-fill the box with the active query for display, but do NOT re-run it: once
+    // you've searched, the results live in the main pane, so the candidate dropdown
+    // stays collapsed (typing again re-opens it). (initialQuery would re-show them.)
+    if (hidden.value) inp.value = hidden.value;
+    fields.push({ host, inp, hidden });
+    inp.addEventListener('input', () => { hidden.value = inp.value; clearOthers(host); });
+    inp.addEventListener('focus', () => clearOthers(host));
+  }
+  field('f-book', 'book_title', {
+    searchUrl: q => `/editions/search?q=${encodeURIComponent(q)}`,
+    render: m => esc(m.title || '(untitled)') + (m.year ? ` <span class="ta-sub">${esc(m.year)}</span>` : '') + ` <span class="ta-sub">#${esc(m.edition_id)}</span>`,
+    placeholder: 'book title / edition number e.g. #3',
+    pick: m => { location.href = BASE + '?eid=' + m.edition_id; },
+  });
+  field('f-work', 'work_title', {
+    searchUrl: q => `/works/search?q=${encodeURIComponent(q)}`,
+    parse: j => (j.matches || []).filter(m => m.kind === 'work'),
+    render: m => esc(m.title || '') + (m.authors && m.authors.length ? ` <span class="ta-sub">${esc(m.authors.join(', '))}</span>` : ''),
+    placeholder: 'work title…',
+    pick: m => { location.href = BASE + '?wid=' + m.work_id; },
+  });
+  field('f-person', 'person', {
+    searchUrl: q => `/library/suggest/person?q=${encodeURIComponent(q)}`,
+    render: m => `<span class="ta-type">${esc((m.roles || []).join(' · ') || 'person')}</span>`
+      + esc(m.name) + (m.dates ? ` <span class="ta-sub">${esc(m.dates)}</span>` : ''),
+    placeholder: 'person (any role)…',
+    pick: m => { location.href = BASE + '?pid=' + m.id; },
+  });
+  // Subject filters the book list (prefix-inclusive) rather than deep-linking an
+  // entity — picking one lists every edition filed under that subject (and below).
+  field('f-subject', 'subject', {
+    searchUrl: q => `/library/suggest/subject?q=${encodeURIComponent(q)}`,
+    render: m => `<span class="ta-type">${esc(m.kind || 'subject')}</span>`
+      + esc(m.name) + (m.n_editions ? ` <span class="ta-sub">${esc(m.n_editions)} book${m.n_editions == 1 ? '' : 's'}</span>` : ''),
+    placeholder: 'subject / series…',
+    pick: m => { location.href = BASE + '?subject=' + encodeURIComponent(m.name); },
+  });
+})();
+</script>

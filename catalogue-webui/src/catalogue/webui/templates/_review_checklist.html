@@ -1,0 +1,23 @@
+{# Verdict checklist for one edition. Curation does the FIXING; these flags
+   record what you CONFIRMED. Expects: eid, review (from
+   catalogue_review.get_review). #}
+{% set fl = review.flags or {} %}
+{% if error %}
+<div role="alert" style="margin:.3rem 0; padding:.5rem .7rem; border-radius:6px;
+     border:1px solid #f5c2c0; background:#fdecea; color:#900">{{ error }}</div>
+{% endif %}
+<form method="post" action="/edition/{{ eid }}/review-card">
+  <p>Confirm what you checked:</p>
+  <label><input type="checkbox" name="f_title" {{ 'checked' if fl.title else '' }}> title OK</label>
+  <label><input type="checkbox" name="f_contributors" {{ 'checked' if fl.contributors else '' }}> contributors OK</label>
+  <label><input type="checkbox" name="f_structure" {{ 'checked' if fl.structure else '' }}> work-structure OK</label>
+  <label><input type="checkbox" name="f_authors" {{ 'checked' if fl.authors else '' }}> author-count OK</label>
+  <p><label>Note<br>
+    <textarea name="note" cols="40" rows="2">{{ review.note or '' }}</textarea></label></p>
+  <button type="submit" name="status" value="ok">✓ Mark reviewed</button>
+  <button type="submit" name="status" value="needs_fix">⚠ Needs fix</button>
+  {% if review.status %}<span class="stub">current: {{ review.status }}
+    {% if review.reviewed_at %}({{ review.reviewed_at }}){% endif %}</span>{% endif %}
+</form>
+{# After "Mark reviewed": file the book out of the inbox onto its subject shelf. #}
+{% if has_inbox %}{% include "_filing_panel.html" with context %}{% endif %}

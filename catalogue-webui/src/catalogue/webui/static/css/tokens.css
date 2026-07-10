@@ -1,0 +1,100 @@
+/* GENERATED from theme/palette.json by `python -m catalogue.webui.theme.gen` — DO NOT edit by hand.
+ * The SINGLE source of truth for the colour palette, shared by the web view (_base.html links
+ * this) and the PWA (app.html links this). Add/rename a theme in palette.json, not here.
+ * Default theme is 'light'; an explicit <html data-theme="…"> overrides the OS preference.
+ * A native client should encode the SAME values (palette.json is the language-neutral master).
+ * (Reader-chrome tokens like --bar/--reader-bg are intentionally reader-local, not here.) */
+:root {
+  color-scheme: light;
+  --bg: #fbfcfd;
+  --fg: #11151b;
+  --muted: #5b6573;
+  --border: #cdd4dd;
+  --surface: #ffffff;
+  --surface-2: #eef1f6;
+  --link: #1856c5;
+  --brand: #16202c;
+  --nav-hover: #e4ecfb;
+  --nav-active-bg: #1856c5;
+  --nav-active-fg: #ffffff;
+  --card-border: #cdd4dd;
+  --subtle-fg: #38424f;
+  --btn-bg: #eef1f6;
+  --btn-fg: #11151b;
+  --btn-border: #b9c1cc;
+  --btn-hover-bg: #e1e6ee;
+  --accent: #1856c5;
+  --ok: #15803d;
+  --warn: #b45309;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    color-scheme: dark;
+    --bg: #0f1318;
+    --fg: #eef1f5;
+    --muted: #aab3c0;
+    --border: #2c343f;
+    --surface: #181d24;
+    --surface-2: #212834;
+    --link: #7db4ff;
+    --brand: #dbe4f0;
+    --nav-hover: #232c38;
+    --nav-active-bg: #2f6bd4;
+    --nav-active-fg: #ffffff;
+    --card-border: #2c343f;
+    --subtle-fg: #b6c0cd;
+    --btn-bg: #252d39;
+    --btn-fg: #eef1f5;
+    --btn-border: #3a4452;
+    --btn-hover-bg: #303a48;
+    --accent: #7db4ff;
+    --ok: #4ade80;
+    --warn: #fbbf24;
+  }
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #fbfcfd;
+  --fg: #11151b;
+  --muted: #5b6573;
+  --border: #cdd4dd;
+  --surface: #ffffff;
+  --surface-2: #eef1f6;
+  --link: #1856c5;
+  --brand: #16202c;
+  --nav-hover: #e4ecfb;
+  --nav-active-bg: #1856c5;
+  --nav-active-fg: #ffffff;
+  --card-border: #cdd4dd;
+  --subtle-fg: #38424f;
+  --btn-bg: #eef1f6;
+  --btn-fg: #11151b;
+  --btn-border: #b9c1cc;
+  --btn-hover-bg: #e1e6ee;
+  --accent: #1856c5;
+  --ok: #15803d;
+  --warn: #b45309;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0f1318;
+  --fg: #eef1f5;
+  --muted: #aab3c0;
+  --border: #2c343f;
+  --surface: #181d24;
+  --surface-2: #212834;
+  --link: #7db4ff;
+  --brand: #dbe4f0;
+  --nav-hover: #232c38;
+  --nav-active-bg: #2f6bd4;
+  --nav-active-fg: #ffffff;
+  --card-border: #2c343f;
+  --subtle-fg: #b6c0cd;
+  --btn-bg: #252d39;
+  --btn-fg: #eef1f5;
+  --btn-border: #3a4452;
+  --btn-hover-bg: #303a48;
+  --accent: #7db4ff;
+  --ok: #4ade80;
+  --warn: #fbbf24;
+}

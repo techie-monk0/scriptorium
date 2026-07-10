@@ -1,0 +1,45 @@
+{# Person AUTHORITY search box — the person twin of the works' authority picker. Place a
+   `<div class="pa-search"><button onclick="mountPersonAuthoritySearch(this)">…</button>
+   <span class="pa-host"></span></div>` INSIDE a person form (the add-person form or the
+   /person/<id> Fields form). On pick it fills the form's fields by name: primary_name,
+   external_id (hub id), and dates when the candidate carries a YYYY–YYYY span. Requires
+   _typeahead.html on the page. #}
+<script>
+function mountPersonAuthoritySearch(btn) {
+  const wrap = btn.closest('.pa-search');
+  const host = wrap.querySelector('.pa-host');
+  const form = btn.closest('form');
+  if (host.dataset.mounted) { const i = host.querySelector('input'); if (i) i.focus(); return; }
+  host.dataset.mounted = '1'; btn.style.display = 'none';
+  const setf = (name, val) => { const el = form.querySelector(`[name=${name}]`);
+                                if (el && val != null && val !== '') el.value = val; };
+  const SRC = { bdrc: 'BDRC', wikidata: 'Wikidata', viaf: 'VIAF' };
+  window.Typeahead.mount(host, {
+    searchUrl: q => `/picker/person/authority/search?q=${encodeURIComponent(q)}`,
+    searchingLabel: 'searching authorities (BDRC + Wikidata + VIAF)…',
+    parse: j => j.matches,
+    render: m => `<b>${SRC[m.source] || m.source}:</b> ${Typeahead.esc(m.label)}`
+      + (m.detail ? ` <small>· ${Typeahead.esc(m.detail)}</small>` : '')
+      + ` <small>· <code>${Typeahead.esc(m.id)}</code></small>`,
+    onPick: m => {
+      setf('primary_name', m.label);
+      setf('external_id', m.id);                 // the authority / hub id (bdr:P… / wikidata:Q… / viaf:…)
+      // Best-effort dates: a YYYY–YYYY (or YYYY-YYYY) span anywhere in the name/detail.
+      const span = (`${m.label} ${m.detail || ''}`).match(/\b\d{3,4}\s*[–\-]\s*\d{3,4}\b/);
+      if (span) setf('dates', span[0].replace(/\s*-\s*/, '–'));
+      host.innerHTML = ''; delete host.dataset.mounted; btn.style.display = '';   // back to the button
+      if (window.bbToast) bbToast('Filled from ' + (SRC[m.source] || m.source) + ' ✓');
+    },
+    placeholder: 'type a name — searches BDRC / Wikidata / VIAF…',
+    autofocus: true,
+    emptyHtml: q => `no authority match for “${Typeahead.esc(q)}” — fill the fields by hand.`,
+  });
+}
+</script>
+<style>
+  .pa-search { margin: .3rem 0; }
+  .pa-search > button { font: inherit; padding: .3rem .7rem; border: 1px solid var(--link);
+                        border-radius: 6px; background: var(--surface-2); color: var(--link); cursor: pointer; }
+  .pa-search > button:hover { background: var(--nav-hover); }
+  .pa-host:empty { display: none; }
+</style>

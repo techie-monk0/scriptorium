@@ -1,0 +1,32 @@
+{# ── Edition bulk-action bar for the editable Review module ───────────────────
+   Reuses the SAME generic endpoints the Books queue uses (bulk-subject / bulk-author /
+   bulk-delete-editions) plus a per-edition mark-reviewed, all driven by the shared
+   multi-select layer in _review_pane.html (bbSelectedIds / bbResolveRow / bbClearSelection
+   / bbToast / the chained bbOnSelectionChange). Edition selection only — works/people are
+   selection-only (the pane dims their boxes when an edition pick is active).
+
+   The pane hides #bb-bulk-actions unless editions are the active selection, so these
+   actions surface exactly when they apply. Include ORDER matters: mark-reviewed installs
+   the base bbOnSelectionChange; BulkAssign + edition-actions CHAIN onto it. #}
+<script>
+// Reviewed rows stay tickable so a reviewed batch can still be assigned a subject/series/
+// author; mark-reviewed itself skips already-done rows.
+window.BB_INCLUDE_REVIEWED = true;
+window.BB_REVIEW = {
+  buttonLabel: '✓ Mark reviewed',
+  confirm: n => `Mark ${n} book(s) reviewed? (sets the catalogue review verdict to “ok”)`,
+  endpoint: id => `/edition/${id}/mark-reviewed`,
+  body: {},
+  done: id => `<h2>✓ Reviewed</h2><p>Book #${id} marked reviewed.</p>`
+    + `<p class="hint">Reversible — open it and change the review verdict.</p>`,
+};
+</script>
+{% include '_bulk_filing_ux.html' %}   {# FilingUX: ask about ambiguous folders, then a summary popup #}
+{% include '_bulk_mark_reviewed.html' %}
+
+{# Assign-subject / add-to-series / add-author over the ticked editions. _bulk_assign
+   defines the reusable BulkAssign control the actions partial configures. #}
+{% include '_bulk_assign.html' %}
+{% include '_bulk_edition_actions.html' %}
+
+{% include '_subj_datalist.html' %}   {# nw-subj-opts / nw-series-opts / nw-person-opts autocompletes #}

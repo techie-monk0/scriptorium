@@ -1,0 +1,16 @@
+{# Lazy fragment: the books a contributor appears in (person review pane). Each
+   title links to the edition page; the 📖 icon beside it opens the book file
+   (PDF inline; other formats via the OS reader). `books` = library.person_books rows. #}
+{% if books %}
+<p class="hint" style="margin:.2rem 0">{{ books|length }} book{{ '' if books|length == 1 else 's' }}:</p>
+<ul class="person-books">
+  {% for item in books %}
+    <li>
+      {% with eid = item.edition_id %}{% include '_edition_title.html' %}{% endwith %}
+      <span class="hint">— {{ item.roles | join(', ') }}</span>
+    </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="hint">No books link to this contributor yet.</p>
+{% endif %}

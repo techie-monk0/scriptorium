@@ -1,0 +1,124 @@
+{# ── Reusable PERSON detail card ───────────────────────────────────────────
+   The full, editable person view — fields (with authority auto-fill), authority
+   identities, aliases, and the works they contributed to. Rendered both as the
+   `/person/<pid>` page body AND as the `/person/<pid>/card` fragment the book
+   browser injects inline (Browse person-pick, person review), so the SAME detail
+   shows wherever a person appears — no page jump. Forms post to /person/<pid>/*;
+   inside the browser shell, non-destructive ones re-render this card. JS lives in
+   _person_card_js.html (included once per page). #}
+{% if from_work %}
+  <p class="stub" style="background:#eef7ee;border:1px solid #bde0bd;border-radius:6px;padding:.5rem .7rem">
+    ✓ New author created and linked to <a href="/work/{{ from_work }}">work #{{ from_work }}</a>.
+    Fill in their details below, then <a href="/work/{{ from_work }}">← back to the work</a>.</p>
+{% endif %}
+
+<p style="margin:.2rem 0">
+  <a href="/person/{{ p[0] }}/treasuryoflives" target="_blank" rel="noopener" style="font-size:.85em"
+     title="Search Treasury of Lives for this person's biography">📜 Treasury of Lives ↗</a>
+</p>
+
+<h3>Fields</h3>
+<form method="post" action="/person/{{ p[0] }}/edit">
+  {# Authority search: type a name → BDRC/Wikidata/VIAF → fills name + hub id (+ dates). #}
+  <div class="pa-search">
+    <button type="button" onclick="mountPersonAuthoritySearch(this)">🔎 search authorities to auto-fill…</button>
+    <span class="pa-host"></span>
+  </div>
+  <p><label>Name <input name="primary_name" value="{{ p[1] or '' }}" size="36" required></label></p>
+  <p><label>Role hint <input name="role_hint" value="{{ p[2] or '' }}" size="14"
+         placeholder="author / translator / …"></label>
+     <label>Dates <input name="dates" value="{{ p[3] or '' }}" size="16"
+         placeholder="e.g. 1357–1419"></label></p>
+  <p><label>Hub id <input name="external_id" value="{{ p[4] or '' }}" size="18"
+         placeholder="bdr:P… / wikidata Q…"></label>
+     <label>Status <input name="verification_status" value="{{ p[5] or '' }}" size="12"
+         placeholder="provisional / verified"></label></p>
+  {# Tradition: the author's Buddhist lineage — the source of the DEFAULT tradition for
+     the works / editions they authored. Free-text box; the datalist offers the
+     config-driven vocabulary (vocab.json `_tradition`) as suggestions. #}
+  <p><label>Tradition <input name="tradition" value="{{ p[7] or '' }}" size="20"
+         list="tradition-opts-pe" placeholder="e.g. Gelug"></label>
+     {# Tenet system: the author's doctrinal/siddhānta home — a controlled-vocab select
+        (catalogue.contracts.fields); lists the Madhyamaka superset nodes alongside the leaves. #}
+     <label>Tenet system
+      <select name="tenet_system">
+        <option value="">—</option>
+        {% for topt in tenet_opts %}<option {% if p[8] == topt %}selected{% endif %}>{{ topt }}</option>{% endfor %}
+      </select></label></p>
+  <datalist id="tradition-opts-pe">
+    {% for t in traditions %}<option value="{{ t }}">{% endfor %}
+  </datalist>
+  <p><label style="display:block">Notes
+     <textarea name="notes" rows="4" style="width:100%;box-sizing:border-box;font-family:inherit"
+       placeholder="disambiguation rationale, conflation history, authority notes…">{{ p[6] or '' }}</textarea></label></p>
+  <button type="submit">Save</button>
+</form>
+
+<h3>Authority identities</h3>
+{% if authority_ids %}
+<ul>
+  {% for a in authority_ids %}
+  <li><strong>{{ a.scheme }}</strong>:
+    {% if a.url %}<a href="{{ a.url }}" target="_blank" rel="noopener">{{ a.value }} ↗</a>
+    {% else %}{{ a.value }}{% endif %}
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="stub">No authority cross-links recorded yet (harvested when this person resolves on Wikidata).</p>
+{% endif %}
+
+<h3>Aliases</h3>
+<p class="stub">The <b>★ primary</b> alias is the display name (the <b>Name</b> field above).
+  <b>Make primary</b> promotes an alias to the display name.</p>
+<table>
+  {% for a in aliases %}
+    {% set is_primary = (a[1] == p[1]) %}
+    <tr>
+      <td>{{ a[1] }}{% if is_primary %}
+            <span title="display name" style="color:#2a7;font-weight:600;white-space:nowrap">★ primary</span>{% endif %}</td>
+      <td><small>{{ a[2] or 'no scheme' }}</small></td>
+      <td style="white-space:nowrap">
+        {% if not is_primary %}
+          <form method="post" action="/person/{{ p[0] }}/alias/{{ a[0] }}/primary" style="display:inline">
+            <button type="submit" title="make this the display (primary) name">★ Make primary</button>
+          </form>
+        {% endif %}
+        <button type="button"
+                onclick="cardInlinePost(this, '/person/{{ p[0] }}/alias/{{ a[0] }}/delete', 'Delete alias “{{ a[1] }}”?')">delete</button>
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="3" class="stub">No aliases yet.</td></tr>
+  {% endfor %}
+</table>
+<form method="post" action="/person/{{ p[0] }}/alias/add">
+  <label>Text <input name="text" size="30" required></label>
+  <label>scheme <select name="scheme">{% for s in alias_schemes %}<option>{{ s }}</option>{% endfor %}</select></label>
+  <button type="submit">Add alias</button>
+</form>
+
+<h3>Works</h3>
+<ul>
+  {% for w in works %}
+  <li><a href="/work/{{ w[0] }}">{{ w[2] or ('work ' ~ w[0]) }}</a> <small>({{ w[1] }})</small></li>
+  {% else %}<li class="stub">none linked</li>
+  {% endfor %}
+</ul>
+
+<h3>Editions</h3>
+{% from '_edition_link.html' import edition_link %}
+<ul>
+  {% for e in editions %}
+  <li>{{ edition_link(e[0], e[1] or ('edition ' ~ e[0])) }}{% if e[2] %} <small>{{ e[2] }}</small>{% endif %} <small>({{ e[3] }})</small></li>
+  {% else %}<li class="stub">none</li>
+  {% endfor %}
+</ul>
+
+{% with merge_kind = 'person', merge_id = p[0],
+        merge_search = '/picker/person/search?exclude=' ~ p[0],
+        merge_idfield = 'id', merge_labelfield = 'name',
+        merge_apply = '/picker/person/' ~ p[0] ~ '/merge',
+        merge_after = '/library?pid=', merge_keep_alias = true %}
+  {% include '_merge_widget.html' %}
+{% endwith %}

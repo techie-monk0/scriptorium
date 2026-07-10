@@ -1,0 +1,73 @@
+{# Reusable works-curation widget — the spine of catalogue review.
+
+   Renders a WorksDraft (catalogue_review.py) as native form fields so it works
+   inside a fragment injected via innerHTML (no JS runs there): an include
+   checkbox per work, a per-contributor name + role <select>, and "fill a blank
+   row to add / clear to drop" spare rows. The enclosing page supplies the
+   <form> + submit button and the structure/book-contributor fields if it wants
+   them. Field names are parsed back by catalogue_review.parse_works_form, so the
+   same widget serves the pending-proposal editor AND the promoted-edition
+   review — one widget, one parser.
+
+   Import:  {% from '_works_curation.html' import works_fields, contribs %}
+   Use:     {{ works_fields(draft, picker=True) }}
+#}
+
+{% macro contrib_row(prefix, j, c, picker) %}
+<span class="contrib">
+  <input name="{{ prefix }}{{ j }}_name" size="22" value="{{ c.name or '' }}"
+         placeholder="contributor name">
+  <select name="{{ prefix }}{{ j }}_role">
+    <option value="author" {{ 'selected' if c.role == 'author' else '' }}>author</option>
+    <option value="translator" {{ 'selected' if c.role == 'translator' else '' }}>translator</option>
+  </select>
+  <input type="hidden" name="{{ prefix }}{{ j }}_pid" value="{{ c.person_id or '' }}">
+  {% if picker %}
+    {% if c.person_id %}
+      <a href="/person/{{ c.person_id }}" title="open person record">#{{ c.person_id }}</a>
+      <a href="/picker/person/{{ c.person_id }}/split" title="split a blended name">split</a>
+    {% else %}
+      <span class="hint">unresolved</span>
+    {% endif %}
+  {% endif %}
+</span>
+{% endmacro %}
+
+{% macro contribs(prefix, contributors, picker=False, blanks=2) %}
+<span class="contribs">
+  {% for c in contributors %}{{ contrib_row(prefix, loop.index0, c, picker) }}{% endfor %}
+  {% for k in range(blanks) %}{{ contrib_row(prefix, (contributors|length) + k, {}, picker) }}{% endfor %}
+</span>
+{% endmacro %}
+
+{% macro work_fieldset(i, w, picker) %}
+<fieldset class="work-row" style="margin:.4rem 0; padding:.4rem .6rem; border:1px solid var(--border); border-radius:6px">
+  <p>
+    <label><input type="checkbox" name="w{{ i }}_included"
+           {{ 'checked' if w.get('included', True) else '' }}> <b>include</b></label>
+    <input type="hidden" name="w{{ i }}_work_id" value="{{ w.work_id or '' }}">
+    <label>Title <input name="w{{ i }}_title" size="30" value="{{ w.title or '' }}"></label>
+    <label>Kind
+      <select name="w{{ i }}_kind">
+        <option value="">—</option>
+        {% for k in ['root', 'commentary', 'work'] %}
+          <option value="{{ k }}" {{ 'selected' if k == w.kind else '' }}>{{ k }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Locator <input name="w{{ i }}_locator" size="10" value="{{ w.locator or '' }}"></label>
+  </p>
+  <p class="contribs-line">Contributors:
+    {{ contribs('w' ~ i ~ '_c', w.contributors or [], picker) }}</p>
+</fieldset>
+{% endmacro %}
+
+{% macro works_fields(draft, picker=False) %}
+  {% set works = draft.works or [] %}
+  <p class="hint">Uncheck a work to drop it from this book (single ↔ multi-work
+    follows what's checked). Set each contributor's role (author vs translator).
+    Fill a blank row to add; clear a row's name/title to remove it.</p>
+  {% for w in works %}{{ work_fieldset(loop.index0, w, picker) }}{% endfor %}
+  {# one spare blank work to add (unchecked so it's ignored unless filled) #}
+  {{ work_fieldset(works|length, {'included': False, 'contributors': []}, picker) }}
+{% endmacro %}

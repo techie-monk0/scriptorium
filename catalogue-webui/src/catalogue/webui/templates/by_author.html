@@ -1,0 +1,58 @@
+{% extends "_base.html" %}
+{% block title %}By author{% endblock %}
+{% block body %}
+{# Two parts: (1) all editions A–Z by title (click → reader); (2) authors/translators
+   A–Z, each with their editions (→ reader) and works (→ work detail). #}
+<h1>Library holdings list</h1>
+
+<p class="stub" style="max-width:60ch">
+  This list has two sections: 1)&nbsp;“Editions” — books alphabetized by book title; and
+  2)&nbsp;“Authors” — authors and translators with books and works for each, alphabetized
+  by book and work title.
+</p>
+
+{# Jump links to the two sections below. #}
+<p><a href="#editions">Editions</a> &nbsp;·&nbsp; <a href="#authors">Authors</a></p>
+
+<hr>
+<h2 id="editions">Editions <span class="stub">— by top-level subject, A–Z by title</span></h2>
+{% for s in subject_sections %}
+  <h3 style="margin:.5rem 0 .2rem">{{ s.subject }} <span class="stub">({{ s.editions|length }})</span></h3>
+  <ul style="margin:.15rem 0">
+  {% for e in s.editions %}
+    <li><a href="{{ e.url }}">{{ e.title }}</a>
+      {%- if e.authors %} — {{ e.authors | join(', ') }}{% endif %}
+      {%- if e.translators %} <span class="stub">(trans. {{ e.translators | join(', ') }})</span>{% endif %}
+    </li>
+  {% endfor %}
+  </ul>
+{% else %}
+  <p class="stub">No editions yet.</p>
+{% endfor %}
+
+<hr>
+<h2 id="authors">Authors <span class="stub">({{ people|length }})</span></h2>
+{% for p in people %}
+  <section style="margin:.6rem 0">
+    <h3 style="margin:.3rem 0">{{ p.name }}</h3>
+    {% if p.editions %}
+    <p class="stub" style="margin:.15rem 0">Editions</p>
+    <ul style="margin:.15rem 0">
+      {% for e in p.editions %}
+        <li><a href="{{ e.url }}">{{ e.title }}</a>{% if e.roles %} <span class="stub">({{ e.roles }})</span>{% endif %}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+    {% if p.works %}
+    <p class="stub" style="margin:.15rem 0">Works</p>
+    <ul style="margin:.15rem 0">
+      {% for w in p.works %}
+        <li><a href="{{ w.url }}">{{ w.title }}</a></li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </section>
+{% else %}
+  <p class="stub">No authors or translators yet.</p>
+{% endfor %}
+{% endblock %}

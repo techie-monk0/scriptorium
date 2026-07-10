@@ -1,0 +1,40 @@
+{# ── Read-only Work Basics ───────────────────────────────────────────────────
+   The non-editable summary of ONE work, shown inside each "Works In This Edition"
+   subsection on BOTH Browse and Review. Expects `w` = a library.work_summary dict.
+   To EDIT a work, the caller (Review) renders a "✎ To edit this work →" link to
+   /work/<id> above this block. #}
+<div class="wb">
+  {# (a) Root text / commentary — show nothing when it's neither. #}
+  {% if w.work_type == 'commentary' %}
+    <p class="wb-rel">📖 Commentary{% if w.root %} on
+      <a href="/work/{{ w.root.id }}"><code>#{{ w.root.id }}</code> {{ w.root.title }}</a>{% endif %}</p>
+  {% elif w.work_type == 'root' %}
+    <p class="wb-rel">📕 Root text</p>
+  {% endif %}
+  {# Layer-2 back-ref: this edition's modern commentary is on THIS contained work. #}
+  {% if w.is_modern_commentary_target %}
+    <p class="wb-rel">⬑ this edition's modern commentary is on this work</p>
+  {% endif %}
+
+  {# (b) Authors — work-level, each linking to the person page. #}
+  <p class="wb-row"><span class="wb-lbl">Authors</span>
+    {% for a in w.authors %}<a href="/person/{{ a.id }}">{{ a.name }}</a>{% if a.role and a.role != 'author' %}
+      <span class="hint">({{ a.role }})</span>{% endif %}{% if not loop.last %} · {% endif %}{% else %}
+      <span class="hint">—</span>{% endfor %}</p>
+
+  {# (c) Subjects. #}
+  <p class="wb-row"><span class="wb-lbl">Subjects</span>
+    {% for sid, name in w.subjects %}<span class="wb-chip">{{ name }}</span>{% else %}
+      <span class="hint">—</span>{% endfor %}</p>
+
+  {# (d) Other editions containing this same work — link into Browse. #}
+  {% if w.other_editions %}
+  <p class="wb-row"><span class="wb-lbl">Other editions</span>
+    <span class="wb-vals" style="display:inline-block; vertical-align:top">
+    {% for e in w.other_editions %}<a href="/library?eid={{ e.id }}" style="display:block"><code>#{{ e.id }}</code>
+      {{ e.title }}</a>{% endfor %}</span></p>
+  {% endif %}
+
+  {# (e) Notes. #}
+  {% if w.notes %}<p class="wb-row"><span class="wb-lbl">Notes</span> {{ w.notes }}</p>{% endif %}
+</div>

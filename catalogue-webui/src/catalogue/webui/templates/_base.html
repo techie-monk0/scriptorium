@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Library Catalogue{% endblock %}</title>
+  {# Colour palette — single source of truth shared by web + PWA. #}
+  <link rel="stylesheet" href="{{ static_v('css/tokens.css') }}">
+  {# Shared shelf/tile styling — used by the home shelves and the converged
+     Search/Browse grids (the same component the PWA uses). #}
+  <link rel="stylesheet" href="{{ static_v('css/shelf.css') }}">
+  {# The shared frontend layer (Tiers 2–3) + the web platform adapter. Pages that
+     converge onto it call window.LibraryUI.<feature>(host, LibraryWeb.adapter(), …).
+     Loaded in order (core before the DOM renderer that reads it) so end-of-body
+     page scripts can call LibraryUI synchronously. ?v=mtime busts stale browser caches. #}
+  <script src="{{ static_v('js/shelf.js') }}"></script>
+  <script src="{{ static_v('js/library-core.js') }}"></script>
+  <script src="{{ static_v('js/library-ui-dom.js') }}"></script>
+  <script src="{{ static_v('js/library-web.js') }}"></script>
+  {# Apply the saved theme BEFORE first paint so there's no light→dark flash.
+     'auto' (or unset) follows the OS via prefers-color-scheme in CSS below. #}
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('theme');
+        if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+        // Shelf art: 'cover' (default) or 'spine'. Set before paint so the home shelves
+        // size correctly on first render. See /settings.
+        var s = localStorage.getItem('shelfArt');
+        document.documentElement.setAttribute('data-shelf', s === 'spine' ? 'spine' : 'cover');
+      } catch (e) {}
+    })();
+  </script>
+  <style>
+    /* Colour tokens (light/dark) live in tokens.css; only non-token base styles here. */
+    body { font-family: system-ui, sans-serif; max-width: min(1100px, 100%); margin: 0 auto;
+           padding: 0 1rem 6rem; background: var(--bg); color: var(--fg); }
+    /* The big bottom gap clears the floating menu button on phones; desktop uses the top bar. */
+    @media (min-width: 768px) { body { padding-bottom: 2rem; } }
+    a { color: var(--link); }
+    hr { border: none; border-top: 1px solid var(--border); }
+    /* Form controls follow the theme (default buttons stay browser-light otherwise). */
+    button, input[type="submit"], input[type="button"] {
+      background: var(--btn-bg); color: var(--btn-fg); border: 1px solid var(--btn-border);
+      border-radius: 6px; padding: .35rem .7rem; font: inherit; cursor: pointer; }
+    button:hover, input[type="submit"]:hover, input[type="button"]:hover { background: var(--btn-hover-bg); }
+    button:disabled { opacity: .55; cursor: default; }
+    input[type="text"], input[type="search"], input[type="number"], input[type="url"],
+    input[type="email"], input[type="password"], textarea, select {
+      background: var(--surface); color: var(--fg); border: 1px solid var(--border);
+      border-radius: 6px; padding: .3rem .4rem; font: inherit; }
+    /* ── Top bar: brand + theme. Section NAVIGATION is the shared floating menu
+       (LibraryUI.nav, mounted below) — the same component the PWA uses. ───────── */
+    .topnav { display: flex; align-items: center; gap: .6rem; margin: 1rem 0 .4rem; }
+    .topnav .brand { font-weight: 700; text-decoration: none; color: var(--brand);
+                     font-size: 1.05rem; margin-right: auto; }
+    .theme-select { font: inherit; padding: .3rem .4rem; border-radius: 6px;
+                    border: 1px solid var(--border); background: var(--surface); color: var(--fg); }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { text-align: left; padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border); }
+    .stub { color: var(--muted); font-style: italic; }
+    /* "Open the book file" control (📖↗) — paired with every edition-record link
+       by the edition_link macro / _open_control.html. Global so the icon styles on
+       every page, not just inside the book browser. */
+    .bookopen { text-decoration: none; color: var(--link); cursor: pointer; }
+    .bookopen:hover { text-decoration: underline; }
+    .bookopen.noopen { color: inherit; cursor: default; }
+    .bookopen .oi { font-size: .8em; opacity: .7; white-space: nowrap; }
+    .bookopen.iconbtn { margin-left: .45rem; font-size: .85em; vertical-align: middle; }
+    /* Broken link: path recorded but the file is gone on disk. Greyed, non-clicking. */
+    .bookopen.broken { color: var(--muted); cursor: help; text-decoration: none; }
+    .bookopen.broken:hover { text-decoration: none; }
+    .bookopen.broken .oi { opacity: .85; }
+  </style>
+</head>
+<body>
+  {# nav_path, not `p` — `p` is the person row in person templates that extend this. #}
+  {% set nav_path = request.path %}
+  <nav class="topnav">
+    <a class="brand" href="/">📚 Library</a>
+    <select id="theme-select" class="theme-select" aria-label="Colour theme" title="Colour theme">
+      <option value="auto">🖥 Auto</option>
+      <option value="light">☀ Light</option>
+      <option value="dark">🌙 Dark</option>
+    </select>
+  </nav>
+  {# Section navigation = the SHARED floating-menu component (LibraryUI.nav), the same one the
+     PWA mounts. Items below are the web's sections; active item derived from the request path. #}
+  <div id="nav-host"></div>
+  <script>
+    (function () {
+      if (!window.LibraryUI || !LibraryUI.nav || !window.LibraryCore) return;
+      // Section labels/icons/order/protocol come from the SHARED manifest (LibraryCore.APP_SECTIONS),
+      // so a rename like Search→Books lands on web, PWA and the native app at once. The web only
+      // declares WHICH section keys it implements + maps each to its own route; 'books' is the book
+      // finder (the /search module). The cross-entity 'search' section has no web page yet (PWA/native
+      // only). Editor sections are gated by can_edit (server also default-denies their GETs).
+      var keys = ['home', 'books', 'read', 'content', 'wishlist'{% if can_edit() %}, 'review', 'scan', 'capture', 'settings'{% endif %}];
+      var HREF = { home: '/', books: '/search', read: '/read', content: '/text', wishlist: '/wishlist',
+                   review: '/review', scan: '/reconcile', capture: '/capture', settings: '/settings' };
+      var items = LibraryCore.navItems(keys, function (k) { return HREF[k]; });
+      {# Order matters: '/review' before '/reconcile'; '/search'/'/text' before fallbacks. '/search'
+         (+ the /library alias) is the 'books' finder now; '/text' is 'content'. #}
+      var active = {{ (
+        'review'   if nav_path.startswith('/review') else
+        'read'     if nav_path == '/read' else
+        'books'    if nav_path.startswith('/search') or nav_path.startswith('/library') else
+        'content'  if nav_path.startswith('/text') else
+        'wishlist' if nav_path.startswith('/wishlist') else
+        'scan'     if nav_path.startswith('/reconcile') else
+        'capture'  if nav_path.startswith('/capture') or nav_path.startswith('/staging') else
+        'settings' if nav_path.startswith('/settings') else
+        'home'     if nav_path == '/' else ''
+      ) | tojson }};
+      // The WEB implementation chooses the presentation FORM (the shared Menu component just
+      // renders whatever it's asked for): a normal top menu BAR on desktop, the floating button
+      // on phones. WHICH items appear is decided by the protocol layer from this context
+      // (desktop = screen size; local = served from the host machine).
+      var host = document.getElementById('nav-host');
+      var mq = window.matchMedia('(min-width: 768px)');
+      var isLocal = ['localhost', '127.0.0.1', '::1', '[::1]'].indexOf(location.hostname) !== -1;
+      var handle = null;
+      function mountNav() {
+        if (handle && handle.destroy) handle.destroy();    // drop the previous form's listeners
+        var desktop = mq.matches;
+        handle = LibraryUI.nav(host, null, {
+          items: items, activeKey: active,
+          ctx: { desktop: desktop, local: isLocal },
+          variant: desktop ? 'bar' : 'fab'
+        });
+      }
+      mountNav();
+      if (mq.addEventListener) mq.addEventListener('change', mountNav);
+      else if (mq.addListener) mq.addListener(mountNav);   // older Safari
+    })();
+  </script>
+  <script>
+    (function () {
+      var sel = document.getElementById('theme-select');
+      if (!sel) return;
+      var saved = null;
+      try { saved = localStorage.getItem('theme'); } catch (e) {}
+      sel.value = (saved === 'light' || saved === 'dark') ? saved : 'auto';
+      sel.addEventListener('change', function () {
+        var v = sel.value;
+        try {
+          if (v === 'auto') { localStorage.removeItem('theme'); document.documentElement.removeAttribute('data-theme'); }
+          else { localStorage.setItem('theme', v); document.documentElement.setAttribute('data-theme', v); }
+        } catch (e) {}
+        // Hand focus back to the page so arrow keys drive the list (↑/↓ in the
+        // review/browse left pane), not the still-focused theme dropdown.
+        sel.blur();
+      });
+      // Arrow keys must NEVER cycle the theme: block the native select behaviour
+      // and blur so the keypress falls through to the page's list navigation.
+      sel.addEventListener('keydown', function (e) {
+        if (e.key === 'ArrowUp' || e.key === 'ArrowDown'
+            || e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+          e.preventDefault();
+          sel.blur();
+        }
+      });
+    })();
+  </script>
+  {% if config.DRY_RUN %}
+  <div style="background:#fdecea; color:#900; border:1px solid #f5c2c0; padding:.4rem .6rem; margin:.4rem 0; font-weight:bold">
+    DRY-RUN — changes are <u>not</u> saved to the database (safe to experiment)
+  </div>
+  {% endif %}
+  {% if config.SANDBOX %}
+  <div style="background:#fff3cd; color:#664d03; border:1px solid #ffe69c; padding:.4rem .6rem; margin:.4rem 0; display:flex; gap:.8rem; align-items:center">
+    <b>SANDBOX</b> — editing a COPY of the catalogue; live is untouched until you promote.
+    <form method="post" action="/sandbox/promote" style="margin:0"
+          onsubmit="return confirm('Swap this sandbox in as the live catalogue? Live is backed up first.')">
+      <button>Promote to live</button></form>
+    <form method="post" action="/sandbox/discard" style="margin:0"
+          onsubmit="return confirm('Discard all sandbox edits?')">
+      <button>Discard</button></form>
+  </div>
+  {% endif %}
+  {# Flash popups — e.g. "tagged Uncategorized, review later" and the review-gate block. #}
+  {% with msgs = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in msgs %}
+      <div role="alert" style="margin:.4rem 0; padding:.5rem .7rem; border-radius:6px;
+           border:1px solid {{ '#f5c2c0' if cat == 'error' else '#ffe69c' }};
+           background:{{ '#fdecea' if cat == 'error' else '#fff3cd' }};
+           color:{{ '#900' if cat == 'error' else '#664d03' }}">{{ msg }}</div>
+    {% endfor %}
+  {% endwith %}
+  <hr>
+  {% block body %}{% endblock %}
+</body>
+</html>

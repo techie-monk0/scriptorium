@@ -1,0 +1,30 @@
+{# Generic inline-card helpers, shared by every entity card (_work_card, _person_card,
+   …). Include ONCE per page that hosts a [data-card-url] card. Lets a destructive
+   sub-action (an alias delete, etc.) re-render its card in place instead of navigating,
+   so the detail stays in the pane. On a standalone page (no card wrapper) it reloads. #}
+<script>
+(function () {
+  if (window.__cardInlineJs) return;          // define once per page
+  window.__cardInlineJs = true;
+
+  // Re-fetch a card's fragment and swap it in (keeps the browser-shell row snapshot fresh).
+  window.cardReload = function (card) {
+    if (!card) return Promise.resolve();
+    const url = card.getAttribute('data-card-url');
+    return fetch(url).then(r => r.text()).then(html => {
+      card.innerHTML = html; card.dataset.filled = '1';
+      if (window.bbSyncDetail) window.bbSyncDetail();
+    });
+  };
+
+  // Confirm (optional) → POST → re-render the enclosing card (or reload the page if the
+  // button isn't inside a card, e.g. on a standalone entity page).
+  window.cardInlinePost = function (btn, url, confirmMsg) {
+    if (confirmMsg && !window.confirm(confirmMsg)) return;
+    const card = btn.closest('[data-card-url]');
+    fetch(url, { method: 'POST', headers: { 'X-Requested-With': 'fetch' } })
+      .then(() => card ? window.cardReload(card) : location.reload())
+      .catch(() => { if (card) card.innerHTML = '<p class="hint">Action failed.</p>'; });
+  };
+})();
+</script>

@@ -1,0 +1,19 @@
+{% extends "_base.html" %}
+{% block title %}Read — Library Catalogue{% endblock %}
+{% block body %}
+{# The recent list is DEVICE-LOCAL (browser localStorage), so the server can't resume it — this page
+   reads the last-opened book here and redirects to its reader, else shows an empty state. #}
+<script src="/static/js/web-recent.js"></script>
+<div id="readResume" class="note" style="margin:2rem 0;text-align:center">Opening your last book…</div>
+<script>
+  (function () {
+    var b = ((window.WebRecent && WebRecent.recent(1)) || [])[0];
+    if (b && b.hid != null) { window.location.replace('/holding/' + b.hid + '/read'); }
+    else if (b && b.eid != null) { window.location.replace('/edition/' + b.eid + '/read'); }
+    else {
+      document.getElementById('readResume').textContent =
+        'No recently-opened book on this device yet — open one from Home or Books.';
+    }
+  })();
+</script>
+{% endblock %}

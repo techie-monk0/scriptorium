@@ -1,0 +1,337 @@
+{% from '_work_picker.html' import work_picker with context %}
+{# ── Edition card (contributors · commentary-on · collapsed Edition Basics) ──────
+   The shared top-of-edition card. Used on BOTH pages via one `editable` flag:
+     • Browse  (editable=false) — plain read-only labels + /person/<id> links.
+     • Review  (editable=true)  — the in-place chip editors (loaded via
+       [data-card-url]="/works/detect/<eid>/edit"; each small form POSTs and the host
+       re-fetches this fragment).
+   Layout: the COMMENTARY ON section (the work(s) this edition is a modern commentary on —
+   Layer 2, edition_commentary_on; may list several) stands ALONE at the top, ABOVE the
+   edition box (larger heading). The box below holds ONLY the EDITION BASICS <details>
+   (stored title, authors, translators, subjects, the modern-single Works row, ISBN),
+   COLLAPSED BY DEFAULT. The edition-level CONTRIBUTORS (authors + translators) live inside
+   Edition Basics; its summary is an <h3> matching the sibling section headers.
+   Native/canonical titles, holdings and the title-page preview are NOT here — native
+   titles live per-work in Work Details, holdings/preview in _edition_extras.html.
+
+   Editable context (from web.py _edit_card): eid, title, structure, is_classical,
+     authors/translators/detected [{id,name}], own_subjects, inherited_subjects,
+     subject_suggestion, works, modern_commentaries [{id,title}], isbn, isbn_url.
+   Read-only context (from /edition/<eid>/works-summary): eid, title, authors,
+     translators [{id,name}], subjects [(sid,name)], modern_commentaries, isbn, isbn_url. #}
+{% set editable = editable | default(false) %}
+{# ── Commentary on (Layer 2: edition→work) — stands ALONE, above the edition box (not
+   inside it). THIS book, by its modern author, is a modern commentary on the listed
+   work(s); lists every target if there are several. Read-only = the linked list;
+   editable adds ✕ remove + a work picker. Hidden on Browse when empty.
+   See docs/design/commentary_relationships_model.md. #}
+{% if modern_commentaries or editable %}
+<div class="comm-on-box">
+  <style>
+    .comm-on-box { margin:.5rem 0 }
+    .comm-on-box .sec-hd { font-size:1.35rem; font-weight:700; color:var(--fg); margin:.2rem 0 .4rem }
+    .comm-on-box .chip { display:block; background:var(--surface-2); border:1px solid var(--border);
+      border-radius:6px; padding:.15rem .55rem; margin:.15rem 0; font-size:.95em }
+    .comm-on-box .chip form { display:inline }
+    .comm-on-box .lnk { border:none; background:none; cursor:pointer; color:var(--link); font-size:.85em }
+    .comm-on-box .lnk.danger { color:#a00 }
+    @media (prefers-color-scheme: dark) { .comm-on-box .chip {
+      background:rgba(255,255,255,.10); border-color:rgba(255,255,255,.18) } }
+  </style>
+  <div class="sec-hd">📘 Commentary on</div>
+  {% if modern_commentaries %}
+    {% for mc in modern_commentaries %}
+      <div class="chip">
+        <a href="/work/{{ mc.id }}"{% if not editable %} target="_blank" rel="noopener"{% endif %}><code>#{{ mc.id }}</code> {{ mc.title }}</a>
+        {% if editable %}
+          <span style="float:right"><form method="post"
+              action="/edition/{{ eid }}/modern-commentary/{{ mc.id }}/remove" style="display:inline">
+            <button class="lnk danger" title="remove this modern-commentary link (the work is kept)">✕</button></form></span>
+        {% endif %}
+      </div>
+    {% endfor %}
+  {% elif editable %}<span class="hint">none yet — this edition isn't recorded as a commentary on any work</span>{% endif %}
+  {% if editable %}
+    {{ work_picker(eid, '/edition/%d/modern-commentary/add'|format(eid), 'Pick or add the work this edition comments on') }}
+  {% endif %}
+</div>
+{% endif %}
+
+{# ── Edition Basics box — the collapsible section ALONE in its own box ── #}
+<fieldset class="edit-card" style="border:1px solid var(--card-border); border-radius:8px; padding:.5rem .7rem; margin:.5rem 0">
+  <style>
+    .edit-card .req { color:#c00; font-weight:700 }
+    .edit-card table.etbl { border-collapse:collapse; width:100% }
+    .edit-card table.etbl > tbody > tr > td { padding:.35rem .5rem; border-bottom:1px solid var(--border); vertical-align:top }
+    .edit-card td.lbl { color:var(--subtle-fg); white-space:nowrap; width:1%; padding-right:1rem }
+    .edit-card tr.ro td.lbl { font-style:italic }
+    .edit-card .chip { display:inline-block; background:var(--surface-2); border:1px solid var(--border);
+      border-radius:12px; padding:.05rem .5rem; margin:.1rem .2rem .1rem 0; font-size:.92em }
+    .edit-card .chip form { display:inline }
+    .edit-card .chip button, .edit-card .quick button { border:none; background:none;
+      cursor:pointer; color:#a00; padding:0 .1rem }
+    .edit-card .quick button { color:var(--link) }
+    .edit-card .lnk { border:none; background:none; cursor:pointer; color:var(--link); font-size:.85em }
+    .edit-card .lnk.danger { color:#a00 }
+    .edit-card input[type=text], .edit-card input:not([type]), .edit-card textarea { min-width:14rem }
+    .edit-card details.ed-basics > summary { cursor:pointer; padding:.25rem 0; list-style:revert }
+    /* section title renders as an <h3> to match the sibling section headers below */
+    .edit-card details.ed-basics > summary h3 { display:inline; margin:0 }
+    @media (prefers-color-scheme: dark) { .edit-card .chip { background:rgba(255,255,255,.10); border-color:rgba(255,255,255,.18) } }
+  </style>
+
+  {# ── Edition Basics — open in Review (you're actively editing; also keeps it visible
+     after a Detect/save re-renders the card), collapsed on Browse. ── #}
+  <details class="ed-basics"{% if editable %} open{% endif %}>
+    <summary><h3>Edition Basics</h3></summary>
+    <table class="etbl"><tbody>
+      {# ── Detect: recover basics from the file's name (Anna's Archive &c.) ── #}
+      {% if editable %}
+      <tr><td class="lbl">Detect</td>
+        <td>
+          {# Plain inline-card form: the book-browser host intercepts the submit, POSTs,
+             and re-renders THIS card — same mechanism as the author/subject buttons, so it
+             needs no page-level JS and can't silently no-op on a stale tab. #}
+          <form method="post" action="/works/detect/{{ eid }}/detect" style="display:inline">
+            <button type="submit"
+                    title="Read title, author, publisher, year &amp; ISBN out of the file name">🔎 Detect from filename</button>
+          </form>
+          <form method="post" action="/works/detect/{{ eid }}/from-isbn" style="display:inline">
+            <button type="submit"
+                    title="Look this edition's ISBN up in the authorities (OpenLibrary) and fill title, authors &amp; translators">🔎 Detect from ISBN</button>
+          </form>
+          <span class="hint">— fills title/subtitle/publisher/year/ISBN &amp; links known authors</span>
+        </td></tr>
+      {% endif %}
+      {# ── Stored title — editable name; on Browse a plain label ── #}
+      <tr><td class="lbl">Stored title{% if editable %} <span class="req">*</span>{% endif %}</td>
+        <td>
+          {% if editable %}
+            <input id="ed-title-{{ eid }}" value="{{ title }}" required>
+            <button type="button" onclick="saveEditionTitle({{ eid }}, this)">Save</button>
+            <span class="hint">— also the heading above</span>
+          {% else %}{{ title or '—' }}{% endif %}
+        </td></tr>
+
+      {# ── Authors (edition-level) ── #}
+      <tr><td class="lbl">Authors</td>
+        <td>
+          {% if editable %}
+          <div class="contrib-row">
+            {% for a in authors %}
+              <span class="chip"><a href="/person/{{ a.id }}">{{ a.name }}</a>
+                <form method="post" action="/works/detect/{{ eid }}/author/remove">
+                  <input type="hidden" name="pid" value="{{ a.id }}"><button title="remove">✕</button></form>
+              </span>
+            {% else %}<span class="hint">none set</span>{% endfor %}
+            {% for a in detected %}
+              <span class="quick"><form method="post" action="/works/detect/{{ eid }}/author/add">
+                <input type="hidden" name="pid" value="{{ a.id }}">
+                <button title="use detected author">+ {{ a.name }}</button></form></span>
+            {% endfor %}
+            {# Names the filename suggests but aren't linked yet. Unique existing person →
+               one-click add (pid form); otherwise the chip opens the picker pre-filled. #}
+            {% for s in (filename_authors | default([])) %}
+              {% if s.pid %}
+                <span class="quick"><form method="post" action="/works/detect/{{ eid }}/author/add">
+                  <input type="hidden" name="pid" value="{{ s.pid }}">
+                  <button title="add this author from the filename">+ {{ s.name }}</button></form></span>
+              {% else %}
+                <span class="quick"><button type="button" data-name="{{ s.name }}"
+                  title="add this author from the filename — opens the person picker"
+                  onclick="bbMountPersonSearch(this, {{ eid }}, this.dataset.name)">+ {{ s.name }} 🔎</button></span>
+              {% endif %}
+            {% endfor %}
+            <button type="button" onclick="bbMountPersonSearch(this, {{ eid }})">+ add…</button>
+            <span class="person-search-host"></span>
+            <form class="add-person-form" method="post" action="/works/detect/{{ eid }}/author/add">
+              <input type="hidden" name="pid"><input type="hidden" name="name"></form>
+          </div>
+          {% else %}
+            {% for a in authors %}<a href="/person/{{ a.id }}">{{ a.name }}</a>{% if not loop.last %} · {% endif %}{% else %}<span class="hint">—</span>{% endfor %}
+          {% endif %}
+        </td></tr>
+
+      {# ── Translators (edition-level) ── #}
+      <tr><td class="lbl">Translators</td>
+        <td>
+          {% if editable %}
+          <div class="contrib-row">
+            {% for t in translators %}
+              <span class="chip"><a href="/person/{{ t.id }}">{{ t.name }}</a>
+                <form method="post" action="/works/detect/{{ eid }}/translator/remove">
+                  <input type="hidden" name="pid" value="{{ t.id }}"><button title="remove">✕</button></form>
+              </span>
+            {% else %}<span class="hint">none set</span>{% endfor %}
+            {% for s in (filename_translators | default([])) %}
+              {% if s.pid %}
+                <span class="quick"><form method="post" action="/works/detect/{{ eid }}/translator/add">
+                  <input type="hidden" name="pid" value="{{ s.pid }}">
+                  <button title="add this translator from the filename">+ {{ s.name }}</button></form></span>
+              {% else %}
+                <span class="quick"><button type="button" data-name="{{ s.name }}"
+                  title="add this translator from the filename — opens the person picker"
+                  onclick="bbMountPersonSearch(this, {{ eid }}, this.dataset.name)">+ {{ s.name }} 🔎</button></span>
+              {% endif %}
+            {% endfor %}
+            <button type="button" onclick="bbMountPersonSearch(this, {{ eid }})">+ add…</button>
+            <span class="person-search-host"></span>
+            <form class="add-person-form" method="post" action="/works/detect/{{ eid }}/translator/add">
+              <input type="hidden" name="pid"><input type="hidden" name="name"></form>
+          </div>
+          {% else %}
+            {% for t in translators %}<a href="/person/{{ t.id }}">{{ t.name }}</a>{% if not loop.last %} · {% endif %}{% else %}<span class="hint">—</span>{% endfor %}
+          {% endif %}
+        </td></tr>
+
+      {# ── Subjects ── #}
+      <tr><td class="lbl">Subjects</td>
+        <td>
+          {% if editable %}
+          {% if own_subjects %}
+            {% for sid, sname in own_subjects %}
+              <span class="chip">{{ sname }}
+                <form method="post" action="/subjects/edition/{{ eid }}/remove">
+                  <input type="hidden" name="subject_id" value="{{ sid }}"><button title="remove (clear all to fall back to inherited)">✕</button></form>
+              </span>
+            {% endfor %}
+            <span class="hint">— overriding the works' subjects</span>
+          {% else %}
+            {% for n in inherited_subjects %}
+              <span class="chip" style="background:var(--surface-2); border-style:dashed">{{ n }}</span>
+            {% else %}<span class="hint">none — set them on the work(s), or add an edition-specific one</span>{% endfor %}
+            {% if inherited_subjects %}<span class="hint">— inherited from the works</span>{% endif %}
+          {% endif %}
+          {% if subject_suggestion %}
+            <span class="quick"><form method="post" action="/subjects/edition/{{ eid }}/add">
+              <input type="hidden" name="name" value="{{ subject_suggestion }}">
+              <button title="use the folder-derived subject as an edition override">+ {{ subject_suggestion }} (from folder)</button></form></span>
+          {% endif %}
+          <form method="post" action="/subjects/edition/{{ eid }}/add" style="display:inline">
+            {# list → the ONE page-level _subj_datalist.html (no per-card datalist) #}
+            <input name="name" list="nw-subj-opts" autocomplete="off" size="18"
+                   placeholder="override: type to autocomplete or add new">
+            <button type="submit" title="adding an edition subject overrides the inherited set">+ override</button>
+          </form>
+          {% else %}
+            {% for sid, name in subjects %}<span class="wb-chip">{{ name }}</span>{% else %}<span class="hint">—</span>{% endfor %}
+          {% endif %}
+        </td></tr>
+
+      {# ── Series / Collections — a separate namespace (kind='series'); NOT a topic,
+           so a series membership never satisfies the "needs a subject" invariant. ── #}
+      <tr><td class="lbl">Series</td>
+        <td>
+          {% if editable %}
+            {% for sid, sname in own_series | default([]) %}
+              <span class="chip"><a href="/subject/{{ sid }}" style="text-decoration:none;color:inherit">{{ sname }}</a>
+                <form method="post" action="/subjects/edition/{{ eid }}/remove">
+                  <input type="hidden" name="subject_id" value="{{ sid }}"><button title="remove from series">✕</button></form>
+              </span>
+            {% else %}<span class="hint">not in any series</span>{% endfor %}
+            <form method="post" action="/subjects/edition/{{ eid }}/add" style="display:inline">
+              <input type="hidden" name="subject_kind" value="series">
+              {# list → the ONE page-level _subj_datalist.html (nw-series-opts) #}
+              <input name="name" list="nw-series-opts" autocomplete="off" size="18"
+                     placeholder="add to a series — type or add new">
+              <button type="submit" title="add this edition to a series/collection">+ series</button>
+            </form>
+          {% else %}
+            {% for sid, name in series | default([]) %}<span class="wb-chip"><a href="/subject/{{ sid }}" style="text-decoration:none;color:inherit">{{ name }}</a></span>{% else %}<span class="hint">—</span>{% endfor %}
+          {% endif %}
+        </td></tr>
+
+      {# ── Works (editable MODERN single only) ──
+         A multi-work or classical-single edition manages its contained texts in the
+         "Works In This Edition" section instead; a modern single keeps this row (its
+         work is a degenerate placeholder, the author lives on the edition). The book's
+         modern-commentary target is the "Commentary on" section above (Layer 2). #}
+      {% if editable and structure != 'multi_work' and not is_classical %}
+      <tr><td class="lbl">Works</td>
+        <td>
+          {% for w in works %}
+            <div class="chip" style="display:block; border-radius:6px">
+              <a href="/work/{{ w.id }}" target="_blank" rel="noopener"
+                 title="open the work to edit its titles, canonical#, type, authors, subjects"><code>#{{ w.id }}</code> {{ w.title }}</a>
+              {% if w.work_type %}<small class="hint">[{{ w.work_type }}]</small>{% endif %}
+              {% if w.canonical %}<small class="hint">· {{ w.canonical }}</small>{% endif %}
+              {% if w.authors %}<small class="hint">— {{ w.authors|join(', ') }}</small>{% endif %}
+              <span style="float:right">
+                <a class="lnk" href="/work/{{ w.id }}" target="_blank" rel="noopener"
+                   title="edit / merge / delete this work (opens the work page)">edit ↗</a>
+                <form method="post" action="/works/detect/{{ eid }}/work/unlink" style="display:inline">
+                  <input type="hidden" name="work_id" value="{{ w.id }}">
+                  <button title="unlink (keep the work, just detach it from this edition)">✕</button></form>
+              </span>
+            </div>
+          {% else %}<span class="hint">none</span>{% endfor %}
+          {{ work_picker(eid, '/works/detect/%d/work/link'|format(eid), 'Link or add a work') }}
+        </td></tr>
+      {% endif %}
+
+      {# ── ISBN — editable in Review (in-place, like the stored title); plain on Browse ── #}
+      <tr{% if not editable %} class="ro"{% endif %}><td class="lbl">ISBN</td>
+        <td>
+          {% if editable %}
+            <input id="ed-isbn-{{ eid }}" value="{{ isbn or '' }}" size="20" placeholder="ISBN-10/13">
+            <button type="button" onclick="saveEditionIsbn({{ eid }}, this)">Save</button>
+            {% if isbn_url %} <a href="{{ isbn_url }}" target="_blank" rel="noopener">Google Books ↗</a>{% endif %}
+          {% else %}{% if isbn %}{{ isbn }}{% if isbn_url %} <a href="{{ isbn_url }}" target="_blank" rel="noopener">Google Books ↗</a>{% endif %}{% else %}<span class="hint">—</span>{% endif %}{% endif %}
+        </td></tr>
+
+      {# ── Tradition — the edition's Buddhist lineage. Editable in Review (in-place, like
+         ISBN); plain on Browse. Free-text box with the config-driven vocab as suggestions. ── #}
+      {% if editable or (tradition is defined and tradition) %}
+      <tr{% if not editable %} class="ro"{% endif %}><td class="lbl">Tradition</td>
+        <td>
+          {% if editable %}
+            <input id="ed-tradition-{{ eid }}" value="{{ tradition or '' }}" size="20"
+                   list="ed-tradition-opts-{{ eid }}" placeholder="e.g. Gelug">
+            <datalist id="ed-tradition-opts-{{ eid }}">
+              {% for t in traditions | default([]) %}<option value="{{ t }}">{% endfor %}
+            </datalist>
+            <button type="button" onclick="saveEditionTradition({{ eid }}, this)">Save</button>
+          {% else %}{{ tradition }}{% endif %}
+        </td></tr>
+      {% endif %}
+
+      {# ── File location(s) — read-only in BOTH modes: where the holding's file lives
+         on disk, paired with the 📖↗ open-in-viewer control. Holdings are MANAGED in
+         _edition_extras.html; this just surfaces the path so it's visible at a glance
+         (the recurring "where is this book's file?" gap). ── #}
+      <tr class="ro"><td class="lbl">File</td>
+        <td>
+          {% if holdings %}
+            {% for h in holdings %}
+              <div style="word-break:break-all; margin:.1rem 0">
+                {% if h.has_file %}
+                  <span class="hint">{{ h.label }}:</span>
+                  <span{% if h.missing %} style="color:#a00"{% endif %}>{{ h.path }}</span>
+                  {% with item = {'holding_id': h.id, 'has_file': true, 'file_ext': h.ext, 'missing': h.missing}, icon_only = true %}{% include '_open_control.html' %}{% endwith %}
+                {% else %}<span class="hint">{{ h.label }}: (no file on disk)</span>{% endif %}
+              </div>
+            {% endfor %}
+          {% else %}<span style="color:#a00">⚠ no file linked — this edition has no holding (broken link)</span>{% endif %}
+        </td></tr>
+
+      {# ── Notes — book-level note; editable in Review (textarea), plain on Browse.
+         Shown on Browse only when present; always shown in Review so a note can be added. ── #}
+      {% if editable or (notes is defined and notes) %}
+      <tr{% if not editable %} class="ro"{% endif %}><td class="lbl">Notes</td>
+        <td>
+          {% if editable %}
+            <textarea id="ed-notes-{{ eid }}" rows="6" style="width:100%;box-sizing:border-box" placeholder="Book-level note…">{{ notes or '' }}</textarea>
+            <button type="button" onclick="saveEditionNotes({{ eid }}, this)">Save</button>
+          {% else %}<div style="white-space:pre-line">{{ notes }}</div>{% endif %}
+        </td></tr>
+      {% endif %}
+
+      {# ── Cover — pin the cover to a page of one of the files, or upload one (Review
+         only). Reverts to the automatic ISBN art on reset. ── #}
+      {% if editable %}
+      <tr><td class="lbl">Cover</td>
+        <td>{% include '_cover_card.html' %}</td></tr>
+      {% endif %}
+    </tbody></table>
+  </details>
+</fieldset>

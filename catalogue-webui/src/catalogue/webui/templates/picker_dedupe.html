@@ -1,0 +1,90 @@
+{% extends "_base.html" %}
+{% block title %}Deduplicate contributors{% endblock %}
+{% block body %}
+{% set total_dups = report.merges | map(attribute='absorbed') | map('length') | sum %}
+<style>
+  .dd-wrap { max-width: 1000px; }
+  .dd-banner { padding: .5rem .8rem; border-radius: 6px; margin: .6rem 0; }
+  .dd-banner.ok { background: #e6f7ee; color: #176; border: 1px solid #b8e6cd; }
+  .dd-banner.info { background: #eef6ff; color: #234; border: 1px solid #cfe2ff; }
+  .dd-list { list-style: none; padding: 0; }
+  .dd-comp { border: 1px solid var(--border); border-radius: 8px; padding: .5rem .8rem; margin: .5rem 0; }
+  .dd-comp .canon { font-weight: 600; }
+  .dd-comp ul { margin: .3rem 0 0; padding-left: 1.2rem; }
+  .dd-comp li { margin: .15rem 0; }
+  .dd-comp code { color: var(--subtle-fg); }
+  .dd-comp small { color: var(--subtle-fg); }
+  .dd-skip { color: #a33; font-weight: 600; }
+  .dd-review { border: 1px solid #f0d8a8; background: #fffaf0; border-radius: 8px;
+               padding: .5rem .8rem; margin: .4rem 0; }
+  .dd-apply { margin: 1rem 0; }
+  .dd-apply button { padding: .5rem 1rem; cursor: pointer; }
+  .dd-apply button.danger { color: #a00; }
+</style>
+<div class="dd-wrap">
+<h1>Deduplicate contributors <span class="hint">(authority-linked)</span></h1>
+<p class="hint">Collapses <code>person</code> records that the authority cross-links
+  prove are the same person — directly (a shared id) or transitively (one record’s
+  links reach another’s). This is the deep-linking dedup; binding alone never merges.</p>
+
+{% if applied %}
+  <div class="dd-banner ok">✓ Merged <b>{{ report.merged_rows }}</b> duplicate record(s)
+    into <b>{{ report.merges | selectattr('absorbed') | list | length }}</b> canonical record(s).</div>
+{% elif report.merges %}
+  <div class="dd-banner info"><b>Dry run.</b> Nothing has changed yet —
+    review the {{ total_dups }} proposed merge(s) below, then Apply.</div>
+{% endif %}
+
+{% if not report.merges and not report.review %}
+  <p>✓ No authority-linked duplicates found — every bound contributor is already unique.</p>
+{% endif %}
+
+{% if report.merges %}
+  <h2>{{ 'Merged' if applied else 'Proposed merges' }}
+    <span class="hint">— which records fold into which</span></h2>
+  <ul class="dd-list">
+    {% for m in report.merges %}
+      <li class="dd-comp">
+        <span class="canon">#{{ m.into }} · {{ m.into_name }}</span>
+        <span class="hint">{{ '←' }} {{ 'absorbed' if applied else 'will absorb' }}:</span>
+        <ul>
+          {% for a in m.absorbed %}
+            <li>
+              <code>#{{ a.id }}</code> {{ a.name }}
+              {% if a.via %}<small>via {{ a.via | join(', ') }}</small>{% endif %}
+              {% if a.skipped %}<span class="dd-skip">— SKIPPED</span>
+              {% elif a.works is not none %}<small>[{{ a.works }} work(s), {{ a.editions }} edition slot(s) re-pointed]</small>{% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      </li>
+    {% endfor %}
+  </ul>
+{% endif %}
+
+{% if not applied and report.merges %}
+  <form class="dd-apply" method="post" action="{{ url_for('picker_dedupe_apply') }}"
+        onsubmit="return confirm('Merge {{ total_dups }} duplicate contributor record(s) into {{ report.merges|length }} canonical record(s)?\n\nThis writes to the catalogue.');">
+    <button type="submit" class="danger">Apply — merge {{ total_dups }} record(s)</button>
+  </form>
+  <p class="hint">Safer trial: point the server at a copy first —
+    <code>python3 -m catalogue.domain.sandbox fork</code>, then
+    <code>CATALOGUE_DB=catalogue-db/catalogue.db.sandbox python3 -m catalogue.webui.web</code>,
+    dedupe there, and <code>… sandbox promote</code> once it looks right.</p>
+{% endif %}
+
+{% if report.review %}
+  <h2>Left for manual review <span class="hint">(NOT merged — see them in <a href="{{ url_for('picker_list', kind='person') }}">Resolve persons</a>)</span></h2>
+  {% for r in report.review %}
+    <div class="dd-review">records {{ r.members | join(', ') }} — {{ r.reason }}</div>
+  {% endfor %}
+{% endif %}
+
+{% if report.skipped %}
+  <h2 class="dd-skip">Skipped ({{ report.skipped | length }})</h2>
+  <ul>{% for s in report.skipped %}<li>#{{ s.dup }} → #{{ s.into }}: {{ s.error }}</li>{% endfor %}</ul>
+{% endif %}
+
+<p style="margin-top:1.2rem"><a href="{{ url_for('picker_list', kind='person') }}">← back to Resolve persons</a></p>
+</div>
+{% endblock %}

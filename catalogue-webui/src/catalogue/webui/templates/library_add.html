@@ -1,0 +1,23 @@
+{% extends "_base.html" %}
+{% block title %}Add a book{% endblock %}
+{% block body %}
+<p><a href="/library">← Library</a></p>
+<h1>Add a book</h1>
+<p class="stub">Upload a PDF or EPUB. It's registered as a new edition + holding,
+  text is extracted, and its contents are segmented into works — then it opens in
+  the editor for you to confirm. For physical books with an ISBN, use
+  <a href="/capture">Capture</a> instead.</p>
+
+{% if result and result.error %}
+<div style="background:#fdecea; color:#900; border:1px solid #f5c2c0; padding:.5rem .7rem; margin:.6rem 0">
+  Could not add the book: {{ result.error }}
+</div>
+{% endif %}
+
+<form method="post" action="/library/add" enctype="multipart/form-data" style="margin:.8rem 0">
+  <p><input type="file" name="file" accept=".pdf,.epub" required></p>
+  <button type="submit">Upload &amp; process</button>
+</form>
+<p class="hint">Large scans take a while to extract — the page waits until the
+  book is registered, then redirects you to it.</p>
+{% endblock %}

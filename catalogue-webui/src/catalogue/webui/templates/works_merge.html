@@ -1,0 +1,56 @@
+{% extends "_base.html" %}
+{% block title %}Merge & link works{% endblock %}
+{% block body %}
+<h1>Merge &amp; link works</h1>
+<p class="stub">The works twin of <a href="/picker/person">Review persons</a>: collapse
+  duplicate Work rows so an English translation, a Sanskrit edition and a Tibetan
+  edition of one text share ONE work. Each group below is a set of works that look
+  like the same text; <b>merge</b> folds a duplicate into the canonical work (lowest
+  id, ✓) — re-pointing its editions, contributors, aliases and subjects — or open a
+  work to merge it by hand.</p>
+
+{% if not sections %}
+  <p class="stub">No duplicate-work groups detected. 🎉</p>
+{% endif %}
+
+{% for title, hint, groups in sections %}
+  <h2>{{ title }} <span class="hint">({{ groups|length }} — {{ hint }})</span></h2>
+  {% for grp in groups %}
+    <table style="margin:.4rem 0; border-collapse:collapse">
+      {% for m in grp.members %}
+        <tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:.2rem .5rem">
+            {% if m.work_id == grp.winner %}<b title="canonical (merge target)">✓</b>{% endif %}
+          </td>
+          <td style="padding:.2rem .5rem">
+            <a href="/work/{{ m.work_id }}">#{{ m.work_id }}</a>
+          </td>
+          <td style="padding:.2rem .5rem">{{ m.title }}</td>
+          <td style="padding:.2rem .5rem" class="hint">{{ m.authors|join(', ') or '—' }}</td>
+          <td style="padding:.2rem .5rem" class="hint">{{ m.n_editions }} ed.</td>
+          <td style="padding:.2rem .5rem">
+            {% if m.work_id != grp.winner %}
+              <form method="post" action="/works/merge" style="display:inline"
+                    onsubmit="return confirm('Fold work #{{ m.work_id }} into #{{ grp.winner }}? This re-points its editions and cannot be auto-undone.');">
+                <input type="hidden" name="dup" value="{{ m.work_id }}">
+                <input type="hidden" name="into" value="{{ grp.winner }}">
+                <button type="submit">Merge into #{{ grp.winner }}</button>
+              </form>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+    </table>
+  {% endfor %}
+{% endfor %}
+
+{% if volume_sets %}
+  <h2>Multi-volume sets <span class="hint">({{ volume_sets|length }} — group, don't merge)</span></h2>
+  <p class="stub">These share a title + author but span distinct volume numbers — a set,
+    not duplicates. Group them from a work/edition page; do not merge here.</p>
+  {% for grp in volume_sets %}
+    <p>{{ grp.members|map(attribute='title')|join(' · ') }}
+      <span class="hint">(#{{ grp.members|map(attribute='work_id')|join(', #') }})</span></p>
+  {% endfor %}
+{% endif %}
+{% endblock %}

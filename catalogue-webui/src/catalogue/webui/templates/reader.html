@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>{{ title }}</title>
+  <link rel="stylesheet" href="/static/reader/reader.css">
+  <link rel="stylesheet" href="/static/reader/reader-themes.css"><!-- generated from palette.json reading_themes -->
+</head>
+<body>
+  <div class="tabstrip hidden" id="tabstrip"></div>{# open books (tabs) — shown when 2+ are open #}
+  {# Two bars, the SAME structure the shared readerChromeVM defines and iOS renders: GENERAL options on
+     the left (exit / contents / search / star), TEXT options on the right (size / reflow / theme + the
+     annotation & bookmark tools). Desktop shows them inline; the ⋯ overflow is a phone concern. #}
+  <div class="topbar">
+    <div class="bar bar-general">
+      <a class="fbtn" href="/" title="Back to library" aria-label="Done">‹</a>
+      <button type="button" class="fbtn" id="tocBtn" title="Contents" aria-label="Table of contents">☰</button>
+      <button type="button" class="fbtn" id="searchBtn" title="Search in book" aria-label="Search in book">🔍</button>
+      <button type="button" class="fbtn" id="refreshBtn" title="Refresh marks from other devices" aria-label="Refresh">⟳</button>
+      {% if can_edit() %}<button type="button" class="fbtn rdr-star" id="favBtn" title="Star this book"
+              aria-label="Star this book" aria-pressed="{{ 'true' if starred else 'false' }}">{{ '★' if starred else '☆' }}</button>{% endif %}
+    </div>
+    <span class="title">{{ title }}</span>
+    <div class="bar bar-text">
+      <button type="button" class="fbtn small" id="fdec" title="Smaller text" aria-label="Smaller text">A</button>
+      <button type="button" class="fbtn big" id="finc" title="Larger text" aria-label="Larger text">A</button>
+      {% if ext == 'pdf' %}<button type="button" class="fbtn" id="reflowBtn" title="Reflow to text" aria-label="Reflow page to text" aria-pressed="false">¶</button>{% endif %}
+      <button type="button" class="fbtn" id="gotoBtn" title="Go to page" aria-label="Go to page">⇥</button>
+      <button type="button" class="fbtn" id="themeBtn" title="Reading theme" aria-label="Cycle reading theme">◐</button>
+      {% if can_download() %}{# annotation tools + bookmarks are the owner's — hidden for viewers #}
+      <span class="toolsep"></span>
+      {# Reading mode by default; ✍ arms annotation (handwriting) — keeps opening/scrolling fast. #}
+      <button type="button" class="fbtn tool" id="annotateBtn" title="Annotate (handwriting)" aria-label="Toggle annotation mode">✍</button>
+      <span id="anntools" class="anntools">{# revealed only in annotate mode (body.annotate-on) #}
+        <button type="button" class="fbtn tool" id="hlBtn" title="Highlight" aria-label="Highlight tool">🖍</button>
+        <button type="button" class="fbtn tool" id="ulBtn" title="Underline" aria-label="Underline tool">U̲</button>
+        <button type="button" class="fbtn tool" id="strikeBtn" title="Strikethrough" aria-label="Strikethrough tool">S̶</button>
+        <button type="button" class="fbtn tool" id="inkBtn" title="Draw / handwrite" aria-label="Draw tool">✎</button>
+        <button type="button" class="fbtn tool" id="noteBtn" title="Add a note" aria-label="Note tool">🅝</button>
+        <button type="button" class="fbtn tool" id="eraseBtn" title="Erase" aria-label="Erase tool">⌫</button>
+        <button type="button" class="fbtn" id="annBtn" title="Annotations" aria-label="Show annotations">▦</button>
+        {% if ext == 'pdf' %}<button type="button" class="fbtn" id="exportBtn" title="Export annotated PDF" aria-label="Export annotated PDF">⬇</button>{% endif %}
+      </span>
+      <span class="toolsep"></span>
+      <button type="button" class="fbtn" id="bmAdd" title="Bookmark this spot" aria-label="Add bookmark">★</button>
+      <button type="button" class="fbtn" id="bmList" title="Bookmarks" aria-label="Show bookmarks">▤</button>
+      {% endif %}
+      <span class="prog" id="prog"></span>
+    </div>
+  </div>
+  <div id="viewer"><noscript><p class="msg">This reader needs JavaScript.{% if can_download() %}
+    <a href="/holding/{{ hid }}/file">Download the file</a> instead.{% endif %}</p></noscript></div>
+  <div id="tocPanel" class="bmpanel tocpanel hidden"></div>{# contents: available to viewers too #}
+  <div id="searchPanel" class="bmpanel searchpanel hidden"></div>{# in-book search #}
+  {% if can_download() %}<div id="bmPanel" class="bmpanel hidden"></div>
+  <div id="annPanel" class="bmpanel annpanel hidden"></div>{# annotation list — editor-only #}
+  <div id="penOpts" class="penopts hidden"></div>{# Draw-tool pen options (colour/width/marker) #}
+  {% if ext == 'pdf' %}<div id="exportMenu" class="penopts hidden">
+    <a class="pen-mode" id="exportCopy" download href="/holding/{{ hid }}/annotated.pdf">Download annotated copy</a>
+    {% if is_local %}<button type="button" class="pen-mode" id="exportInplace">Write into original</button>{% endif %}
+  </div>{% endif %}
+  <div id="hlPopup" class="hlpopup hidden"></div>{# colour picker / note — editor-only #}{% endif %}
+  <button type="button" class="pager left" id="pgPrev" aria-label="Previous page">‹</button>
+  <button type="button" class="pager right" id="pgNext" aria-label="Next page">›</button>
+  <div class="vrail left"></div>
+  <div class="vrail right"></div>
+
+  <!-- The reader engine lives in a standalone, adapter-driven module (reader_module_plan.md
+       Phase 1). This page is now just the WEB SHELL: it owns the markup/CSS above and wires
+       Flask-backed adapters (URL-streamed PDF, fetch-bytes EPUB, /position get/save/beacon)
+       into ReaderCore. The PWA / a future native webview drive the SAME engine with their
+       own adapters. -->
+  <script src="/static/reader/vendor.js"></script>
+  <script src="/static/reader/overlay.js"></script>
+  <script src="/static/reader/reader-core.js"></script>
+  <script src="/static/reader/reader-sessions.js"></script>
+  <script src="/static/js/library-core.js"></script>
+  <script src="/static/js/web-recent.js"></script>
+  <script>/* device-local recent list (feeds the Read menu's resume) — web has no synced store */
+    if (window.WebRecent) WebRecent.record({ hid: {{ hid|tojson }}, eid: {{ eid|tojson }},
+                                             title: {{ (title or '')|tojson }}, ext: {{ (ext or '')|tojson }} });</script>
+  <script>
+    // Multi-book tabs: record THIS book as open, then render the strip (only when 2+ are open).
+    // Each tab links to that book's reader page (active = the current EID); × closes the tab.
+    (function () {
+      if (!window.ReaderSessions) return;
+      var EID = {{ eid }};
+      ReaderSessions.open({ eid: EID, hid: {{ hid }}, title: {{ title | tojson }} });
+      function render() {
+        var strip = document.getElementById('tabstrip');
+        if (!strip) return;
+        var books = ReaderSessions.list();
+        strip.innerHTML = '';
+        if (books.length < 2) { strip.classList.add('hidden'); return; }
+        strip.classList.remove('hidden');
+        books.forEach(function (b) {
+          var tab = document.createElement('div');
+          tab.className = 'rtab' + (b.eid === EID ? ' active' : '');
+          var a = document.createElement('a');
+          a.className = 'rtab-t'; a.href = '/edition/' + b.eid + '/read'; a.textContent = b.title;
+          var x = document.createElement('button');
+          x.className = 'rtab-x'; x.type = 'button'; x.textContent = '×'; x.title = 'Close tab';
+          x.addEventListener('click', function (e) {
+            e.preventDefault(); ReaderSessions.close(b.eid); render();
+          });
+          tab.appendChild(a); tab.appendChild(x); strip.appendChild(tab);
+        });
+      }
+      render();
+    })();
+  </script>
+  <script>
+    // Star (favourite) THIS edition from the reader top bar — toggles via the shared
+    // LibraryCore.starredRequest mapper (same request web/PWA/iOS issue), updating the ★/☆ glyph.
+    (function () {
+      var btn = document.getElementById('favBtn');
+      if (!btn || !window.LibraryCore) return;
+      var EID = {{ eid }};
+      btn.addEventListener('click', function () {
+        var on = btn.getAttribute('aria-pressed') !== 'true';
+        btn.setAttribute('aria-pressed', on ? 'true' : 'false'); btn.textContent = on ? '★' : '☆';
+        var req = LibraryCore.starredRequest(on ? 'star' : 'unstar', { eid: EID });
+        fetch(req.path, { method: req.method, headers: { 'Content-Type': 'application/json' },
+                          body: req.body ? JSON.stringify(req.body) : undefined })
+          .then(function (r) { if (!r.ok) throw 0; })
+          .catch(function () {           // rollback on failure
+            btn.setAttribute('aria-pressed', on ? 'false' : 'true'); btn.textContent = on ? '☆' : '★';
+          });
+      });
+    })();
+  </script>
+  <script>
+    const HID = {{ hid }};
+    const CAN_DL = {{ can_download() | tojson }};   // viewer (read-only) → no download links
+    const FILE_URL = `/holding/${HID}/file`;
+    const POS_URL  = `/holding/${HID}/position`;
+
+    // POST one bookmark op (add / rename / delete) to the offline-first sync endpoint.
+    const _bmPost = (fields) =>
+      fetch('/sync/reader', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ops: [Object.assign({ type: 'bookmark' }, fields)] }) }).then(() => {});
+    const _annPost = (fields) =>
+      fetch('/sync/reader', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ops: [Object.assign({ type: 'annotation' }, fields)] }) }).then(() => {});
+    const _uuid = () => (self.crypto && crypto.randomUUID) ? crypto.randomUUID()
+      : ('id-' + Date.now() + '-' + Math.random().toString(16).slice(2));
+
+    ReaderCore.mount({
+      ext: "{{ ext }}",
+      els: {
+        viewer:  document.getElementById('viewer'),
+        prog:    document.getElementById('prog'),
+        topbar:  document.querySelector('.topbar'),
+        pgPrev:  document.getElementById('pgPrev'),
+        pgNext:  document.getElementById('pgNext'),
+        fdec:    document.getElementById('fdec'),
+        finc:    document.getElementById('finc'),
+        bmAdd:   document.getElementById('bmAdd'),    // null for a read-only viewer (not rendered)
+        bmList:  document.getElementById('bmList'),
+        bmPanel: document.getElementById('bmPanel'),
+        tocBtn:  document.getElementById('tocBtn'),   // contents — rendered for everyone
+        tocPanel: document.getElementById('tocPanel'),
+        themeBtn: document.getElementById('themeBtn'),
+        gotoBtn: document.getElementById('gotoBtn'),       // typed jump: page (PDF) / position (EPUB)
+        reflowBtn: document.getElementById('reflowBtn'),   // PDF-only reflow-to-text toggle
+        searchBtn: document.getElementById('searchBtn'),
+        refreshBtn: document.getElementById('refreshBtn'),   // re-pull marks from other devices
+        searchPanel: document.getElementById('searchPanel'),
+        hlPopup: document.getElementById('hlPopup'),   // null for a read-only viewer
+        // Annotation tools (editor-only; null for a read-only viewer → tools stay off).
+        annotateBtn: document.getElementById('annotateBtn'),
+        hlBtn:    document.getElementById('hlBtn'),
+        ulBtn:    document.getElementById('ulBtn'),
+        strikeBtn: document.getElementById('strikeBtn'),
+        inkBtn:   document.getElementById('inkBtn'),
+        noteBtn:  document.getElementById('noteBtn'),
+        eraseBtn: document.getElementById('eraseBtn'),
+        annBtn:   document.getElementById('annBtn'),
+        annPanel: document.getElementById('annPanel'),
+        penOpts:  document.getElementById('penOpts'),
+      },
+      // Byte source. PDF streams by URL (range requests — never loads a 50M file whole), but with
+      // a 1MB rangeChunkSize instead of pdf.js's 64KB default: a non-linearized PDF makes pdf.js
+      // walk the object graph one dependency at a time, so 64KB chunks meant DOZENS of sequential
+      // range round-trips for the first page — pathological over a high-latency tunnel (Cloudflare).
+      // 1MB chunks cut the round-trips ~16x while still rendering page 1 without the whole file.
+      // EPUB fetches the bytes (epub.js needs an unambiguous archive, see reader-core).
+      io: {
+        pdfSource: () => ({ url: FILE_URL, rangeChunkSize: 1048576 }),
+        // EPUB: fetch the whole archive, STREAMING the body so we can report download progress
+        // (received / total bytes) to the engine's overlay — a big EPUB over the tunnel is a long
+        // blank otherwise. Falls back to a plain arrayBuffer() if streaming isn't available.
+        epubData: async (onProgress) => {
+          const r = await fetch(FILE_URL);
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          if (!r.body || !onProgress) return r.arrayBuffer();
+          const total = +(r.headers.get('Content-Length') || 0);   // may be 0 over a chunked proxy
+          const reader = r.body.getReader();
+          const chunks = []; let received = 0;
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            chunks.push(value); received += value.length;
+            try { onProgress(received, total); } catch (e) {}
+          }
+          const out = new Uint8Array(received); let off = 0;
+          for (const c of chunks) { out.set(c, off); off += c.length; }
+          return out.buffer;
+        },
+      },
+      // Reading position → the server's reading_position row (resumes + syncs across devices).
+      position: {
+        get: () => fetch(POS_URL).then(r => r.ok ? r.json() : {}).catch(() => ({})),
+        save: (locator, fraction) => {
+          fetch(POS_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ locator, fraction }), keepalive: true }).catch(() => {});
+        },
+        saveBeacon: (locator, fraction) => {
+          try {
+            navigator.sendBeacon(POS_URL, new Blob(
+              [JSON.stringify({ locator, fraction })], { type: 'application/json' }));
+          } catch (e) {}
+        },
+      },
+      // Bookmarks → the offline-first /sync/reader store (synced across devices). Each add is
+      // a client-uuid'd op; a delete is a tombstone (set deleted_at) so it propagates on sync.
+      // Only wired for an editor — the chrome above isn't rendered for a read-only viewer.
+      bookmarks: {
+        list: () => fetch(`/sync/reader?holding=${HID}`)   // holding-scoped: tiny, not a whole-table pull
+          .then(r => r.ok ? r.json() : { bookmarks: [] })
+          .then(d => (d.bookmarks || []).sort((a, b) => (a.fraction || 0) - (b.fraction || 0)))
+          .catch(() => []),
+        add: ({ locator, fraction, label }) => {
+          const id = (self.crypto && crypto.randomUUID) ? crypto.randomUUID()
+            : ('bm-' + Date.now() + '-' + Math.random().toString(16).slice(2));
+          const now = new Date().toISOString();
+          return _bmPost({ id, holding_id: HID, locator: String(locator), fraction, label,
+            created_at: now, updated_at: now });
+        },
+        // Rename = upsert the same id with a new label + bumped updated_at (LWW on the server).
+        rename: (bm, label) => _bmPost({ id: bm.id, holding_id: HID, locator: bm.locator,
+          fraction: bm.fraction, label, created_at: bm.created_at, updated_at: new Date().toISOString() }),
+        // Delete = a tombstone (deleted_at) so the removal propagates on sync.
+        remove: (bm) => _bmPost({ id: bm.id, holding_id: HID, locator: bm.locator,
+          fraction: bm.fraction, label: bm.label, created_at: bm.created_at,
+          deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() }),
+      },
+      // Annotations (highlights/notes now; ink later) → the same /sync/reader store. add()
+      // returns the created record (with its id) so the engine can render it immediately.
+      annotations: {
+        list: () => fetch(`/sync/reader?holding=${HID}`)   // holding-scoped: only this book's marks
+          .then(r => r.ok ? r.json() : { annotations: [] })
+          .then(d => (d.annotations || []))
+          .catch(() => []),
+        add: (a) => {   // a = {kind, cfi_range?|page?+rect?, color, note_text?, ink?}
+          const id = _uuid(); const now = new Date().toISOString();
+          return _annPost(Object.assign({ id, holding_id: HID, created_at: now, updated_at: now }, a))
+            .then(() => Object.assign({ id }, a));
+        },
+        update: (a, fields) => _annPost(Object.assign(
+          { id: a.id, holding_id: HID, kind: a.kind, cfi_range: a.cfi_range, page: a.page,
+            rect: a.rect, color: a.color, note_text: a.note_text, ink: a.ink,
+            created_at: a.created_at }, fields, { updated_at: new Date().toISOString() }))
+          .then(() => Object.assign({}, a, fields)),
+        remove: (a) => _annPost({ id: a.id, holding_id: HID, kind: a.kind, cfi_range: a.cfi_range,
+          page: a.page, rect: a.rect, color: a.color, note_text: a.note_text, ink: a.ink,
+          created_at: a.created_at, deleted_at: new Date().toISOString(),
+          updated_at: new Date().toISOString() }),
+      },
+      downloadUrl: CAN_DL ? FILE_URL : null,   // the "Download instead" link on a load error
+    });
+
+    // Export annotated PDF (third-party-tool path). The button toggles a small menu: a
+    // download link for a flattened COPY (original untouched), and — when served locally — a
+    // "write into original" POST. The copy link's <a download> needs no JS.
+    (function () {
+      const btn = document.getElementById('exportBtn');
+      const menu = document.getElementById('exportMenu');
+      if (!btn || !menu) return;
+      btn.addEventListener('click', () => menu.classList.toggle('hidden'));
+      const inplace = document.getElementById('exportInplace');
+      if (inplace) inplace.addEventListener('click', async () => {
+        inplace.textContent = 'Writing…';
+        try {
+          const r = await fetch(`/holding/${HID}/annotated`, { method: 'POST' });
+          inplace.textContent = r.ok ? 'Written ✓'
+            : (r.status === 409 ? 'No annotations' : 'Failed');
+        } catch (e) { inplace.textContent = 'Failed'; }
+        setTimeout(() => { inplace.textContent = 'Write into original'; menu.classList.add('hidden'); }, 1500);
+      });
+    })();
+  </script>
+</body>
+</html>

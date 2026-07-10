@@ -1,0 +1,81 @@
+{# Reusable BULK-ASSIGN control for the book-browser multi-select bar (#bb-bulk-actions).
+   ONE mechanism for assigning any label to many ticked rows — subjects, series, and any
+   future kind — so each is a single `BulkAssign.add({…})` call instead of copy-pasted
+   input + fetch + toast code. Builds on the shell's multi-select layer (bulk_select) and
+   its helpers (bbSelectedIds / bbRefreshDetail / bbClearSelection / bbToast / the chained
+   bbOnSelectionChange). Include ONCE per page, before the page's BulkAssign.add() calls.
+
+   cfg = {
+     key,                       // unique slug (control id)
+     noun,                      // 'subject' | 'series' | … (used in prompts/toast)
+     label,                     // button text, e.g. 'Assign subject'
+     url,                       // POST endpoint; receives {ids, name, ...extra}; returns {assigned, errors}
+     placeholder?, datalist?,   // input hints (datalist = an existing <datalist> id)
+     extra?,                    // extra POST fields (e.g. {subject_kind:'series'})
+     confirm?(name, n) -> str,  // confirm message (default provided)
+     toast?(name, r)   -> str,  // toast message (default provided)
+   }
+#}
+<script>
+(function () {
+  if (window.BulkAssign) return;                       // define once per page
+  const postJSON = (url, body) => fetch(url, {
+    method: 'POST', headers: {'Content-Type': 'application/json', 'X-Requested-With': 'fetch'},
+    body: JSON.stringify(body)}).then(r => r.json());
+
+  function add(cfg) {
+    const host = document.getElementById('bb-bulk-actions');
+    if (!host) return;                                 // bulk_select off / not a review page
+    const span = document.createElement('span');
+    span.className = 'bb-bulk';
+    span.dataset.bulkKey = cfg.key;
+    const input = document.createElement('input');
+    input.placeholder = cfg.placeholder || (cfg.noun + '…');
+    if (cfg.datalist) input.setAttribute('list', cfg.datalist);
+    input.style.cssText = 'font:inherit;width:11em;max-width:40vw';
+    const btn = document.createElement('button');
+    btn.type = 'button'; btn.textContent = cfg.label; btn.disabled = true;
+    span.append(document.createTextNode(' · '), input, document.createTextNode(' '), btn);
+    host.appendChild(span);
+
+    // Chain the selection hook so every control's enable/disable keeps running.
+    const prev = window.bbOnSelectionChange;
+    window.bbOnSelectionChange = ids => { if (prev) prev(ids); btn.disabled = ids.length === 0; };
+
+    btn.addEventListener('click', async () => {
+      const name = (input.value || '').trim();
+      if (!name) { alert('Type or pick a ' + cfg.noun + ' first.'); input.focus(); return; }
+      const ids = (window.bbSelectedIds ? window.bbSelectedIds() : []).map(Number);
+      if (!ids.length) return;
+      const msg = cfg.confirm ? cfg.confirm(name, ids.length)
+        : `Assign ${cfg.noun} “${name}” to ${ids.length} item(s)?`;
+      if (!confirm(msg)) return;
+      btn.disabled = true;
+      let r;
+      try { r = await postJSON(cfg.url, Object.assign({ids, name}, cfg.extra || {})); }
+      catch (e) { alert('Network error.'); btn.disabled = false; return; }
+      const done = r.assigned || [];
+      done.forEach(id => { if (window.bbRefreshDetail) window.bbRefreshDetail(id); });
+      // Fold a newly-created value into this control's datalist so it autocompletes for
+      // the next bulk op without a page reload (mirrors the per-row datalist live-update).
+      if (cfg.datalist && done.length) {
+        var dl = document.getElementById(cfg.datalist), exists = false;
+        if (dl) {
+          for (var i = 0; i < dl.options.length; i++)
+            if (dl.options[i].value.toLowerCase() === name.toLowerCase()) { exists = true; break; }
+          if (!exists) { var o = document.createElement('option'); o.value = name; dl.appendChild(o); }
+        }
+      }
+      // KEEP the editions checked so the operator can run another bulk op on the SAME
+      // set (e.g. assign a subject, then a series); only "select all" / manual untick
+      // clears them. Re-sync the selection so the action buttons re-enable.
+      if (window.bbRefreshSelection) window.bbRefreshSelection();
+      input.value = '';
+      if (window.bbToast) window.bbToast(cfg.toast ? cfg.toast(name, r)
+        : `${cfg.noun} “${name}” → ${done.length} book(s)`
+          + ((r.errors || []).length ? `, ${r.errors.length} failed` : ' ✓'));
+    });
+  }
+  window.BulkAssign = { add };
+})();
+</script>
