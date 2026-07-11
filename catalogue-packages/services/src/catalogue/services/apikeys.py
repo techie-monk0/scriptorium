@@ -2,11 +2,14 @@
 
 Per key, resolution is: environment variable wins, else a `KEY=VALUE` line in a
 git-ignored secret file — `api_key.txt` (the project's existing key store), then
-`.kdrive_settings`. A bare single-line `api_key.txt` (the legacy format) is read as
-`ANTHROPIC_API_KEY`, so nothing breaks. An `export ` prefix and surrounding quotes are
-tolerated, so shell-style files work too.
+`.kdrive_settings`. Those files live in `private/secrets/` (their home; the whole
+dir is git-ignored so secrets are never committed even though `private/` is
+tracked); the repo root and CWD are also searched for backward compatibility. A
+bare single-line `api_key.txt` (the legacy format) is read as `ANTHROPIC_API_KEY`,
+so nothing breaks. An `export ` prefix and surrounding quotes are tolerated, so
+shell-style files work too.
 
-Put every key in ONE file — `api_key.txt`, one per line:
+Put every key in ONE file — `private/secrets/api_key.txt`, one per line:
 
     ANTHROPIC_API_KEY=sk-ant-...
     GOOGLE_BOOKS_API_KEY=AIza...
@@ -23,15 +26,21 @@ import os
 from pathlib import Path
 
 SECRET_FILES = ("api_key.txt", ".kdrive_settings")
+#: Preferred home for secret files — a git-ignored dir inside the tracked private/ tree.
+SECRET_SUBDIR = Path("private") / "secrets"
 
 
 def _roots():
-    out = [Path.cwd()]
+    bases = [Path.cwd()]
     try:
-        out.append(Path(__file__).resolve().parents[2])      # repo root
+        bases.append(Path(__file__).resolve().parents[2])    # repo root (best-effort)
     except Exception:
         pass
-    return out
+    roots = []
+    for b in bases:
+        roots.append(b / SECRET_SUBDIR)                      # new home wins
+        roots.append(b)                                      # legacy: CWD / repo root
+    return roots
 
 
 def _parse(text: str, *, bare_is_anthropic: bool) -> dict:
@@ -74,5 +83,6 @@ def get(name: str, default=None):
 def require(name: str) -> str:
     v = get(name)
     if not v:
-        raise RuntimeError(f"missing {name}: set the env var or add `{name}=...` to api_key.txt")
+        raise RuntimeError(
+            f"missing {name}: set the env var or add `{name}=...` to private/secrets/api_key.txt")
     return v

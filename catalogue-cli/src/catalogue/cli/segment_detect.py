@@ -4,7 +4,7 @@ Over the operator-marked `multi_work` editions, runs the deterministic segmenter
 the local-model grouping pass + the configured cloud-model grouping pass (claude or
 gemini, per vocab.json `_external_llm`), so you can compare them. WRITES NOTHING canonical.
 
-  caffeinate -i -s python3 -m catalogue.cli.segment_detect catalogue-db/catalogue.db
+  caffeinate -i -s python3 -m catalogue.cli.segment_detect private/catalogue-db/catalogue.db
   ... --no-cloud       # skip the cloud model (claude/gemini, per vocab.json _external_llm)
   ... --no-local       # skip gemma (e.g. Ollama not running)
   ... --offline        # skip BDRC per-work canonical lookups (network)

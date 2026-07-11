@@ -2,7 +2,7 @@
 and NOT in the repo, so every entrypoint resolves its path through one function.
 
 Contract under test:
-  default_db_path()  ->  $CATALOGUE_DB  >  $CATALOGUE_DATA_DIR/catalogue.db  >  ./catalogue-db/catalogue.db
+  default_db_path()  ->  $CATALOGUE_DB  >  $CATALOGUE_DATA_DIR/catalogue.db  >  ./private/catalogue-db/catalogue.db
   data_dir()         ->  the directory that holds the DB + its sidecar caches
   require_db()       ->  actionable FileNotFoundError when the file is absent
   connect_ro()       ->  same friendly error (read-only cannot create a DB)
@@ -31,9 +31,9 @@ def clean_env(monkeypatch):
 
 # ── resolution precedence ───────────────────────────────────────────────────
 def test_fallback_is_repo_relative(clean_env):
-    """No env → the git-ignored repo-relative default."""
-    assert default_db_path() == os.path.join("catalogue-db", "catalogue.db")
-    assert data_dir() == "catalogue-db"
+    """No env → the repo-relative default under the private/ tree."""
+    assert default_db_path() == os.path.join("private", "catalogue-db", "catalogue.db")
+    assert data_dir() == os.path.join("private", "catalogue-db")
 
 
 def test_data_dir_env_places_db_inside_it(clean_env):
@@ -122,5 +122,5 @@ def test_fresh_process_honours_catalogue_db_env(tmp_path):
     assert proc.returncode == 0, proc.stderr
     assert target.is_file(), f"DB not created at $CATALOGUE_DB; stdout={proc.stdout!r}"
     assert "init OK" in proc.stdout
-    # It must NOT have fallen back to ./catalogue-db/ under the temp CWD.
-    assert not (tmp_path / "catalogue-db").exists()
+    # It must NOT have fallen back to ./private/catalogue-db/ under the temp CWD.
+    assert not (tmp_path / "private" / "catalogue-db").exists()

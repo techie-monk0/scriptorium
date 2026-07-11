@@ -1,6 +1,6 @@
 """Apply verified single-work detections (work_detection) into the canonical tables
 — the rebuild. Dry-run by default. BACK UP first (it drops degenerate works):
-`cp catalogue-db/catalogue.db catalogue-db/catalogue.db_store.pre-apply-$(date +%s).bak`.
+`cp private/catalogue-db/catalogue.db private/catalogue-db/catalogue.db_store.pre-apply-$(date +%s).bak`.
 
   python3 -m catalogue.cli.works_apply DB                       # preview counts
   python3 -m catalogue.cli.works_apply DB --apply               # apply all single detections

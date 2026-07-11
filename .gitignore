@@ -1,9 +1,11 @@
-# catalogue-db/ is RUNTIME USER DATA, never committed. It holds the user-supplied
-# catalogue.db (the personal library), its WAL sidecars, local backups, cover
-# caches, and pinned covers. The code resolves the DB location via db_store's
-# default_db_path() ($CATALOGUE_DB → $CATALOGUE_DATA_DIR → ./catalogue-db/), so the
-# data can live anywhere; this repo ships no database. Back the DB up yourself
-# (git history is NOT its backup anymore).
+# The catalogue DB lives under the tracked private/ tree (stripped from the public
+# release). ONLY the live catalogue.db is version-controlled — as a raw blob on the
+# private main branch. Everything else in the dir stays local: WAL sidecars, the
+# backups/ + timestamped *.bak / backup-*.db / *.pre-*.db snapshots, and the
+# .cover-cache / .webdav-cache / covers-pinned / isbn_backfill_*.json sidecars.
+/private/catalogue-db/*
+!/private/catalogue-db/catalogue.db
+# Any legacy top-level catalogue-db/ (pre-move) stays ignored too.
 /catalogue-db/
 *.db-shm
 *.db-wal
@@ -19,24 +21,15 @@ __pycache__/
 *.pyc
 *.pyo
 
-# Timestamped local DB backups (the tracked catalogue-db/catalogue.db is canonical)
+# Timestamped local DB backups + pre-write consistency snapshots — kept locally,
+# NEVER in git (each is ~500MB+). The private/catalogue-db/* rule above already
+# ignores those under the data dir; these globals catch them anywhere.
+# The full pre-2026-06-11 git history lives in ~/Dev-backup/library_cataloging-history.git.
 *.bak-*
-catalogue-db/*.bak-*
 *-backup-*.db
-catalogue-db/*-backup-*.db
 *.backup-*.db
-catalogue-db/*.backup-*.db
 
-# Timestamped consistency snapshots taken before bulk/destructive writes. These
-# are on-disk DB backups kept locally, NOT in git (each is ~500MB+). The full
-# pre-2026-06-11 git history lives in ~/Dev-backup/library_cataloging-history.git.
-catalogue-db/catalogue.snapshot-*.db
-catalogue-db/catalogue.pre-*.db
-
-# Local caches + one-off backfill outputs + OCR scratch (never in git)
-catalogue-db/.cover-cache/
-catalogue-db/.webdav-cache/
-catalogue-db/isbn_backfill_*.json
+# OCR scratch (never in git)
 ocr_review/
 
 # Phantom DBs created when an open connection (or a non-path) was passed where a
@@ -51,8 +44,12 @@ catalogue/db.sqlite
 # Files parked for deletion (REMOVE_ prefix convention)
 REMOVE_*
 
-# Secrets — never commit (API keys live here or in env vars)
+# Secrets live in private/secrets/ (their home). private/ is otherwise tracked, so
+# ignore the whole secrets dir explicitly — nothing under it is ever committed.
+/private/secrets/
+# Belt-and-suspenders: also ignore these by name wherever they appear.
 api_key.txt
+.kdrive_settings
 *.key
 .env
 
@@ -63,19 +60,8 @@ api_key.txt
 .DS_Store
 .claude/
 
-# Empty placeholder DB at repo root (real one is catalogue-db/catalogue.db)
+# Empty placeholder DB at repo root (real one is private/catalogue-db/catalogue.db)
 /catalogue.db
-
-# Large external archive dir + session scratch
-/archival/
-/16_books.md
-/OxfordTantric-Glossary.pdf
-/force_ocr_prasannapada.py
-/_test_summary.txt
-
-# Local WebDAV / kDrive credentials (never commit)
-.kdrive_settings
-catalogue-db/*.bak
 
 # MyScript SDK certificate — a licensed commercial credential, kept local, never
 # committed. Unanchored so it's ignored wherever it sits in the tree.

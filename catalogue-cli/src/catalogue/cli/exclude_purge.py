@@ -16,8 +16,8 @@ the access-API delete trashes the holding files and purges the non-FK closure
 (file-hash caches, `e<id>` cover art) that the old raw DELETE left dangling —
 exactly the edition-id-reuse hazard class. Idempotent; dry-run by default.
 
-  python3 -m catalogue.cli.exclude_purge catalogue-db/catalogue.db          # preview
-  python3 -m catalogue.cli.exclude_purge catalogue-db/catalogue.db --apply  # delete
+  python3 -m catalogue.cli.exclude_purge private/catalogue-db/catalogue.db          # preview
+  python3 -m catalogue.cli.exclude_purge private/catalogue-db/catalogue.db --apply  # delete
 """
 import argparse
 

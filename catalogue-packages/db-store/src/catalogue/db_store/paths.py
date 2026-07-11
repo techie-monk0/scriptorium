@@ -1,14 +1,17 @@
 """Where the catalogue data lives — the single source of truth for DB location.
 
-The database is **user-supplied data, not code**: it is intentionally NOT in the
-git repo (see the top-level `.gitignore`). Every entrypoint — the webui, the CLI,
-the batch pipelines — resolves the DB path through this module so there is exactly
-one policy to reason about.
+The database is **personal data**, kept out of the public release: the live
+``catalogue.db`` sits under the git-ignored-at-publish ``private/`` tree and is the
+only DB file version-controlled (as a raw blob on the private ``main`` branch); its
+sidecars — WAL, backups, snapshots, caches — stay local (see the top-level
+`.gitignore`). Every entrypoint — the webui, the CLI, the batch pipelines —
+resolves the DB path through this module so there is exactly one policy to reason
+about.
 
 Resolution order (`default_db_path()`):
   1. ``$CATALOGUE_DB``        — full path to the ``.db`` file (highest precedence)
   2. ``$CATALOGUE_DATA_DIR``  — a directory; the DB is ``<dir>/catalogue.db``
-  3. ``./catalogue-db/catalogue.db`` — repo-relative fallback (git-ignored)
+  3. ``./private/catalogue-db/catalogue.db`` — repo-relative fallback
 
 The DB's sidecar artifacts (``.cover-cache``, ``.webdav-cache``, ``covers-pinned``)
 live alongside it and are derived from ``data_dir()`` / the DB's parent directory,
@@ -23,9 +26,10 @@ DB_ENV = "CATALOGUE_DB"
 #: Env var naming the directory that holds the DB + its sidecar caches.
 DATA_DIR_ENV = "CATALOGUE_DATA_DIR"
 
-#: Repo-relative fallback used only when neither env var is set. Git-ignored, so a
-#: DB dropped here is never committed; it keeps the zero-config local workflow.
-DEFAULT_DATA_DIR = "catalogue-db"
+#: Repo-relative fallback used only when neither env var is set. Lives under the
+#: private/ tree (stripped from the public release); only the live catalogue.db in
+#: here is tracked. Keeps the zero-config local workflow.
+DEFAULT_DATA_DIR = "private/catalogue-db"
 DB_FILENAME = "catalogue.db"
 
 

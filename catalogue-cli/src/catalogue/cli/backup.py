@@ -8,7 +8,7 @@ WAL into the snapshot, and writes ONE defragmented file with no `-wal`/`-shm`
 baggage. Use this for every backup.
 
 Usage:
-    python -m catalogue.cli.backup                       # → catalogue-db/catalogue-backup-<ts>.db
+    python -m catalogue.cli.backup                       # → private/catalogue-db/catalogue-backup-<ts>.db
     python -m catalogue.cli.backup path/to.db -o out.db
 """
 from __future__ import annotations

@@ -6,7 +6,7 @@ Two hard invariants, set BEFORE any catalogue module is imported:
    accept time (CATALOGUE_INGEST_VERIFY defaults ON in production), which would hit
    the network from inside the promote/accept routes. Force it OFF for tests.
 
-2. NEVER touch the live catalogue DB. The default DB path is `catalogue-db/
+2. NEVER touch the live catalogue DB. The default DB path is `private/catalogue-db/
    catalogue.db` (web.DEFAULT_DB / sandbox.DEFAULT_LIVE, both read CATALOGUE_DB).
    A test that fell back to that default — `create_app()` with no path, a bare
    `sandbox.fork()`, a module CLI default — would mutate REAL data. We point
@@ -30,7 +30,7 @@ os.environ.setdefault("CATALOGUE_ALLOW_OPEN", "1")
 os.environ["CATALOGUE_DB"] = os.path.join(
     tempfile.mkdtemp(prefix="catalogue-test-"), "default.db")
 
-_LIVE_DB = "catalogue-db/catalogue.db"
+_LIVE_DB = "private/catalogue-db/catalogue.db"
 
 
 def _live_fingerprint():

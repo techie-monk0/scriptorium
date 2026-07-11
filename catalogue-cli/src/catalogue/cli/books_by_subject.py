@@ -21,11 +21,11 @@ author on the WORK, so the work path matters.
 "Added" means the EARLIEST `holding.date_added` across an edition's copies. All
 filters intersect; `--subject` is optional, but at least one filter is required.
 
-    python3 -m catalogue.cli.books_by_subject catalogue-db/catalogue.db --subject "Buddhism/Tantra"
-    python3 -m catalogue.cli.books_by_subject catalogue-db/catalogue.db --subject "Buddhism" --author "Tsongkhapa"
-    python3 -m catalogue.cli.books_by_subject catalogue-db/catalogue.db --since-date 2026-06-15
-    python3 -m catalogue.cli.books_by_subject catalogue-db/catalogue.db --subject "Buddhism/Tantra" --since-edition-num 400
-    python3 -m catalogue.cli.books_by_subject catalogue-db/catalogue.db --subject "Buddhism/Madhyamaka" --json
+    python3 -m catalogue.cli.books_by_subject private/catalogue-db/catalogue.db --subject "Buddhism/Tantra"
+    python3 -m catalogue.cli.books_by_subject private/catalogue-db/catalogue.db --subject "Buddhism" --author "Tsongkhapa"
+    python3 -m catalogue.cli.books_by_subject private/catalogue-db/catalogue.db --since-date 2026-06-15
+    python3 -m catalogue.cli.books_by_subject private/catalogue-db/catalogue.db --subject "Buddhism/Tantra" --since-edition-num 400
+    python3 -m catalogue.cli.books_by_subject private/catalogue-db/catalogue.db --subject "Buddhism/Madhyamaka" --json
 """
 from __future__ import annotations
 

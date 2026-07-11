@@ -272,7 +272,7 @@ def test_all_db_access_goes_through_connect():
 
 # ── The live DB invariant (guard; skipped when the file isn't present) ───────
 def test_live_db_has_no_dangling_references():
-    path = "catalogue-db/catalogue.db"
+    path = "private/catalogue-db/catalogue.db"
     if not os.path.exists(path):
         pytest.skip("live DB not present")
     # Open IMMUTABLE read-only: the integrity scan must validate the real live DB
