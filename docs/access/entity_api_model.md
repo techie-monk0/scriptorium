@@ -283,8 +283,7 @@ do not — so soft-delete is **inert on the live app** until Phase 4 routes read
 `wishlist_item` (schema v6, books wanted-not-owned) is also a soft-deletable root (`deleted_at` +
 `rev`, read via `v_live_wishlist_item`), but exposed as a FLAT repo (`access_api/wishlist.py`, like
 `CaptureRepo`) rather than a plan/apply aggregate; its `matched_edition_id` is a real FK with
-`ON DELETE SET NULL` (safe — the referenced edition root soft-deletes, id frozen). See
-`docs/design/wishlist_model.md`.
+`ON DELETE SET NULL` (safe — the referenced edition root soft-deletes, id frozen).
 
 **Declarative backstops + a health command.** Push invariants the schema can hold — `UNIQUE`
 (e.g. `normalized_key`), `NOT NULL`, `CHECK` — into `schema.sql`, so a bug *in* the API still

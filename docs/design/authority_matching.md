@@ -2,7 +2,6 @@
 
 How the catalogue resolves works and people to external authorities (BDRC, 84000,
 Wikidata, VIAF, …), how it disambiguates names, and what is built vs. planned.
-Companion to `catalogue_plan.md` (master plan) and `whats_next.md` (punch list).
 
 Status legend: **[built]** shipped + tested · **[partial]** wired but limited ·
 **[planned]** designed, not yet built.

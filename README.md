@@ -43,7 +43,8 @@ and the full environment-variable reference.
 A monorepo of independent packages with one-way dependencies
 (`contracts ← db-store ← access-api ← services ← apps`), enforced by import-linter.
 The `catalogue.*` library is reusable on its own; the `catalogue-webui` / `-cli` /
-`-pwa` apps are built on top.
+`-pwa` apps are built on top. For the full picture — packages, entities and their
+relationships, reads/writes, ingest, and search — see **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
 
 | Area | What it is |
 |------|-----------|
@@ -69,7 +70,7 @@ Dependency direction is one-way; nothing imports "upward".
 
 The catalogue lives in a SQLite file you supply — it isn't shipped (it's your
 library, and often large). Point at it with `$CATALOGUE_DB`, or drop it in
-`catalogue-db/`. Its covers and caches sit alongside it. **Back it up yourself.**
+`private/catalogue-db/`. Its covers and caches sit alongside it. **Back it up yourself.**
 
 Create a fresh, empty database:
 
@@ -105,11 +106,59 @@ organization markers, traditions, dropdown options) ship as defaults and are
 **user-extensible** without editing the shipped file — drop a `vocab.local.json`
 next to your database. See `catalogue.db_store.authority_vocab`.
 
-## Development
+## Development (uv)
 
-`uv sync` installs the whole workspace editable from one lockfile. Each package has
-its own tests; `uv run pytest` runs the suite. See **[HOWTO.md](HOWTO.md)** for
-day-to-day commands.
+This repo uses **uv** to manage the Python version, the virtualenv, and every package
+in the monorepo — you rarely call `python`/`pip` directly. (Full day-to-day reference,
+including the phone PWA and the server launcher, is in
+**[docs/USAGE.md](docs/USAGE.md)**.)
+
+**Install uv** (once, macOS / Linux):
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+uv --version
+```
+
+**Set up / refresh the workspace** — after cloning, and whenever dependencies change:
+
+```bash
+uv sync        # creates .venv/ and installs every package editable, from uv.lock
+```
+
+"Editable" means code edits are live with no reinstall; if imports break after a pull,
+run `uv sync` again.
+
+**Run things** inside the project env (no manual activation needed):
+
+```bash
+uv run pytest                                      # the whole test suite
+uv run pytest catalogue-packages/db-store/tests    # just one package's tests
+```
+
+**Manage dependencies** — always name the owning package with `--package`:
+
+```bash
+uv add flask --package catalogue-webui         # add a third-party dependency
+uv add access-api --package catalogue-webui    # depend on one of OUR packages
+uv remove flask --package catalogue-webui      # remove one
+uv lock --upgrade && uv sync                   # bump locked versions, then install
+```
+
+Cheat sheet:
+
+| I want to… | Command |
+|------------|---------|
+| Set up / refresh the workspace | `uv sync` |
+| Run the tests | `uv run pytest` |
+| Test one package | `uv run pytest catalogue-packages/<pkg>/tests` |
+| Run any command in the env | `uv run <command>` |
+| Add a dependency to a package | `uv add <dep> --package <pkg>` |
+| Remove a dependency | `uv remove <dep> --package <pkg>` |
+| Re-lock after upstream changes | `uv lock` then `uv sync` |
+
+Troubleshooting: **`uv: command not found`** → reinstall, then open a new terminal;
+**import errors after pulling** → `uv sync`.
 
 ## License
 

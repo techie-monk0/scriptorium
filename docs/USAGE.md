@@ -3,6 +3,9 @@
 A short guide to running the server, reading the web UI, and the two ways to add books
 (physical via the phone app, digitized via folder scan).
 
+> Setting up the toolchain (uv, `uv sync`, running tests, managing dependencies) lives in
+> the README's [Development (uv)](../README.md#development-uv) section.
+
 ## Environment variables
 
 **You don't need to set anything to start the app and browse an existing catalogue** —
@@ -13,7 +16,7 @@ settings can also be set in the web **Settings** page instead (which saves them 
 
 **The few things that are required — and error clearly if missing:**
 
-- **A database.** Defaults to `catalogue-db/catalogue.db`; point elsewhere with
+- **A database.** Defaults to `private/catalogue-db/catalogue.db`; point elsewhere with
   `$CATALOGUE_DB`. If the file doesn't exist, the app tells you how to create one
   (it does not silently start empty). See the README "database" section.
 - **A books folder — only if you add/scan books from disk.** Set `$CATALOGUE_MOUNT_ROOT`
@@ -30,8 +33,8 @@ cloud AI help and online lookups.
 
 | Variable | Purpose | If unset |
 |----------|---------|----------|
-| `CATALOGUE_DB` | Path to the catalogue `.db` file | Falls back to `catalogue-db/catalogue.db`; **errors clearly** if that file is absent |
-| `CATALOGUE_DATA_DIR` | Folder holding the DB + its caches (alternative to `CATALOGUE_DB`) | Uses the `catalogue-db/` folder |
+| `CATALOGUE_DB` | Path to the catalogue `.db` file | Falls back to `private/catalogue-db/catalogue.db`; **errors clearly** if that file is absent |
+| `CATALOGUE_DATA_DIR` | Folder holding the DB + its caches (alternative to `CATALOGUE_DB`) | Uses the `private/catalogue-db/` folder |
 | `CATALOGUE_MOUNT_ROOT` / `CATALOGUE_LIBRARY_ROOT` | Your on-disk books folder(s) (`LIBRARY_ROOT` is `os.pathsep`-separated for several) | Uses the library root set in Settings; **scanning errors clearly** if none is set |
 | `CATALOGUE_INBOX_DIR` | Drop folder scanned first for freshly-added books | No inbox (feature simply off) |
 | `CATALOGUE_TRASH_DIR` | Where deleted book files are moved | Delete-to-Trash **errors clearly** until set (in Settings or here) |
@@ -61,7 +64,7 @@ Open **http://localhost:8000** (or `/app`). It binds `0.0.0.0:8000` so the iPhon
 reach it over Wi-Fi (use the Mac's LAN IP, e.g. `http://192.168.1.50:8000`, from the phone), and
 it's reachable remotely over the tunnel at **https://your-domain.example** — see **Remote access** below.
 
-- Live DB is `catalogue-db/catalogue.db` (the root `catalogue.db` is empty — ignore it).
+- Live DB is `private/catalogue-db/catalogue.db` (the root `catalogue.db` is empty — ignore it).
 - `caffeinate -s` keeps long OCR/LLM passes from freezing when the Mac sleeps (it does **not**
   stop lid-close sleep).
 - To restart and pick up code/credential changes: **Ctrl-C and re-run the launcher**.

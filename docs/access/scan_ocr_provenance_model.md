@@ -7,7 +7,8 @@ edition can have several scans), extending what `text_status` / `digitizer_used`
 already started.
 
 Companion access module: `catalogue/access/scan_ocr.py` (the *only* code that
-touches these tables — see §6). Related: `docs/design/ocr_considerations.md`.
+touches these tables — see §6). The OCR engine that produces this provenance is the
+separate [`techie-monk0/scholia-rag-ocr`](https://github.com/techie-monk0/scholia-rag-ocr) repo.
 
 ---
 

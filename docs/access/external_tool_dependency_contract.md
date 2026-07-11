@@ -5,7 +5,7 @@
 (`catalogue/contracts/external_dep.py` + `conformance.py`); the executor + `ToolRegistry`
 (`catalogue/access_api/tool_policy.py`), `claim()` / `is_flagged()` / `resolve()` / `supersede()`
 (`catalogue/access_api/external_deps.py`), and tool impls (`catalogue/access_api/integrations/`) live
-in access-api. Design narrative + phasing: `citation_edition_contract_plan.md`. Related:
+in access-api. Related:
 `entity_api_model.md` (§4 contracts, §6 writers), `[[abstract-protocol-layers]]`,
 `[[soft-delete-decision]]`, `[[sqlite-id-reuse-hazard]]`.*
 
@@ -155,4 +155,4 @@ until their next `init_db`; a consumer treats `None` as "older than v1".)
 | `IDENTITY_EDIT` | `WARN` (content re-scan forks a new `pub_id` + `superseded_by`) |
 | `DISPLAY_EDIT` | `ALLOW` (fixes propagate into citations via live-join) |
 
-`enqueue_reconcile` is off for v1 ("do nothing" — plan D7 / `later_tasks.md`).
+`enqueue_reconcile` is off for v1 ("do nothing").
