@@ -1,4 +1,4 @@
-# Colophon
+# Scriptorium
 
 **A local-first catalogue for a personal book library** — real authority control,
 full-text search that actually finds things, OCR-aware ingest, and an offline
