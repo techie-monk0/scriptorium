@@ -245,6 +245,9 @@ For PDFs/EPUBs you've digitized or downloaded into the library folder:
 New editions then flow into **Review** (`/review-hub`) for work detection, then
 people/subject resolution. Books under an `ANNOTATED`-named folder are excluded by design.
 
+> OCR of scans is done by a separate project, `scholia-rag-ocr` — see
+> **[INTEGRATIONS.md](INTEGRATIONS.md)** for how the two connect.
+
 ## Once a book is in: Review
 
 `/review-hub` is a tabbed queue (Books / Works / People / Subjects):

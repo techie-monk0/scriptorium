@@ -18,3 +18,4 @@ The access-API (`catalogue.access_api`) architecture every app layer goes throug
 ## Top level
 - [ARCHITECTURE.md](ARCHITECTURE.md) — the overall map: packages, entities, relationships, reads/writes, ingest, search, surfaces. Start here to orient.
 - [USAGE.md](USAGE.md) — entry point / how to run. (The front door.)
+- [INTEGRATIONS.md](INTEGRATIONS.md) — how the catalogue connects to other projects (OCR `scholia-rag-ocr`, …); points to the contract docs.
