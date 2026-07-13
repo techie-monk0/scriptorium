@@ -1,8 +1,9 @@
 # Scriptorium
 
 **A local-first catalogue for a personal book library** — real authority control,
-full-text search that actually finds things, OCR-aware ingest, and an offline
-reader. Your own SQLite database; no server, no cloud required.
+full-text search that actually finds things, OCR-aware ingest, and offline reading
+on the web, a phone PWA, and a native iOS app. Your own SQLite database; no server,
+no cloud required.
 
 Handles everyday ebooks and PDFs, and has deep optional support for scanned and
 scholarly texts (including Tibetan/Sanskrit/Buddhist material).
@@ -43,15 +44,18 @@ and the full environment-variable reference.
 A monorepo of independent packages with one-way dependencies
 (`contracts ← db-store ← access-api ← services ← apps`), enforced by import-linter.
 The `catalogue.*` library is reusable on its own; the `catalogue-webui` / `-cli` /
-`-pwa` apps are built on top. For the full picture — packages, entities and their
-relationships, reads/writes, ingest, and search — see **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
+`-pwa` apps and the native iOS app (`catalogue-app`) are built on top. For the full
+picture — packages, entities and their relationships, reads/writes, ingest, and
+search — see **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
 
 | Area | What it is |
 |------|-----------|
 | `catalogue/` (packages) | The reusable library: data layer, the authorized read/write API, business logic, ingest pipelines |
-| `catalogue-webui/` | Flask web UI + the HTTP API the PWA consumes |
+| `catalogue-webui/` | Flask web UI + the HTTP API the PWA and native app consume |
 | `catalogue-cli/` | Batch/admin operations (dedup, backup, content-index build) |
 | `catalogue-pwa/` | Installable, offline-first phone app |
+| `catalogue-app/` | Native iOS reader/library client — **Scriptorium Reader** (browse, search, read, sync annotations, offline replica) |
+| `reader-sdks/` | Reusable, host-agnostic reading engines the app embeds: **octavo** (PDF/EPUB) and **postilla** (annotations / handwriting) |
 | `docs/` | Design, data-model, and access-contract docs |
 
 ### Packages in the library
@@ -162,4 +166,5 @@ Troubleshooting: **`uv: command not found`** → reinstall, then open a new term
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE). The reusable reading SDKs under `reader-sdks/`
+(**octavo**, **postilla**) are Apache-2.0, per their own READMEs.
