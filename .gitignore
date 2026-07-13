@@ -1,12 +1,10 @@
-# The catalogue DB lives under the tracked private/ tree (stripped from the public
-# release). ONLY the live catalogue.db is version-controlled — as a raw blob on the
-# private main branch. Everything else in the dir stays local: WAL sidecars, the
-# backups/ + timestamped *.bak / backup-*.db / *.pre-*.db snapshots, and the
-# .cover-cache / .webdav-cache / covers-pinned / isbn_backfill_*.json sidecars.
-/private/catalogue-db/*
-!/private/catalogue-db/catalogue.db
-# Any legacy top-level catalogue-db/ (pre-move) stays ignored too.
+# The catalogue DB now lives in its OWN repo/dir (~/Dev/catalogue-db), pointed at via
+# $CATALOGUE_DB in private/serve.env. It is no longer tracked here. Ignore any local
+# private/catalogue-db/ working dir if one is (re)created, plus a legacy top-level one.
+/private/catalogue-db/
 /catalogue-db/
+# Machine-local server env (real DB path, etc.) — never committed.
+/private/serve.env
 *.db-shm
 *.db-wal
 *.bak

@@ -1,12 +1,12 @@
 """Where the catalogue data lives — the single source of truth for DB location.
 
-The database is **personal data**, kept out of the public release: the live
-``catalogue.db`` sits under the git-ignored-at-publish ``private/`` tree and is the
-only DB file version-controlled (as a raw blob on the private ``main`` branch); its
-sidecars — WAL, backups, snapshots, caches — stay local (see the top-level
-`.gitignore`). Every entrypoint — the webui, the CLI, the batch pipelines —
-resolves the DB path through this module so there is exactly one policy to reason
-about.
+The database is **personal data**, kept out of the public release. It is **not
+tracked in this repo**: the live ``catalogue.db`` lives in its own repo/dir (e.g.
+``~/Dev/catalogue-db``), pointed at via ``$CATALOGUE_DB`` — set in
+``private/serve.env`` (git-ignored) and sourced by ``scripts/library-serve.sh``. Its
+sidecars — WAL, backups, snapshots, caches — stay local alongside it. Every
+entrypoint — the webui, the CLI, the batch pipelines — resolves the DB path through
+this module so there is exactly one policy to reason about.
 
 Resolution order (`default_db_path()`):
   1. ``$CATALOGUE_DB``        — full path to the ``.db`` file (highest precedence)
@@ -26,9 +26,9 @@ DB_ENV = "CATALOGUE_DB"
 #: Env var naming the directory that holds the DB + its sidecar caches.
 DATA_DIR_ENV = "CATALOGUE_DATA_DIR"
 
-#: Repo-relative fallback used only when neither env var is set. Lives under the
-#: private/ tree (stripped from the public release); only the live catalogue.db in
-#: here is tracked. Keeps the zero-config local workflow.
+#: Repo-relative fallback used only when neither env var is set (e.g. a fresh clone
+#: with no serve.env). Kept for a zero-config default; the maintainer's real DB is
+#: pointed at via $CATALOGUE_DB (private/serve.env). Nothing here is tracked anymore.
 DEFAULT_DATA_DIR = "private/catalogue-db"
 DB_FILENAME = "catalogue.db"
 
