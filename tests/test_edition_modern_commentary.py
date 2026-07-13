@@ -99,7 +99,7 @@ def test_browse_is_readonly_with_review_link_picker_only_in_review(ctx):
     with app.test_client() as c:
         browse = c.get(f"/edition/{eid}/works-summary").data.decode()
         review = c.get(f"/works/detect/{eid}/edit").data.decode()
-    assert f"/works/detect/single#i{eid}" in browse            # link to the Review card
+    assert f"/works/detect/{eid}/review" in browse             # link to the Review card (seeds + deep-links)
     assert "Edit this edition on the Review page" in browse
     assert "this edition comments on" not in browse            # no inline picker on Browse
     assert "this edition comments on" in review                # picker lives in Review
