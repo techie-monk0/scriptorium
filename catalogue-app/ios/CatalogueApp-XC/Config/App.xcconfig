@@ -1,0 +1,15 @@
+// App bundle identity.
+//
+// This is the PUBLIC default. It is a valid Apple bundle identifier, but it is not
+// registered to any team — to build for a device or submit to the App Store, set your
+// own identifier in a git-ignored `App.local.xcconfig` next to this file (see below),
+// or change this value in your fork.
+//
+// The keychain service string is derived from the bundle id at runtime (Auth.swift),
+// so overriding the id here is enough — nothing else hardcodes it.
+PRODUCT_BUNDLE_IDENTIFIER = app.scriptorium.reader
+
+// Optional per-machine override (git-ignored). Absent in fresh/public checkouts, so the
+// default above applies. Present on the maintainer's machine to keep signing + the
+// existing keychain login stable.
+#include? "App.local.xcconfig"

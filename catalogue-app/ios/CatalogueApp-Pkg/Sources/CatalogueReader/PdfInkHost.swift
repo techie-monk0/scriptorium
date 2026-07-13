@@ -1,0 +1,43 @@
+#if canImport(UIKit)
+import UIKit
+import PDFKit
+import Postilla
+import PostillaUI
+
+/// The PDF adapter of the `InkHost` port (`PostillaUI`) — renders **fixed-page** `InkRegion`s onto a
+/// hosted `PDFView` as native `PDFAnnotation`s, so PDFKit gives transform/zoom/print for free. The ink
+/// sibling of `PdfDecorationHost` (text-anchored marks). Ink is deliberately not an octavo
+/// `Decoration` — it needs its raw stroke payload — so it renders here, each region wrapped in an
+/// `InkPdfAnnotation`. The structured record, not the file, is the source of truth, so the same ink
+/// reaches web/export. (EPUB's `InkHost` adapter, N4, hosts inline/detached regions via an overlay.)
+@MainActor
+public final class PdfInkHost: InkHost {
+    private let pdfView: PDFView
+    private var drawn: [(PDFPage, PDFAnnotation)] = []
+
+    public init(pdfView: PDFView) { self.pdfView = pdfView }
+
+    /// (Re-)render the ink `regions` (non-`.fixedPage` placements are skipped — they belong to the
+    /// EPUB overlay host). Idempotent: clears the prior set first. Map annotations via
+    /// `Annotation.inkRegion()`.
+    public func render(_ regions: [InkRegion]) {
+        clear()
+        guard let doc = pdfView.document else { return }
+        for region in regions where region.placement == .fixedPage {
+            guard !region.strokes.isEmpty else { continue }
+            let index = region.anchor.locations.position
+                ?? region.anchor.locations.page.map { max(0, $0 - 1) }
+            guard let i = index, i >= 0, i < doc.pageCount,
+                  let page = doc.page(at: i) else { continue }
+            let ann = InkPdfAnnotation(strokes: region.strokes, pageBounds: page.bounds(for: .cropBox))
+            page.addAnnotation(ann)
+            drawn.append((page, ann))
+        }
+    }
+
+    public func clear() {
+        for (page, ann) in drawn { page.removeAnnotation(ann) }
+        drawn.removeAll()
+    }
+}
+#endif

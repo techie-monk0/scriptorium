@@ -20,15 +20,17 @@ MANIFEST_PATH = _STATIC / "pwa" / "manifest.webmanifest"
 # In-book reader themes (White/Sepia/Gray/Night) — a second master section (`reading_themes`), emitted
 # to a reader-local CSS file (web/PWA) and a Swift port (iOS), kept out of the app palette above.
 READER_THEMES_CSS_PATH = _STATIC / "reader" / "reader-themes.css"
-# A native client build consumes the SAME master — gen emits a Swift port so the
-# drift test keeps web + native in lockstep. Repo root is 4
+# The native iOS client (`catalogue-app`) consumes the SAME master — gen emits a Swift port so the
+# drift test keeps web + iOS in lockstep from one source (ios_native_plan.md §3). Repo root is 4
 # parents above the theme dir (theme → webui → catalogue → src → catalogue-webui → <root>).
 _REPO_ROOT = _HERE.parents[4]
 PALETTE_SWIFT_PATH = (
-    _REPO_ROOT / ".native-app" / "Palette.swift"
+    _REPO_ROOT / "catalogue-app" / "ios" / "CatalogueApp-Pkg" / "Sources" / "CatalogueDesign"
+    / "Generated" / "Palette.swift"
 )
 READING_PALETTE_SWIFT_PATH = (
-    _REPO_ROOT / ".native-app" / "ReadingPalette.swift"
+    _REPO_ROOT / "catalogue-app" / "ios" / "CatalogueApp-Pkg" / "Sources" / "CatalogueDesign"
+    / "Generated" / "ReadingPalette.swift"
 )
 
 _GENERATED_BANNER = "GENERATED from theme/palette.json by `python -m catalogue.webui.theme.gen` — DO NOT edit by hand."

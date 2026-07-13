@@ -26,6 +26,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Iterable, Optional
 
+from . import local_defaults
 from .extract import ExtractedText, ExtractorFn, extract as default_extractor
 from .quality import score_text
 from catalogue.db_store import default_db_path
@@ -690,8 +691,9 @@ def _prompt_for_categories(counts: dict[str, int],
 
 # Last-resort default books directory. Resolution order (config, not constants —
 # §13 / §12 rule 7): $CATALOGUE_MOUNT_ROOT → vocab.json `_library_root` (the
-# operator-set mount root, edited via /settings) → this built-in default.
-DEFAULT_MOUNT_ROOT = os.environ.get("CATALOGUE_MOUNT_ROOT_DEFAULT", "")
+# operator-set mount root, edited via /settings) → this built-in default (a
+# machine-local value; "" when none is configured).
+DEFAULT_MOUNT_ROOT = local_defaults.get("mount_root")
 
 
 def default_mount_root() -> Path:

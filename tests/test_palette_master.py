@@ -15,10 +15,12 @@ import pytest
 
 from catalogue.webui.theme import gen
 
-# The native-app Swift files aren't in this tree, so the Swift-drift checks skip.
+# The native app's generated Swift files live at catalogue-app/.../Generated/. The
+# drift checks run whenever those files are present (a fresh checkout before the first
+# `gen` run won't have them yet — skip cleanly then).
 _native_app_present = pytest.mark.skipif(
     not gen.PALETTE_SWIFT_PATH.exists(),
-    reason="native-app palette not present in this tree",
+    reason="generated Palette.swift not present (run `python -m catalogue.webui.theme.gen`)",
 )
 
 
@@ -42,13 +44,13 @@ def test_manifest_chrome_is_regenerated_from_palette():
 
 @_native_app_present
 def test_palette_swift_is_regenerated_from_palette():
-    """The native app reads the SAME master via a generated `Palette.swift`. Assert the
+    """The native `catalogue-app` reads the SAME master via a generated `Palette.swift`. Assert the
     committed Swift equals a fresh render — so a colour change in palette.json that wasn't followed by
     `python -m catalogue.webui.theme.gen` (leaving iOS stale) fails CI exactly like tokens.css does."""
     master = gen.load_palette()
     committed = gen.PALETTE_SWIFT_PATH.read_text(encoding="utf-8")
     assert committed == gen.render_palette_swift(master), (
-        "The native Palette.swift is stale vs palette.json — run "
+        "catalogue-app/ios/CatalogueApp-Pkg/.../Generated/Palette.swift is stale vs palette.json — run "
         "`python -m catalogue.webui.theme.gen` and commit."
     )
 

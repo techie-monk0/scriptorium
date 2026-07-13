@@ -1,0 +1,12 @@
+.build/
+.swiftpm/
+DerivedData/
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+
+# xcodegen-generated app project (regenerate: cd CatalogueApp-XC && xcodegen)
+CatalogueApp-XC/CatalogueApp.xcodeproj/
+CatalogueApp-XC/Generated/
+
+# Machine-local bundle-id override (holds the real, team-registered identifier)
+CatalogueApp-XC/Config/App.local.xcconfig

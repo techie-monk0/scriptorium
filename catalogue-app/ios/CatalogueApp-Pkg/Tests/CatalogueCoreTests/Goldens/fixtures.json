@@ -1,0 +1,593 @@
+{
+  "_about": "Shared adapter fixtures for the Tier-2 parity test (U2). The SAME file feeds the Node generator (which runs the real library-core.js view-models → goldens.json) AND the Swift StubPlatform, so Swift output is asserted equal to JS output for identical input. Keep web the source of truth: regenerate goldens with `node Tools/gen_goldens.mjs`.",
+  "prefs": {
+    "theme": "dark",
+    "shelfArt": "spine"
+  },
+  "search": {
+    "bodhi": [
+      {
+        "eid": 42,
+        "title": "Bodhicaryāvatāra",
+        "display_title": "Bodhicaryāvatāra",
+        "by": "Śāntideva · 1w · reviewed",
+        "cover_url": "/edition/42/cover.jpg",
+        "spine_url": "/edition/42/spine.svg"
+      }
+    ],
+    "": []
+  },
+  "browse": {
+    "shanti": {
+      "groups": [
+        {
+          "key": "people",
+          "label": "Person",
+          "label_plural": "People",
+          "count": 1,
+          "hits": [
+            {
+              "type": "Person",
+              "label": "Śāntideva",
+              "sublabel": "author",
+              "url": "/person/9"
+            }
+          ]
+        },
+        {
+          "label": "Book",
+          "hits": [
+            {
+              "label": "Bodhicaryāvatāra",
+              "url": "/library?eid=42"
+            },
+            {
+              "label": "A Guide",
+              "url": "/edition/43"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "content": {
+    "emptiness": {
+      "q": "emptiness",
+      "books": [
+        {
+          "eid": 42,
+          "title": "Bodhicaryāvatāra",
+          "authors": [
+            "Śāntideva"
+          ],
+          "snippets": [
+            "…the [match]emptiness[/match] of all dharmas…"
+          ]
+        }
+      ],
+      "available": true
+    }
+  },
+  "detail": {
+    "42": {
+      "edition_id": 42,
+      "title": "Bodhicaryāvatāra",
+      "display_title": "Bodhicaryāvatāra",
+      "authors": [
+        "Śāntideva"
+      ],
+      "translators": [
+        "Crosby",
+        "Skilton"
+      ],
+      "subjects": [
+        "Buddhism/Emptiness"
+      ],
+      "isbns": [
+        "9780192835802"
+      ],
+      "publisher": "Oxford",
+      "year": 1998,
+      "tradition": "Gelug",
+      "work_titles": [
+        "Bodhicaryāvatāra"
+      ],
+      "connections": [
+        {
+          "eid": 43,
+          "title": "A Guide to the Bodhisattva's Way of Life"
+        }
+      ],
+      "cover_url": "/edition/42/cover.jpg",
+      "holdings": [
+        {
+          "holding_id": 7,
+          "format": "pdf",
+          "kind": "pdf",
+          "has_file": true,
+          "storage": null
+        },
+        {
+          "holding_id": 8,
+          "format": "epub",
+          "kind": "epub",
+          "has_file": false,
+          "storage": null
+        }
+      ]
+    }
+  },
+  "home": {
+    "recentIds": [
+      101
+    ],
+    "replica": {
+      "schema_version": 4,
+      "exported_at": "2024-04-10T00:00:00+00:00",
+      "count": 4,
+      "editions": [
+        {
+          "edition_id": 101,
+          "title": "Vol One",
+          "display_title": "A Series · vol. 1",
+          "authors": [
+            "Auth A"
+          ],
+          "translators": [],
+          "isbns": [],
+          "subjects": [
+            "Buddhism/Zen"
+          ],
+          "work_titles": [],
+          "holdings": [],
+          "volume": "1",
+          "date_added": "2024-01-10",
+          "series": [
+            "A Series"
+          ],
+          "search_text": "vol one auth a buddhism/zen a series",
+          "works": [
+            {
+              "title": "Bodhisattva Way",
+              "search": "bodhisattva way alttitle"
+            }
+          ],
+          "cover_url": "/edition/101/cover.jpg",
+          "spine_url": "/edition/101/spine.svg"
+        },
+        {
+          "edition_id": 102,
+          "title": "Vol Ten",
+          "display_title": "A Series · vol. 10",
+          "authors": [
+            "Auth A"
+          ],
+          "translators": [],
+          "isbns": [],
+          "subjects": [
+            "Buddhism/Zen"
+          ],
+          "work_titles": [],
+          "holdings": [],
+          "volume": "10",
+          "date_added": "2024-02-20",
+          "series": [
+            "A Series"
+          ],
+          "search_text": "vol ten auth a buddhism/zen a series",
+          "cover_url": "/edition/102/cover.jpg",
+          "spine_url": "/edition/102/spine.svg"
+        },
+        {
+          "edition_id": 103,
+          "title": "Vol Two",
+          "display_title": "A Series · vol. 2",
+          "authors": [
+            "Auth A"
+          ],
+          "translators": [],
+          "isbns": [],
+          "subjects": [
+            "History"
+          ],
+          "work_titles": [],
+          "holdings": [],
+          "volume": "2",
+          "date_added": "2024-03-05",
+          "series": [
+            "A Series"
+          ],
+          "search_text": "vol two auth a history a series",
+          "cover_url": "/edition/103/cover.jpg",
+          "spine_url": "/edition/103/spine.svg"
+        },
+        {
+          "edition_id": 104,
+          "title": "Loner",
+          "display_title": "Loner",
+          "authors": [],
+          "translators": [],
+          "isbns": [],
+          "subjects": [
+            "Uncategorized"
+          ],
+          "work_titles": [],
+          "holdings": [],
+          "volume": null,
+          "date_added": "2024-04-01",
+          "series": [],
+          "search_text": "loner uncategorized tenzin gyatso dalai lama xiv",
+          "cover_url": "/edition/104/cover.jpg",
+          "spine_url": "/edition/104/spine.svg"
+        }
+      ],
+      "subject_forest": [
+        {
+          "id": 1,
+          "name": "Buddhism",
+          "leaf_label": "Buddhism",
+          "depth": 0,
+          "parent_id": null,
+          "has_children": true,
+          "is_protected": false
+        },
+        {
+          "id": 4,
+          "name": "Buddhism/Zen",
+          "leaf_label": "Zen",
+          "depth": 1,
+          "parent_id": 1,
+          "has_children": false,
+          "is_protected": false
+        },
+        {
+          "id": 2,
+          "name": "History",
+          "leaf_label": "History",
+          "depth": 0,
+          "parent_id": null,
+          "has_children": false,
+          "is_protected": false
+        },
+        {
+          "id": 3,
+          "name": "Uncategorized",
+          "leaf_label": "Uncategorized",
+          "depth": 0,
+          "parent_id": null,
+          "has_children": false,
+          "is_protected": true
+        }
+      ]
+    },
+    "starredIds": [
+      103,
+      102
+    ]
+  },
+  "nav": {
+    "items": [
+      {
+        "key": "home",
+        "label": "Home",
+        "icon": "house",
+        "href": "/"
+      },
+      {
+        "key": "search",
+        "label": "Search",
+        "icon": "magnifyingglass",
+        "href": "/library"
+      },
+      {
+        "key": "scan",
+        "label": "Scan",
+        "icon": "barcode",
+        "href": "/scan",
+        "protocol": "desktop"
+      }
+    ],
+    "activeKey": "search",
+    "ctx": {
+      "local": false,
+      "desktop": false
+    }
+  },
+  "fold_inputs": [
+    "Bodhicaryāvatāra",
+    "Śāntideva",
+    "ŚŪNYATĀ",
+    "café",
+    "  Spaced  ",
+    "Mañjuśrī"
+  ],
+  "wishlist": {
+    "items": [
+      {
+        "id": 5,
+        "source": "isbn",
+        "status": "resolved",
+        "title": "Being and Time",
+        "authors": [
+          "Martin Heidegger"
+        ],
+        "publisher": "Harper",
+        "year": 1962,
+        "isbn": "9780061575594",
+        "cover_url": null,
+        "candidates": [],
+        "matched_edition_id": null
+      },
+      {
+        "id": 4,
+        "source": "manual",
+        "status": "ambiguous",
+        "raw_title": "Zen Mind",
+        "title": "Zen Mind",
+        "authors": [],
+        "candidates": [
+          {
+            "title": "A1"
+          },
+          {
+            "title": "A2"
+          }
+        ],
+        "matched_edition_id": null
+      },
+      {
+        "id": 6,
+        "source": "isbn",
+        "status": "suspected",
+        "title": "Being and Time",
+        "authors": [
+          "Martin Heidegger"
+        ],
+        "isbn": "9781614294412",
+        "candidates": [
+          {
+            "id": 42,
+            "title": "Being and Time",
+            "forms": [
+              "physical"
+            ]
+          }
+        ],
+        "matched_edition_id": null
+      },
+      {
+        "id": 3,
+        "source": "manual",
+        "status": "unresolved",
+        "raw_title": "A Book I Cannot Find",
+        "authors": [],
+        "candidates": []
+      },
+      {
+        "id": 2,
+        "source": "scan",
+        "status": "unresolved",
+        "raw_isbn": "9999999999999",
+        "authors": [],
+        "candidates": []
+      },
+      {
+        "id": 1,
+        "source": "isbn",
+        "status": "owned",
+        "title": "Already Have It",
+        "authors": [
+          "X"
+        ],
+        "isbn": "9780000000001",
+        "candidates": [],
+        "matched_edition_id": 42
+      }
+    ]
+  },
+  "wishlistActions": [
+    {
+      "action": "list"
+    },
+    {
+      "action": "add",
+      "body": {
+        "isbn": "9780061575594",
+        "source": "manual"
+      }
+    },
+    {
+      "action": "remove",
+      "id": 7
+    },
+    {
+      "action": "pick",
+      "id": 7,
+      "index": 1
+    },
+    {
+      "action": "confirm",
+      "id": 7,
+      "editionId": 42
+    },
+    {
+      "action": "decline",
+      "id": 7
+    }
+  ],
+  "wishlistAddResponses": [
+    {
+      "added": true,
+      "item": {
+        "id": 1,
+        "source": "isbn",
+        "status": "resolved",
+        "authors": [],
+        "candidates": []
+      }
+    },
+    {
+      "added": true,
+      "item": {
+        "id": 2,
+        "source": "manual",
+        "status": "unresolved",
+        "authors": [],
+        "candidates": []
+      }
+    },
+    {
+      "added": true,
+      "item": {
+        "id": 3,
+        "source": "manual",
+        "status": "ambiguous",
+        "authors": [],
+        "candidates": []
+      }
+    },
+    {
+      "added": true,
+      "item": {
+        "id": 4,
+        "source": "isbn",
+        "status": "suspected",
+        "authors": [],
+        "candidates": []
+      }
+    },
+    {
+      "added": false,
+      "owned": true,
+      "item": null
+    },
+    {
+      "added": false,
+      "duplicate": true,
+      "item": {
+        "id": 5,
+        "source": "isbn",
+        "status": "resolved",
+        "authors": [],
+        "candidates": []
+      }
+    }
+  ],
+  "starredActions": [
+    {
+      "action": "list"
+    },
+    {
+      "action": "star",
+      "eid": 103
+    },
+    {
+      "action": "unstar",
+      "eid": 103
+    }
+  ],
+  "reflow_inputs": [
+    "The quick brown fox\njumps over the lazy dog.",
+    "A hyphen-\nated word should join.\n\nA second paragraph here.",
+    "  Leading and trailing   spaces   collapse.  \n\n\nMultiple blanks are one break.",
+    ""
+  ],
+  "chrome_inputs": [
+    {
+      "format": "pdf",
+      "caps": {
+        "ready": true,
+        "search": true,
+        "star": true,
+        "annotate": true,
+        "reflow": true
+      },
+      "state": {
+        "reflow": false,
+        "draw": false
+      }
+    },
+    {
+      "format": "pdf",
+      "caps": {
+        "ready": true,
+        "search": true,
+        "star": true,
+        "annotate": true,
+        "reflow": true
+      },
+      "state": {
+        "reflow": true,
+        "draw": true
+      }
+    },
+    {
+      "format": "epub",
+      "caps": {
+        "ready": true,
+        "search": true,
+        "star": true
+      },
+      "state": {}
+    },
+    {
+      "format": "pdf",
+      "caps": {
+        "ready": false
+      },
+      "state": {}
+    },
+    {
+      "format": "pdf",
+      "caps": {
+        "ready": true,
+        "search": true,
+        "star": true,
+        "annotate": true,
+        "annotateText": true,
+        "export": true,
+        "reflow": true
+      },
+      "state": {
+        "reflow": false,
+        "draw": false
+      }
+    }
+  ],
+  "sync_inputs": [
+    {
+      "online": true,
+      "syncing": false,
+      "pendingWrites": 0,
+      "exportedAt": "2026-07-01T10:00:00Z"
+    },
+    {
+      "online": true,
+      "syncing": true,
+      "pendingWrites": 0
+    },
+    {
+      "online": false,
+      "syncing": false,
+      "pendingWrites": 2,
+      "exportedAt": "2026-06-30T09:00:00Z"
+    },
+    {
+      "online": false,
+      "syncing": false,
+      "pendingWrites": 0
+    },
+    {
+      "online": true,
+      "syncing": false,
+      "pendingWrites": 0,
+      "lastError": "The request timed out."
+    },
+    {
+      "online": true,
+      "syncing": false,
+      "pendingWrites": 3,
+      "exportedAt": "2026-07-02T00:00:00Z"
+    }
+  ]
+}

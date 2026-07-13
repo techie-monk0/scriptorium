@@ -31,6 +31,8 @@ from dataclasses import dataclass
 
 from catalogue.db_store.db import VOCAB_PATH
 
+from . import local_defaults
+
 
 def _acc(db):
     """A system Access over this connection — engine-routed holding reads/writes, the sweep-resume
@@ -44,7 +46,8 @@ TRASH_KEY = "_trash_dir"         # folder deleted book files are MOVED to (recov
 
 # Where book files land when an edition/holding is deleted with "move to Trash".
 # A real folder rather than the system Trash so it sits inside the synced library.
-DEFAULT_TRASH_DIR = os.environ.get("CATALOGUE_TRASH_DIR", "")
+# Machine-local default (see local_defaults); "" means none configured.
+DEFAULT_TRASH_DIR = local_defaults.get("trash_dir")
 
 
 class RootError(ValueError):

@@ -32,6 +32,8 @@ from dataclasses import dataclass, field
 
 from catalogue.db_store.db import VOCAB_PATH
 
+from . import local_defaults
+
 
 def _acc(db):
     """A system Access over this connection — engine-routed subject/edition/holding reads + the
@@ -45,7 +47,8 @@ INBOX_DIRS_KEY = "_inbox_dirs"
 
 # Built-in default inbox folder (parallels mount.DEFAULT_TRASH_DIR): a real folder
 # inside the synced library where new books land, used when `_inbox_dirs` is unset.
-DEFAULT_INBOX_DIR = os.environ.get("CATALOGUE_INBOX_DIR", "")
+# The value is a machine-local default (see local_defaults); "" means none configured.
+DEFAULT_INBOX_DIR = local_defaults.get("inbox_dir")
 
 # Subject top-level → library-root folder basename, where the two differ. Roots not
 # listed map to a same-named root (History, Philosophy). See mount.library_roots().

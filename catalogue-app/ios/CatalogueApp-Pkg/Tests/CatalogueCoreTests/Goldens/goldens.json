@@ -1,0 +1,1316 @@
+{
+  "fold": {
+    "Bodhicaryāvatāra": "bodicaryavatara",
+    "Śāntideva": "santideva",
+    "ŚŪNYATĀ": "sunyata",
+    "café": "cafe",
+    "  Spaced  ": "  spaced  ",
+    "Mañjuśrī": "manjusri"
+  },
+  "nameKey": [
+    "#14 dalai lama",
+    "#14 dalai lama",
+    "dalai lama #14",
+    "#14",
+    "volume 14",
+    "cafe"
+  ],
+  "reflowPageText": [
+    [
+      "The quick brown fox jumps over the lazy dog."
+    ],
+    [
+      "A hyphenated word should join.",
+      "A second paragraph here."
+    ],
+    [
+      "Leading and trailing spaces collapse.",
+      "Multiple blanks are one break."
+    ],
+    []
+  ],
+  "readerChromeVM": [
+    [
+      {
+        "id": "done",
+        "bar": "general",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "toc",
+        "bar": "general",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "search",
+        "bar": "general",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "star",
+        "bar": "general",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "reflow",
+        "bar": "text",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "goto",
+        "bar": "text",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "theme",
+        "bar": "text",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "bookmarkAdd",
+        "bar": "text",
+        "overflow": true,
+        "active": false
+      },
+      {
+        "id": "bookmarkList",
+        "bar": "text",
+        "overflow": true,
+        "active": false
+      },
+      {
+        "id": "highlight",
+        "bar": "text",
+        "overflow": true,
+        "active": false
+      },
+      {
+        "id": "draw",
+        "bar": "text",
+        "overflow": true,
+        "active": false
+      },
+      {
+        "id": "annList",
+        "bar": "text",
+        "overflow": true,
+        "active": false
+      }
+    ],
+    [
+      {
+        "id": "done",
+        "bar": "general",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "toc",
+        "bar": "general",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "search",
+        "bar": "general",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "star",
+        "bar": "general",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "textSmaller",
+        "bar": "text",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "textLarger",
+        "bar": "text",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "reflow",
+        "bar": "text",
+        "overflow": false,
+        "active": true
+      },
+      {
+        "id": "goto",
+        "bar": "text",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "theme",
+        "bar": "text",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "bookmarkAdd",
+        "bar": "text",
+        "overflow": true,
+        "active": false
+      },
+      {
+        "id": "bookmarkList",
+        "bar": "text",
+        "overflow": true,
+        "active": false
+      },
+      {
+        "id": "highlight",
+        "bar": "text",
+        "overflow": true,
+        "active": false
+      },
+      {
+        "id": "draw",
+        "bar": "text",
+        "overflow": true,
+        "active": true
+      },
+      {
+        "id": "annList",
+        "bar": "text",
+        "overflow": true,
+        "active": false
+      }
+    ],
+    [
+      {
+        "id": "done",
+        "bar": "general",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "toc",
+        "bar": "general",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "search",
+        "bar": "general",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "star",
+        "bar": "general",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "textSmaller",
+        "bar": "text",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "textLarger",
+        "bar": "text",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "goto",
+        "bar": "text",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "theme",
+        "bar": "text",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "bookmarkAdd",
+        "bar": "text",
+        "overflow": true,
+        "active": false
+      },
+      {
+        "id": "bookmarkList",
+        "bar": "text",
+        "overflow": true,
+        "active": false
+      }
+    ],
+    [
+      {
+        "id": "done",
+        "bar": "general",
+        "overflow": false,
+        "active": false
+      }
+    ],
+    [
+      {
+        "id": "done",
+        "bar": "general",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "toc",
+        "bar": "general",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "search",
+        "bar": "general",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "star",
+        "bar": "general",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "reflow",
+        "bar": "text",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "goto",
+        "bar": "text",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "theme",
+        "bar": "text",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "bookmarkAdd",
+        "bar": "text",
+        "overflow": true,
+        "active": false
+      },
+      {
+        "id": "bookmarkList",
+        "bar": "text",
+        "overflow": true,
+        "active": false
+      },
+      {
+        "id": "highlight",
+        "bar": "text",
+        "overflow": true,
+        "active": false
+      },
+      {
+        "id": "draw",
+        "bar": "text",
+        "overflow": true,
+        "active": false
+      },
+      {
+        "id": "underline",
+        "bar": "text",
+        "overflow": true,
+        "active": false
+      },
+      {
+        "id": "strike",
+        "bar": "text",
+        "overflow": true,
+        "active": false
+      },
+      {
+        "id": "note",
+        "bar": "text",
+        "overflow": true,
+        "active": false
+      },
+      {
+        "id": "erase",
+        "bar": "text",
+        "overflow": true,
+        "active": false
+      },
+      {
+        "id": "annList",
+        "bar": "text",
+        "overflow": true,
+        "active": false
+      },
+      {
+        "id": "export",
+        "bar": "text",
+        "overflow": true,
+        "active": false
+      }
+    ]
+  ],
+  "syncVM": [
+    {
+      "state": "live",
+      "label": "Live",
+      "tone": "ok",
+      "detail": null,
+      "canPull": true
+    },
+    {
+      "state": "syncing",
+      "label": "Syncing…",
+      "tone": "muted",
+      "detail": null,
+      "canPull": false
+    },
+    {
+      "state": "offline",
+      "label": "Offline · 2026-06-30",
+      "tone": "warn",
+      "detail": "2 unsynced",
+      "canPull": false
+    },
+    {
+      "state": "offline",
+      "label": "Offline",
+      "tone": "warn",
+      "detail": null,
+      "canPull": false
+    },
+    {
+      "state": "error",
+      "label": "Sync failed",
+      "tone": "error",
+      "detail": "The request timed out.",
+      "canPull": true
+    },
+    {
+      "state": "live",
+      "label": "Live",
+      "tone": "ok",
+      "detail": "3 syncing",
+      "canPull": true
+    }
+  ],
+  "searchVM": {
+    "bodhi": {
+      "kind": "search",
+      "q": "bodhi",
+      "cards": [
+        {
+          "eid": 42,
+          "title": "Bodhicaryāvatāra",
+          "display_title": "Bodhicaryāvatāra",
+          "by": "Śāntideva · 1w · reviewed",
+          "cover_url": "/edition/42/cover.jpg",
+          "spine_url": "/edition/42/spine.svg"
+        }
+      ],
+      "empty": false
+    },
+    "empty": {
+      "kind": "search",
+      "q": "",
+      "cards": [],
+      "empty": true
+    }
+  },
+  "browseVM": {
+    "shanti": {
+      "kind": "browse",
+      "q": "shanti",
+      "only": null,
+      "groups": [
+        {
+          "key": "people",
+          "label": "Person",
+          "labelPlural": "People",
+          "count": 1,
+          "hits": [
+            {
+              "type": "Person",
+              "label": "Śāntideva",
+              "sublabel": "author",
+              "ref": {
+                "kind": "person",
+                "id": 9
+              }
+            }
+          ]
+        },
+        {
+          "label": "Book",
+          "labelPlural": "Book",
+          "count": 2,
+          "hits": [
+            {
+              "type": "Book",
+              "label": "Bodhicaryāvatāra",
+              "sublabel": "",
+              "ref": {
+                "kind": "edition",
+                "id": 42
+              }
+            },
+            {
+              "type": "Book",
+              "label": "A Guide",
+              "sublabel": "",
+              "ref": {
+                "kind": "edition",
+                "id": 43
+              }
+            }
+          ]
+        }
+      ],
+      "empty": false
+    },
+    "empty": {
+      "kind": "browse",
+      "q": "",
+      "only": null,
+      "groups": [],
+      "empty": true
+    }
+  },
+  "contentVM": {
+    "emptiness": {
+      "kind": "content",
+      "q": "emptiness",
+      "books": [
+        {
+          "eid": 42,
+          "title": "Bodhicaryāvatāra",
+          "authors": [
+            "Śāntideva"
+          ],
+          "snippets": [
+            "…the [match]emptiness[/match] of all dharmas…"
+          ],
+          "ref": {
+            "kind": "edition",
+            "id": 42
+          }
+        }
+      ],
+      "empty": false,
+      "available": true
+    },
+    "empty": {
+      "kind": "content",
+      "q": "",
+      "books": [],
+      "empty": true,
+      "available": true
+    }
+  },
+  "detailVM": {
+    "42": {
+      "kind": "detail",
+      "eid": 42,
+      "title": "Bodhicaryāvatāra",
+      "by": "Śāntideva",
+      "authors": [
+        "Śāntideva"
+      ],
+      "translators": [
+        "Crosby",
+        "Skilton"
+      ],
+      "subjects": [
+        "Buddhism/Emptiness"
+      ],
+      "isbns": [
+        "9780192835802"
+      ],
+      "publisher": "Oxford",
+      "year": 1998,
+      "tradition": "Gelug",
+      "workTitles": [
+        "Bodhicaryāvatāra"
+      ],
+      "connections": [
+        {
+          "eid": 43,
+          "title": "A Guide to the Bodhisattva's Way of Life",
+          "ref": {
+            "kind": "edition",
+            "id": 43
+          }
+        }
+      ],
+      "coverUrl": "/edition/42/cover.jpg",
+      "holdings": [
+        {
+          "holding_id": 7,
+          "format": "pdf",
+          "kind": "pdf",
+          "has_file": true,
+          "storage": null
+        }
+      ],
+      "ref": {
+        "kind": "edition",
+        "id": 42
+      }
+    },
+    "999": {
+      "kind": "detail",
+      "eid": 999,
+      "missing": true
+    }
+  },
+  "homeVM": {
+    "kind": "home",
+    "rails": [
+      {
+        "kind": "recent",
+        "title": "Recent",
+        "cards": [
+          {
+            "eid": 101,
+            "title": "A Series · vol. 1",
+            "by": "Auth A",
+            "cover_url": "/edition/101/cover.jpg",
+            "spine_url": "/edition/101/spine.svg",
+            "starred": false,
+            "badge": ""
+          },
+          {
+            "eid": 104,
+            "title": "Loner",
+            "by": "",
+            "cover_url": "/edition/104/cover.jpg",
+            "spine_url": "/edition/104/spine.svg",
+            "starred": false,
+            "badge": "New"
+          }
+        ]
+      },
+      {
+        "kind": "starred",
+        "title": "Starred",
+        "cards": [
+          {
+            "eid": 103,
+            "title": "A Series · vol. 2",
+            "by": "Auth A",
+            "cover_url": "/edition/103/cover.jpg",
+            "spine_url": "/edition/103/spine.svg",
+            "starred": true,
+            "badge": ""
+          },
+          {
+            "eid": 102,
+            "title": "A Series · vol. 10",
+            "by": "Auth A",
+            "cover_url": "/edition/102/cover.jpg",
+            "spine_url": "/edition/102/spine.svg",
+            "starred": true,
+            "badge": ""
+          }
+        ]
+      },
+      {
+        "kind": "subject",
+        "id": 1,
+        "title": "Buddhism",
+        "count": 2,
+        "cards": [
+          {
+            "eid": 102,
+            "title": "A Series · vol. 10",
+            "by": "Auth A",
+            "cover_url": "/edition/102/cover.jpg",
+            "spine_url": "/edition/102/spine.svg",
+            "starred": true,
+            "badge": ""
+          },
+          {
+            "eid": 101,
+            "title": "A Series · vol. 1",
+            "by": "Auth A",
+            "cover_url": "/edition/101/cover.jpg",
+            "spine_url": "/edition/101/spine.svg",
+            "starred": false,
+            "badge": ""
+          }
+        ]
+      },
+      {
+        "kind": "subject",
+        "id": 2,
+        "title": "History",
+        "count": 1,
+        "cards": [
+          {
+            "eid": 103,
+            "title": "A Series · vol. 2",
+            "by": "Auth A",
+            "cover_url": "/edition/103/cover.jpg",
+            "spine_url": "/edition/103/spine.svg",
+            "starred": true,
+            "badge": ""
+          }
+        ]
+      },
+      {
+        "kind": "subject",
+        "id": 3,
+        "title": "Uncategorized",
+        "count": 1,
+        "cards": [
+          {
+            "eid": 104,
+            "title": "Loner",
+            "by": "",
+            "cover_url": "/edition/104/cover.jpg",
+            "spine_url": "/edition/104/spine.svg",
+            "starred": false,
+            "badge": ""
+          }
+        ]
+      },
+      {
+        "kind": "series",
+        "title": "Series",
+        "sets": [
+          {
+            "name": "A Series",
+            "count": 3,
+            "cards": [
+              {
+                "eid": 101,
+                "title": "A Series · vol. 1",
+                "by": "Auth A",
+                "cover_url": "/edition/101/cover.jpg",
+                "spine_url": "/edition/101/spine.svg",
+                "starred": false,
+                "badge": ""
+              },
+              {
+                "eid": 103,
+                "title": "A Series · vol. 2",
+                "by": "Auth A",
+                "cover_url": "/edition/103/cover.jpg",
+                "spine_url": "/edition/103/spine.svg",
+                "starred": true,
+                "badge": ""
+              },
+              {
+                "eid": 102,
+                "title": "A Series · vol. 10",
+                "by": "Auth A",
+                "cover_url": "/edition/102/cover.jpg",
+                "spine_url": "/edition/102/spine.svg",
+                "starred": true,
+                "badge": ""
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "empty": false
+  },
+  "searchReplica": {
+    "auth": [
+      103,
+      102,
+      101
+    ],
+    "zen": [
+      102,
+      101
+    ],
+    "none": [],
+    "eid": [
+      102
+    ],
+    "ordinal": [
+      104
+    ]
+  },
+  "suggestReplica": {
+    "auth": [
+      {
+        "type": "Book",
+        "label": "A Series · vol. 2",
+        "sublabel": "Auth A",
+        "url": "/library?eid=103"
+      },
+      {
+        "type": "Book",
+        "label": "A Series · vol. 10",
+        "sublabel": "Auth A",
+        "url": "/library?eid=102"
+      },
+      {
+        "type": "Book",
+        "label": "A Series · vol. 1",
+        "sublabel": "Auth A",
+        "url": "/library?eid=101"
+      }
+    ]
+  },
+  "subjectVM": {
+    "buddhism": {
+      "kind": "subject",
+      "name": "Buddhism",
+      "leaf": "Buddhism",
+      "count": 2,
+      "crumbs": [
+        {
+          "name": "Buddhism",
+          "label": "Buddhism"
+        }
+      ],
+      "children": [
+        {
+          "name": "Buddhism/Zen",
+          "leaf": "Zen",
+          "books": [
+            {
+              "eid": 101,
+              "title": "A Series · vol. 1",
+              "by": "Auth A",
+              "cover_url": "/edition/101/cover.jpg",
+              "spine_url": "/edition/101/spine.svg"
+            },
+            {
+              "eid": 102,
+              "title": "A Series · vol. 10",
+              "by": "Auth A",
+              "cover_url": "/edition/102/cover.jpg",
+              "spine_url": "/edition/102/spine.svg"
+            }
+          ]
+        }
+      ],
+      "books": [
+        {
+          "eid": 101,
+          "title": "A Series · vol. 1",
+          "by": "Auth A",
+          "cover_url": "/edition/101/cover.jpg",
+          "spine_url": "/edition/101/spine.svg"
+        },
+        {
+          "eid": 102,
+          "title": "A Series · vol. 10",
+          "by": "Auth A",
+          "cover_url": "/edition/102/cover.jpg",
+          "spine_url": "/edition/102/spine.svg"
+        }
+      ],
+      "leftover": []
+    }
+  },
+  "subjectSections": [
+    {
+      "type": "crumbs",
+      "crumbs": [
+        {
+          "name": "Buddhism",
+          "label": "Buddhism"
+        }
+      ],
+      "cards": []
+    },
+    {
+      "type": "rail",
+      "title": "Zen",
+      "subject": "Buddhism/Zen",
+      "cards": [
+        {
+          "eid": 101,
+          "title": "A Series · vol. 1",
+          "by": "Auth A",
+          "cover_url": "/edition/101/cover.jpg",
+          "spine_url": "/edition/101/spine.svg"
+        },
+        {
+          "eid": 102,
+          "title": "A Series · vol. 10",
+          "by": "Auth A",
+          "cover_url": "/edition/102/cover.jpg",
+          "spine_url": "/edition/102/spine.svg"
+        }
+      ],
+      "crumbs": []
+    }
+  ],
+  "wishlistVM": {
+    "kind": "wishlist",
+    "groups": [
+      {
+        "kind": "ambiguous",
+        "title": "Choose an edition",
+        "cards": [
+          {
+            "id": 4,
+            "title": "Zen Mind",
+            "by": "",
+            "year": null,
+            "publisher": null,
+            "isbn": null,
+            "status": "ambiguous",
+            "badge": "Choose edition",
+            "cover_url": null,
+            "candidate_count": 2,
+            "matched_edition_id": null
+          }
+        ]
+      },
+      {
+        "kind": "suspected",
+        "title": "Might already be in your library",
+        "cards": [
+          {
+            "id": 6,
+            "title": "Being and Time",
+            "by": "Martin Heidegger",
+            "year": null,
+            "publisher": null,
+            "isbn": "9781614294412",
+            "status": "suspected",
+            "badge": "Confirm match",
+            "cover_url": "https://covers.openlibrary.org/b/isbn/9781614294412-L.jpg",
+            "candidate_count": 1,
+            "matched_edition_id": null
+          }
+        ]
+      },
+      {
+        "kind": "unresolved",
+        "title": "Needs details",
+        "cards": [
+          {
+            "id": 3,
+            "title": "A Book I Cannot Find",
+            "by": "",
+            "year": null,
+            "publisher": null,
+            "isbn": null,
+            "status": "unresolved",
+            "badge": "Add details",
+            "cover_url": null,
+            "candidate_count": 0,
+            "matched_edition_id": null
+          },
+          {
+            "id": 2,
+            "title": "ISBN 9999999999999",
+            "by": "",
+            "year": null,
+            "publisher": null,
+            "isbn": "9999999999999",
+            "status": "unresolved",
+            "badge": "Add details",
+            "cover_url": "https://covers.openlibrary.org/b/isbn/9999999999999-L.jpg",
+            "candidate_count": 0,
+            "matched_edition_id": null
+          }
+        ]
+      },
+      {
+        "kind": "resolved",
+        "title": "Wishlist",
+        "cards": [
+          {
+            "id": 5,
+            "title": "Being and Time",
+            "by": "Martin Heidegger",
+            "year": 1962,
+            "publisher": "Harper",
+            "isbn": "9780061575594",
+            "status": "resolved",
+            "badge": "",
+            "cover_url": "https://covers.openlibrary.org/b/isbn/9780061575594-L.jpg",
+            "candidate_count": 0,
+            "matched_edition_id": null
+          }
+        ]
+      },
+      {
+        "kind": "owned",
+        "title": "Already in your library",
+        "cards": [
+          {
+            "id": 1,
+            "title": "Already Have It",
+            "by": "X",
+            "year": null,
+            "publisher": null,
+            "isbn": "9780000000001",
+            "status": "owned",
+            "badge": "Already owned",
+            "cover_url": "https://covers.openlibrary.org/b/isbn/9780000000001-L.jpg",
+            "candidate_count": 0,
+            "matched_edition_id": 42
+          }
+        ]
+      }
+    ],
+    "count": 6,
+    "empty": false
+  },
+  "wishlistRequest": [
+    {
+      "method": "GET",
+      "path": "/api/v1/wishlist"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/wishlist",
+      "body": {
+        "isbn": "9780061575594",
+        "source": "manual"
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/wishlist/7"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/wishlist/7",
+      "body": {
+        "pick": 1
+      }
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/wishlist/7",
+      "body": {
+        "confirm_owned": 42
+      }
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/wishlist/7",
+      "body": {
+        "decline_suspected": true
+      }
+    }
+  ],
+  "wishlistAddMessage": [
+    "Added to wishlist.",
+    "Added — needs details (couldn’t identify it).",
+    "Added — choose the right edition below.",
+    "Added — you might already own this; confirm below.",
+    "You already own this — not added.",
+    "Already on your wishlist."
+  ],
+  "starredRequest": [
+    {
+      "method": "GET",
+      "path": "/api/v1/starred"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/starred",
+      "body": {
+        "edition_id": 103
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/starred/103"
+    }
+  ],
+  "browseReplica": {
+    "auth": {
+      "groups": [
+        {
+          "key": "editions",
+          "label": "Book",
+          "label_plural": "Books",
+          "count": 3,
+          "hits": [
+            {
+              "type": "Book",
+              "label": "A Series · vol. 2",
+              "url": "/library?eid=103"
+            },
+            {
+              "type": "Book",
+              "label": "A Series · vol. 10",
+              "url": "/library?eid=102"
+            },
+            {
+              "type": "Book",
+              "label": "A Series · vol. 1",
+              "url": "/library?eid=101"
+            }
+          ]
+        },
+        {
+          "key": "people",
+          "label": "Person",
+          "label_plural": "People",
+          "count": 1,
+          "hits": [
+            {
+              "type": "Person",
+              "label": "Auth A",
+              "url": null
+            }
+          ]
+        }
+      ]
+    },
+    "zenSubjects": {
+      "groups": [
+        {
+          "key": "subjects",
+          "label": "Subject",
+          "label_plural": "Subjects",
+          "count": 1,
+          "hits": [
+            {
+              "type": "Subject",
+              "label": "Buddhism/Zen",
+              "url": "/subject/4"
+            }
+          ]
+        }
+      ]
+    },
+    "workAlias": {
+      "groups": [
+        {
+          "key": "works",
+          "label": "Work",
+          "label_plural": "Works",
+          "count": 1,
+          "hits": [
+            {
+              "type": "Work",
+              "label": "Bodhisattva Way",
+              "url": null
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "settingsVM": {
+    "kind": "settings",
+    "theme": "dark",
+    "shelfArt": "spine",
+    "seriesCoverStyle": "fan",
+    "shelfTitles": false,
+    "themeOptions": [
+      {
+        "value": "auto",
+        "label": "🖥 Auto"
+      },
+      {
+        "value": "light",
+        "label": "☀ Light"
+      },
+      {
+        "value": "dark",
+        "label": "🌙 Dark"
+      }
+    ],
+    "shelfOptions": [
+      {
+        "value": "spine",
+        "label": "Spines"
+      },
+      {
+        "value": "cover",
+        "label": "Covers"
+      }
+    ],
+    "seriesCoverStyles": [
+      {
+        "key": "collage",
+        "label": "Collage",
+        "wRatio": 1.23,
+        "hRatio": 0.95
+      },
+      {
+        "key": "cover",
+        "label": "Single cover",
+        "wRatio": 1.07,
+        "hRatio": 0.95
+      },
+      {
+        "key": "fan",
+        "label": "Cover stack",
+        "wRatio": 1.5,
+        "hRatio": 0.95
+      }
+    ]
+  },
+  "navVM": {
+    "kind": "nav",
+    "items": [
+      {
+        "key": "home",
+        "label": "Home",
+        "icon": "house",
+        "href": "/",
+        "active": false
+      },
+      {
+        "key": "search",
+        "label": "Search",
+        "icon": "magnifyingglass",
+        "href": "/library",
+        "active": true
+      }
+    ]
+  },
+  "appSections": [
+    {
+      "key": "home",
+      "label": "Home",
+      "icon": "house",
+      "protocol": "default"
+    },
+    {
+      "key": "books",
+      "label": "Books",
+      "icon": "books.vertical",
+      "protocol": "default"
+    },
+    {
+      "key": "read",
+      "label": "Read",
+      "icon": "book",
+      "protocol": "default"
+    },
+    {
+      "key": "search",
+      "label": "Search",
+      "icon": "magnifyingglass",
+      "protocol": "default"
+    },
+    {
+      "key": "content",
+      "label": "Text",
+      "icon": "doc.text",
+      "protocol": "default"
+    },
+    {
+      "key": "review",
+      "label": "Review",
+      "icon": "checklist",
+      "protocol": "desktop"
+    },
+    {
+      "key": "scan",
+      "label": "Scan",
+      "icon": "viewfinder",
+      "protocol": "desktop"
+    },
+    {
+      "key": "capture",
+      "label": "Capture",
+      "icon": "camera",
+      "protocol": "default"
+    },
+    {
+      "key": "wishlist",
+      "label": "Wishlist",
+      "icon": "star",
+      "protocol": "default"
+    },
+    {
+      "key": "settings",
+      "label": "Settings",
+      "icon": "slider.horizontal.3",
+      "protocol": "default"
+    }
+  ],
+  "coverContract": {
+    "bookCoverAspect": 1.5,
+    "seriesCoverStyles": [
+      {
+        "key": "collage",
+        "label": "Collage",
+        "wRatio": 1.23,
+        "hRatio": 0.95
+      },
+      {
+        "key": "cover",
+        "label": "Single cover",
+        "wRatio": 1.07,
+        "hRatio": 0.95
+      },
+      {
+        "key": "fan",
+        "label": "Cover stack",
+        "wRatio": 1.5,
+        "hRatio": 0.95
+      }
+    ],
+    "seriesCoverDefault": "fan"
+  },
+  "searchFields": [
+    {
+      "key": "book_title",
+      "label": "Book title",
+      "suggest": "/editions/search",
+      "picks": "edition"
+    },
+    {
+      "key": "work_title",
+      "label": "Work title",
+      "suggest": "/works/search",
+      "picks": "work"
+    },
+    {
+      "key": "person",
+      "label": "Person",
+      "suggest": "/library/suggest/person",
+      "picks": "person"
+    },
+    {
+      "key": "subject",
+      "label": "Subject",
+      "suggest": "/library/suggest/subject",
+      "picks": "subject"
+    }
+  ],
+  "bookDetailSections": [
+    {
+      "key": "basics",
+      "label": "Edition Basics"
+    },
+    {
+      "key": "holdings",
+      "label": "Holdings"
+    },
+    {
+      "key": "works",
+      "label": "Works In This Edition"
+    },
+    {
+      "key": "connections",
+      "label": "Connections"
+    }
+  ]
+}

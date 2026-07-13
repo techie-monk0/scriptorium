@@ -1,6 +1,6 @@
 """Phone-drop ingest: consume JSON sidecars from the Books `_inbox/` folder.
 
-The "add a book from my phone" path (hosted_server_thoughts.md §9.7): the phone
+The "add a book from my phone" path: the phone
 (kDrive app + an iOS Shortcut) drops a book plus a sidecar next to it —
 `Book.pdf` + `Book.pdf.json` — into `<Books root>/_inbox/`. The normal sweep walk
 ingests the media file (creating an edition+holding); THIS pass then reads the

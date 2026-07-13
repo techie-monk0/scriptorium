@@ -1,0 +1,51 @@
+// swift-tools-version: 6.0
+import PackageDescription
+
+// catalogue-app — the native iOS reader/library client (sibling of catalogue-webui / catalogue-pwa).
+// SwiftPM library targets: pure tiers test headlessly via `swift test`; iOS UI/reader targets build for
+// the simulator via `xcodebuild`. The reader HOSTS the octavo + postilla SDKs (local path deps).
+//   CatalogueDesign  palette.json port + tokens                         [step 1]
+//   CatalogueCore    Tier 2 — pure presenter/view-models               [step 3]
+//   CatalogueData    adapters (API client, replica, file cache)         [steps 2,5]
+//   CatalogueUI      Tier 3 — SwiftUI screens (iOS)                      [step 4]
+//   CatalogueReader  in-app reader — hosts Octavo + Postilla (iOS)       [steps 6–7]
+let package = Package(
+    name: "CatalogueApp",
+    platforms: [.iOS(.v17), .macOS(.v14)],
+    products: [
+        .library(name: "CatalogueDesign", targets: ["CatalogueDesign"]),
+        .library(name: "CatalogueCore", targets: ["CatalogueCore"]),
+        .library(name: "CatalogueData", targets: ["CatalogueData"]),
+        .library(name: "CatalogueReader", targets: ["CatalogueReader"]),
+        .library(name: "CatalogueUI", targets: ["CatalogueUI"]),
+    ],
+    dependencies: [
+        // octavo-swift / postilla-swift live at the repo root; this package is now nested at
+        // catalogue-app/ios/CatalogueApp, so reach up three levels.
+        .package(path: "../../../reader-sdks/octavo-swift"),
+        .package(path: "../../../reader-sdks/postilla-swift"),
+    ],
+    targets: [
+        .target(name: "CatalogueDesign"),
+        .target(name: "CatalogueCore"),
+        .target(name: "CatalogueData", dependencies: ["CatalogueCore"]),
+        .target(name: "CatalogueReader", dependencies: [
+            "CatalogueCore", "CatalogueData", "CatalogueDesign",
+            .product(name: "Octavo", package: "octavo-swift"),
+            .product(name: "OctavoPDFKit", package: "octavo-swift"),
+            .product(name: "OctavoEPUB", package: "octavo-swift"),
+            .product(name: "OctavoAdapters", package: "octavo-swift"),
+            .product(name: "Postilla", package: "postilla-swift"),
+            .product(name: "PostillaUI", package: "postilla-swift"),
+        ]),
+        .target(name: "CatalogueUI", dependencies: ["CatalogueCore", "CatalogueData", "CatalogueDesign", "CatalogueReader"]),
+
+        .testTarget(name: "CatalogueDesignTests", dependencies: ["CatalogueDesign"]),
+        .testTarget(name: "CatalogueCoreTests", dependencies: ["CatalogueCore"], resources: [.copy("Goldens")]),
+        .testTarget(name: "CatalogueDataTests", dependencies: ["CatalogueData", "CatalogueCore"]),
+        .testTarget(name: "CatalogueReaderTests", dependencies: [
+            "CatalogueReader", .product(name: "Octavo", package: "octavo-swift"),
+            .product(name: "Postilla", package: "postilla-swift"),
+        ]),
+    ]
+)
