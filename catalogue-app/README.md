@@ -16,8 +16,8 @@ particular deployment is baked into the app.
 - `ios/CatalogueApp-XC/` — the runnable Xcode app bundle (generated with XcodeGen).
 - `docs/` — build status and the implementation plan.
 
-It hosts two reusable reading SDKs from `../reader-sdks/`: **octavo** (the PDF/EPUB
-engine) and **postilla** (annotations / handwriting).
+It hosts two reusable reading SDKs from the sibling `octavo-postilla` repo: **octavo**
+(the PDF/EPUB engine) and **postilla** (annotations / handwriting).
 
 ## Build
 

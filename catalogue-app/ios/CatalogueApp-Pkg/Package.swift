@@ -20,10 +20,11 @@ let package = Package(
         .library(name: "CatalogueUI", targets: ["CatalogueUI"]),
     ],
     dependencies: [
-        // octavo-swift / postilla-swift live at the repo root; this package is now nested at
-        // catalogue-app/ios/CatalogueApp, so reach up three levels.
-        .package(path: "../../../reader-sdks/octavo-swift"),
-        .package(path: "../../../reader-sdks/postilla-swift"),
+        // The reader SDKs live in the sibling `octavo-postilla` repo (extracted out of this one).
+        // This package is nested at catalogue-app/ios/CatalogueApp-Pkg, so reach up four levels to
+        // /Users/…/Dev, then into octavo-postilla. Each package pulls `reader-contract` transitively.
+        .package(path: "../../../../octavo-postilla/octavo/octavo-swift"),
+        .package(path: "../../../../octavo-postilla/postilla/postilla-swift"),
     ],
     targets: [
         .target(name: "CatalogueDesign"),

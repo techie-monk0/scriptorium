@@ -131,8 +131,8 @@ Tier-2 view-model. No Favorites yet (not in current code; it's only in the older
 ## 5. Reader (the native advantage) — host `octavo-swift` + `postilla`
 
 The reader is **not** built from scratch against a bespoke "reader contract"; it is a thin SwiftUI
-**host of the `octavo` reading SDK** (`../../reader-sdks/octavo/docs/octavo.md`) and its annotation extension
-**`postilla`** (`../../reader-sdks/octavo/docs/postilla.md`). The catalogue is octavo's **first consumer**: the
+**host of the `octavo` reading SDK** (`../../../octavo-postilla/octavo/docs/octavo.md`) and its annotation extension
+**`postilla`** (`../../../octavo-postilla/postilla/docs/postilla.md`). The catalogue is octavo's **first consumer**: the
 iOS app supplies the SDK's *ports*, octavo supplies the engine, and dogfooding it as an outside
 integrator is exactly how octavo proves it is host-free. This **supersedes** the earlier
 "implement against the reader contract, not a shared renderer" framing — the renderer *is* shared
@@ -335,7 +335,7 @@ with explicit budgets that fail the test if exceeded.
 
 > **Dependency / sequencing.** Steps 1–5 (the catalogue-app browse/search/offline half) stand alone
 > and can start now. Steps 6–7 (the reader) **depend on `octavo-swift` + `postilla-swift` existing** —
-> those packages are pre-build (`../../reader-sdks/octavo/README.md`). Build order across repos:
+> those packages are pre-build (`../../../octavo-postilla/README.md`). Build order across repos:
 > `octavo-swift` OS-M1→M3 → `postilla-swift` PS-M1→M2 → wire them here as steps 6–7. The SDK-level
 > reader tests (**U8, U9, U10, S5, P6, P7, P9**, EPUB half of **S8**) move into the SDK packages
 > (`octavo-swift_plan.md` §5, `postilla-swift_plan.md` §5); this plan keeps host-integration tests.

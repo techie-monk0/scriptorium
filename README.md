@@ -55,7 +55,7 @@ search — see **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
 | `catalogue-cli/` | Batch/admin operations (dedup, backup, content-index build) |
 | `catalogue-pwa/` | Installable, offline-first phone app |
 | `catalogue-app/` | Native iOS reader/library client — **Scriptorium Reader** (browse, search, read, sync annotations, offline replica) |
-| `reader-sdks/` | Reusable, host-agnostic reading engines the app embeds: **octavo** (PDF/EPUB) and **postilla** (annotations / handwriting) |
+| `../octavo-postilla/` *(sibling repo)* | Reusable, host-agnostic reading SDKs the app embeds — **octavo** (PDF/EPUB engine), **postilla** (annotations / handwriting), **reader-contract** (the shared seam). Extracted out of this repo; consumed by `catalogue-app` via relative path |
 | `docs/` | Design, data-model, and access-contract docs |
 
 ### Packages in the library
@@ -166,5 +166,5 @@ Troubleshooting: **`uv: command not found`** → reinstall, then open a new term
 
 ## License
 
-MIT — see [LICENSE](LICENSE). The reusable reading SDKs under `reader-sdks/`
-(**octavo**, **postilla**) are Apache-2.0, per their own READMEs.
+MIT — see [LICENSE](LICENSE). The reusable reading SDKs in the sibling
+`octavo-postilla` repo (**octavo**, **postilla**) are Apache-2.0, per their own READMEs.
