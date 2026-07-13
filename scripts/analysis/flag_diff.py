@@ -29,7 +29,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 
 from catalogue.services import person_work
 from catalogue.services import verify
-from catalogue.db_store import init_db
+from catalogue.db_store import default_db_path, init_db
 from catalogue.services.work_authority import WorkAuthorityResolver
 
 
@@ -56,7 +56,7 @@ def _name_outcome(db, verifiers, pid, name, *, extensions):
 def main(argv=None) -> None:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("db", nargs="?", default="catalogue-db/catalogue.db")
+    ap.add_argument("db", nargs="?", default=default_db_path())
     ap.add_argument("--offline", action="store_true", help="cache-only, no network")
     ap.add_argument("--limit", type=int, default=None, help="only the first N persons")
     ap.add_argument("--out", default=None, help="write the full per-person CSV here")

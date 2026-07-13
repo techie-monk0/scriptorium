@@ -21,8 +21,9 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 
 from catalogue.services.locator import extract_sections
 from catalogue.services.book_analysis import analyze_book_sections
+from catalogue.db_store import default_db_path
 
-DB = "catalogue-db/catalogue.db"
+DB = default_db_path()
 
 # Curated representative sample, grouped by expected shape × format. The verse
 # profile printed per book (mean verse score / fraction of sections scoring ≥0.5)

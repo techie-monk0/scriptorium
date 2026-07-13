@@ -29,7 +29,7 @@ import sys, pathlib
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 
 from catalogue.services import verify
-from catalogue.db_store import init_db
+from catalogue.db_store import default_db_path, init_db
 
 
 def _outcome(db, verifiers, pid: int, name: str, *, extensions: bool):
@@ -57,7 +57,7 @@ def _outcome(db, verifiers, pid: int, name: str, *, extensions: bool):
 def main(argv=None) -> None:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("db", nargs="?", default="catalogue-db/catalogue.db")
+    ap.add_argument("db", nargs="?", default=default_db_path())
     ap.add_argument("--bdrc-over-blmp", dest="bdrc_over_blmp", action="store_true",
                     help="route persons through the BDRC ElasticSearch verifier")
     ap.add_argument("--offline", action="store_true", help="cache-only, no network")

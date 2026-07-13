@@ -27,8 +27,9 @@ from catalogue.services.book_analysis import analyze_book_sections
 from catalogue.services.locator import extract_sections
 from catalogue.services.toc import (extract_structured_outline, is_degenerate_outline,
                            parse_contents_index)
+from catalogue.db_store import default_db_path
 
-DB = "catalogue-db/catalogue.db"
+DB = default_db_path()
 
 
 def _front_matter(path: Path, n: int = 30) -> str:

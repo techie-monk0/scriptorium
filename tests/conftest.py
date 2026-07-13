@@ -30,12 +30,18 @@ os.environ.setdefault("CATALOGUE_ALLOW_OPEN", "1")
 os.environ["CATALOGUE_DB"] = os.path.join(
     tempfile.mkdtemp(prefix="catalogue-test-"), "default.db")
 
-_LIVE_DB = "private/catalogue-db/catalogue.db"
+# The REAL live DB, from the private config (catalogue_db in local_defaults.json) — NOT
+# the tmp path forced above. config_db_path() ignores the $CATALOGUE_DB override, so the
+# tripwire watches the actual DB wherever it's configured (None on CI / if unconfigured).
+from catalogue.db_store.paths import config_db_path  # noqa: E402
+_LIVE_DB = config_db_path()
 
 
 def _live_fingerprint():
-    """(size, mtime_ns) of the live DB, or None if it isn't present. Cheap — a
+    """(size, mtime_ns) of the live DB, or None if unconfigured/absent. Cheap — a
     single stat, no hashing — so it's fine to run around every test."""
+    if not _LIVE_DB:
+        return None
     try:
         s = os.stat(_LIVE_DB)
     except FileNotFoundError:

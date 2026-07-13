@@ -3,8 +3,6 @@
 # private/catalogue-db/ working dir if one is (re)created, plus a legacy top-level one.
 /private/catalogue-db/
 /catalogue-db/
-# Machine-local server env (real DB path, etc.) — never committed.
-/private/serve.env
 *.db-shm
 *.db-wal
 *.bak

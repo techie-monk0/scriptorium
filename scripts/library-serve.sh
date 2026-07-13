@@ -16,13 +16,10 @@ set -euo pipefail
 # Repo root = parent of this script's dir, so the server runs wherever the repo is cloned.
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO"
-# Machine-local server env (DB location, etc.) — git-ignored, sourced if present, so a
-# fresh/public clone keeps the generic default below. The catalogue DB now lives in its
-# own repo (~/Dev/catalogue-db); point $CATALOGUE_DB at it here. See private/serve.env.
-[ -f "$REPO/private/serve.env" ] && source "$REPO/private/serve.env"
-# Honor a pre-set $CATALOGUE_DB (from serve.env or the environment); otherwise fall back
-# to the repo-local private/catalogue-db/ dir. See db_store.default_db_path().
-export CATALOGUE_DB="${CATALOGUE_DB:-$REPO/private/catalogue-db/catalogue.db}"
+# The DB location is resolved by the app itself (db_store.default_db_path): $CATALOGUE_DB
+# > $CATALOGUE_DATA_DIR > `catalogue_db` in private/local_defaults.json > repo-relative
+# fallback. Nothing to set here — export $CATALOGUE_DB before running to override for a
+# one-off (e.g. a sandbox DB).
 # The app now runs inside the uv workspace (post-reorg); make sure uv is on PATH.
 export PATH="$HOME/.local/bin:$PATH"
 

@@ -32,6 +32,7 @@ from .db import (
 from .paths import (
     DB_ENV,
     DATA_DIR_ENV,
+    config_db_path,
     data_dir,
     default_db_path,
 )

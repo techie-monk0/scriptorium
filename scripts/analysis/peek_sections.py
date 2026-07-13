@@ -11,7 +11,7 @@ from pathlib import Path
 import sys, pathlib
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 
-from catalogue.db_store import connect
+from catalogue.db_store import connect, default_db_path
 from catalogue.services.process import _read_raw_text
 from catalogue.services.locator import extract_sections
 from catalogue.services.book_analysis import peek_section
@@ -57,7 +57,7 @@ def main():
     warm = os.environ.get("CATALOGUE_LLM_MODELS", "gemma3:12b").split(",")[0].strip()
     ensure_ollama(base, warm_model=warm, log=_p)
     ladder = default_ladder()
-    db = connect("catalogue-db/catalogue.db")
+    db = connect(default_db_path())
     run(db, 39, ladder, "Wheel-Weapon + Poison-Peacock → Dharmarakṣita (epub-nav)")
     run(db, 60, ladder, "no contained texts → modern_study (pdf-bookmark)")
     run(db, 155, ladder, "Precious Garland → Nāgārjuna (pdf-textlayer)")

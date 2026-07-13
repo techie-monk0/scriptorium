@@ -11,7 +11,10 @@ this module so there is exactly one policy to reason about.
 Resolution order (`default_db_path()`):
   1. ``$CATALOGUE_DB``        — full path to the ``.db`` file (highest precedence)
   2. ``$CATALOGUE_DATA_DIR``  — a directory; the DB is ``<dir>/catalogue.db``
-  3. ``./private/catalogue-db/catalogue.db`` — repo-relative fallback
+  3. ``catalogue_db`` in ``private/local_defaults.json`` — the machine-local config, the
+     single source of truth read by *every* entrypoint (webui, CLI, pipelines, tests,
+     analysis scripts); so the DB location is never hardcoded anywhere
+  4. ``./private/catalogue-db/catalogue.db`` — repo-relative fallback
 
 The DB's sidecar artifacts (``.cover-cache``, ``.webdav-cache``, ``covers-pinned``)
 live alongside it and are derived from ``data_dir()`` / the DB's parent directory,
@@ -19,12 +22,48 @@ so pointing ``$CATALOGUE_DB`` elsewhere moves the whole data set as a unit.
 """
 from __future__ import annotations
 
+import json
 import os
+from pathlib import Path
 
 #: Env var naming the DB file directly (wins over everything).
 DB_ENV = "CATALOGUE_DB"
 #: Env var naming the directory that holds the DB + its sidecar caches.
 DATA_DIR_ENV = "CATALOGUE_DATA_DIR"
+
+#: Machine-local private config (tracked under private/, stripped from the public
+#: release). Holds the real DB path (and other machine paths); read directly here so a
+#: lower layer doesn't import the services layer. Location overridable for tests.
+_LOCAL_DEFAULTS_ENV = "CATALOGUE_LOCAL_DEFAULTS"
+_CONFIG_DB_KEY = "catalogue_db"
+#: Repo root, from this file's location (editable install / repo checkout).
+_REPO_ROOT = Path(__file__).resolve().parents[5]
+
+
+def _private_config() -> dict:
+    """Parsed ``private/local_defaults.json`` (or ``$CATALOGUE_LOCAL_DEFAULTS``); ``{}``
+    if absent/unreadable. Read as plain JSON — no dependency on the services layer."""
+    override = os.environ.get(_LOCAL_DEFAULTS_ENV)
+    path = Path(override) if override else _REPO_ROOT / "private" / "local_defaults.json"
+    try:
+        data = json.loads(path.read_text("utf-8"))
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def config_db_path() -> "str | None":
+    """The DB path from the private config (``catalogue_db`` in local_defaults.json),
+    with env overrides IGNORED and ``~`` / ``$VARS`` expanded; ``None`` when unset.
+
+    This is the machine-local source of truth. It exists separately from
+    ``default_db_path()`` because the test suite deliberately overrides ``$CATALOGUE_DB``
+    to a tmp DB for hermeticity — the live-DB guard/integrity tests use *this* to find
+    the REAL live DB regardless of that override."""
+    v = _private_config().get(_CONFIG_DB_KEY)
+    if not v:
+        return None
+    return os.path.expanduser(os.path.expandvars(v))
 
 #: Repo-relative fallback used only when neither env var is set (e.g. a fresh clone
 #: with no serve.env). Kept for a zero-config default; the maintainer's real DB is
@@ -43,7 +82,13 @@ def data_dir() -> str:
     db = os.environ.get(DB_ENV)
     if db:
         return os.path.dirname(os.path.abspath(db))
-    return os.environ.get(DATA_DIR_ENV) or DEFAULT_DATA_DIR
+    dd = os.environ.get(DATA_DIR_ENV)
+    if dd:
+        return dd
+    cfg = config_db_path()
+    if cfg:
+        return os.path.dirname(os.path.abspath(cfg))
+    return DEFAULT_DATA_DIR
 
 
 def default_db_path() -> str:
@@ -57,7 +102,13 @@ def default_db_path() -> str:
     db = os.environ.get(DB_ENV)
     if db:
         return db
-    return os.path.join(data_dir(), DB_FILENAME)
+    dd = os.environ.get(DATA_DIR_ENV)
+    if dd:
+        return os.path.join(dd, DB_FILENAME)
+    cfg = config_db_path()
+    if cfg:
+        return cfg
+    return os.path.join(DEFAULT_DATA_DIR, DB_FILENAME)
 
 
 def require_db(db_path: str | os.PathLike) -> str:

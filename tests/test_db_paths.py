@@ -2,7 +2,7 @@
 and NOT in the repo, so every entrypoint resolves its path through one function.
 
 Contract under test:
-  default_db_path()  ->  $CATALOGUE_DB  >  $CATALOGUE_DATA_DIR/catalogue.db  >  ./private/catalogue-db/catalogue.db
+  default_db_path()  ->  $CATALOGUE_DB  >  $CATALOGUE_DATA_DIR/catalogue.db  >  catalogue_db (private/local_defaults.json)  >  ./private/catalogue-db/catalogue.db
   data_dir()         ->  the directory that holds the DB + its sidecar caches
   require_db()       ->  actionable FileNotFoundError when the file is absent
   connect_ro()       ->  same friendly error (read-only cannot create a DB)
@@ -22,10 +22,13 @@ from catalogue.db_store import paths, connect_ro, default_db_path, data_dir, DB_
 
 @pytest.fixture
 def clean_env(monkeypatch):
-    """Neither location env set. conftest FORCES CATALOGUE_DB for hermeticity, so
-    delete both here and let each test opt back in."""
+    """Neither location env set, and the private config suppressed (point
+    $CATALOGUE_LOCAL_DEFAULTS at a nonexistent file) so resolution falls to the
+    repo-relative default. conftest FORCES CATALOGUE_DB for hermeticity, so delete
+    both here and let each test opt back in."""
     monkeypatch.delenv(DB_ENV, raising=False)
     monkeypatch.delenv(DATA_DIR_ENV, raising=False)
+    monkeypatch.setenv("CATALOGUE_LOCAL_DEFAULTS", "/nonexistent/__no_local_defaults__.json")
     return monkeypatch
 
 
@@ -50,6 +53,23 @@ def test_catalogue_db_wins_over_data_dir(clean_env):
     # Sidecars (.cover-cache, covers-pinned, …) live beside the DB, so data_dir
     # tracks the DB's parent, not $CATALOGUE_DATA_DIR.
     assert data_dir() == "/elsewhere"
+
+
+def test_config_file_resolves_db_below_env(clean_env, tmp_path):
+    """`catalogue_db` in the private config resolves the DB when no env is set (~
+    expanded), and both env vars still win over it."""
+    import json
+    ld = tmp_path / "local_defaults.json"
+    ld.write_text(json.dumps({"catalogue_db": "~/somewhere/cat.db"}))
+    clean_env.setenv("CATALOGUE_LOCAL_DEFAULTS", str(ld))
+    expected = os.path.expanduser("~/somewhere/cat.db")
+    assert default_db_path() == expected
+    assert data_dir() == os.path.dirname(os.path.abspath(expected))
+    # env beats the config file
+    clean_env.setenv(DATA_DIR_ENV, "/srv/library")
+    assert default_db_path() == os.path.join("/srv/library", "catalogue.db")
+    clean_env.setenv(DB_ENV, "/env/wins.db")
+    assert default_db_path() == "/env/wins.db"
 
 
 def test_read_at_call_time_not_cached(clean_env):

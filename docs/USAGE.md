@@ -16,9 +16,11 @@ settings can also be set in the web **Settings** page instead (which saves them 
 
 **The few things that are required — and error clearly if missing:**
 
-- **A database.** Defaults to `private/catalogue-db/catalogue.db`; point elsewhere with
-  `$CATALOGUE_DB`. If the file doesn't exist, the app tells you how to create one
-  (it does not silently start empty). See the README "database" section.
+- **A database.** Resolved by the app in this order: `$CATALOGUE_DB` → `$CATALOGUE_DATA_DIR`
+  → **`catalogue_db` in `private/local_defaults.json`** (the machine-local config; this repo
+  sets it to the DB's own repo at `~/Dev/catalogue-db/catalogue.db`) → the repo-relative
+  `private/catalogue-db/catalogue.db` fallback. If the file doesn't exist, the app tells you
+  how to create one (it does not silently start empty). See the README "database" section.
 - **A books folder — only if you add/scan books from disk.** Set `$CATALOGUE_MOUNT_ROOT`
   (or configure the library root in Settings). Trying to scan without it stops with
   *"No library books directory is configured…"* instead of scanning the wrong folder.
@@ -33,8 +35,8 @@ cloud AI help and online lookups.
 
 | Variable | Purpose | If unset |
 |----------|---------|----------|
-| `CATALOGUE_DB` | Path to the catalogue `.db` file | Falls back to `private/catalogue-db/catalogue.db`; **errors clearly** if that file is absent |
-| `CATALOGUE_DATA_DIR` | Folder holding the DB + its caches (alternative to `CATALOGUE_DB`) | Uses the `private/catalogue-db/` folder |
+| `CATALOGUE_DB` | Path to the catalogue `.db` file | Then `$CATALOGUE_DATA_DIR`, then `catalogue_db` in `private/local_defaults.json`, then `private/catalogue-db/catalogue.db`; **errors clearly** if the resolved file is absent |
+| `CATALOGUE_DATA_DIR` | Folder holding the DB + its caches (alternative to `CATALOGUE_DB`) | Uses the config'd DB dir, else `private/catalogue-db/` |
 | `CATALOGUE_MOUNT_ROOT` / `CATALOGUE_LIBRARY_ROOT` | Your on-disk books folder(s) (`LIBRARY_ROOT` is `os.pathsep`-separated for several) | Uses the library root set in Settings; **scanning errors clearly** if none is set |
 | `CATALOGUE_INBOX_DIR` | Drop folder scanned first for freshly-added books | No inbox (feature simply off) |
 | `CATALOGUE_TRASH_DIR` | Where deleted book files are moved | Delete-to-Trash **errors clearly** until set (in Settings or here) |
@@ -64,7 +66,8 @@ Open **http://localhost:8000** (or `/app`). It binds `0.0.0.0:8000` so the iPhon
 reach it over Wi-Fi (use the Mac's LAN IP, e.g. `http://192.168.1.50:8000`, from the phone), and
 it's reachable remotely over the tunnel at **https://your-domain.example** — see **Remote access** below.
 
-- Live DB is `private/catalogue-db/catalogue.db` (the root `catalogue.db` is empty — ignore it).
+- Live DB lives in its own repo/dir (`~/Dev/catalogue-db/catalogue.db`), set via `catalogue_db`
+  in `private/local_defaults.json` (the root `catalogue.db` is empty — ignore it).
 - `caffeinate -s` keeps long OCR/LLM passes from freezing when the Mac sleeps (it does **not**
   stop lid-close sleep).
 - To restart and pick up code/credential changes: **Ctrl-C and re-run the launcher**.
