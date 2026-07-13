@@ -1,6 +1,6 @@
 .build/
 .swiftpm/*
-# Keep the shared scheme (builds Postilla + PostillaUI for the iOS destination).
+# Keep the shared scheme (builds Postilla + PostillaRender for the iOS destination).
 !.swiftpm/xcode
 .swiftpm/xcode/*
 !.swiftpm/xcode/xcshareddata

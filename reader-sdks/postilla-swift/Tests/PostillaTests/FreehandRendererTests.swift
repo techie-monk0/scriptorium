@@ -1,6 +1,6 @@
 import XCTest
 import CoreGraphics
-import PostillaUI
+import PostillaRender
 @testable import Postilla
 
 /// FreehandRenderer determinism (the canonical-ink parity gate, CoreGraphics —

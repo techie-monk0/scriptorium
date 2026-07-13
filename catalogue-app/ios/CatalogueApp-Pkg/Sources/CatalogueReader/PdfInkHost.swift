@@ -2,9 +2,9 @@
 import UIKit
 import PDFKit
 import Postilla
-import PostillaUI
+import PostillaRender
 
-/// The PDF adapter of the `InkHost` port (`PostillaUI`) — renders **fixed-page** `InkRegion`s onto a
+/// The PDF adapter of the `InkHost` port (`PostillaRender`) — renders **fixed-page** `InkRegion`s onto a
 /// hosted `PDFView` as native `PDFAnnotation`s, so PDFKit gives transform/zoom/print for free. The ink
 /// sibling of `PdfDecorationHost` (text-anchored marks). Ink is deliberately not an octavo
 /// `Decoration` — it needs its raw stroke payload — so it renders here, each region wrapped in an

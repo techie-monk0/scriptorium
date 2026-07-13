@@ -28,9 +28,9 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "PostillaUI"
-               BuildableName = "PostillaUI"
-               BlueprintName = "PostillaUI"
+               BlueprintIdentifier = "PostillaRender"
+               BuildableName = "PostillaRender"
+               BlueprintName = "PostillaRender"
                ReferencedContainer = "container:">
             </BuildableReference>
          </BuildActionEntry>

@@ -32,7 +32,7 @@ postilla-swift/                     # → SwiftPM package "Postilla", deps: Octa
       AnnotationStore.swift         # PORT: pull(since:rev)->{rev,ops} · push(ops)->{rev}  (LWW + UUID + tombstones)
       SyncEngine.swift              # offline op-queue, LWW merge, publication-scoped; flush on reconnect
       Recognizer.swift              # PORT: recognize(ink|region)->{text|shape|…}  (advisory)
-    PostillaUI/                     # capture + render (UIKit/PencilKit) — plugs DecorationHost
+    PostillaRender/                     # capture + render (UIKit/PencilKit) — plugs DecorationHost
       InkCanvas.swift               # PencilKit/UITouch capture; pen-vs-touch + ±700ms palm rejection
       FreehandRenderer.swift        # perfect-freehand-Swift outline → filled path (the canonical render)
       MarkOverlay.swift             # highlight/underline/strikeout/note over Octavo.DecorationHost
@@ -146,7 +146,7 @@ These are exposed as `Postilla` API on top of `Octavo`; the SDK provides the sea
 
 1. **PS-M1 — core + sync engine.** `Postilla` target: model, ports, LWW, offline op-queue;
    PS-U1–U5 green. Pure, no UIKit.
-2. **PS-M2 — capture + render.** `PostillaUI`: `InkCanvas` (PencilKit input + palm rejection) +
+2. **PS-M2 — capture + render.** `PostillaRender`: `InkCanvas` (PencilKit input + palm rejection) +
    `FreehandRenderer` (perfect-freehand-Swift) + `MarkOverlay` over `DecorationHost`; PS-S1/S2.
 3. **PS-M3 — ink parity gate.** `PostillaParityTests` green vs web + flattened PDF (PS-Parity).
 4. **PS-M4 — export.** `PostillaExport` (PDF flatten today; W3C-EPUB JSON); PS-S3.

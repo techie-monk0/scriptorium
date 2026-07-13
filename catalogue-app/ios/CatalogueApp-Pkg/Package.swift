@@ -36,7 +36,7 @@ let package = Package(
             .product(name: "OctavoEPUB", package: "octavo-swift"),
             .product(name: "OctavoAdapters", package: "octavo-swift"),
             .product(name: "Postilla", package: "postilla-swift"),
-            .product(name: "PostillaUI", package: "postilla-swift"),
+            .product(name: "PostillaRender", package: "postilla-swift"),
         ]),
         .target(name: "CatalogueUI", dependencies: ["CatalogueCore", "CatalogueData", "CatalogueDesign", "CatalogueReader"]),
 

@@ -1,6 +1,6 @@
 import XCTest
 import CoreGraphics
-import PostillaUI
+import PostillaRender
 @testable import Postilla
 
 /// `InkLayerRenderer` actually paints (the "canvas-actually-painted" guard,

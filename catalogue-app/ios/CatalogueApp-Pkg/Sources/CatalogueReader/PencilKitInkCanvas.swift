@@ -3,7 +3,7 @@ import SwiftUI
 import PencilKit
 import PDFKit
 import Postilla
-import PostillaUI
+import PostillaRender
 
 /// PencilKit capture surface laid over the PDF page. **PencilKit is input-only** (the canonical-ink
 /// rule): a finished stroke is converted to a normalized `InkStroke` — page-relative `0…1` with the

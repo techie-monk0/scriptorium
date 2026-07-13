@@ -30,7 +30,7 @@ SwiftUI rendering + web/PWA JS still need a **simulator/browser pass** (not yet 
 
 ### SDKs (repo root)
 - [x] **octavo-swift** — `Octavo` (Locator, ports, Navigator), `PdfKitNavigator`, adapters. *(30 tests)*
-- [x] **postilla-swift** — `Postilla` (annotation/ink model, LWW SyncEngine, ports), `PostillaUI` (PencilKit input, FreehandRenderer). *(27 tests)*
+- [x] **postilla-swift** — `Postilla` (annotation/ink model, LWW SyncEngine, ports), `PostillaRender` (PencilKit input, FreehandRenderer). *(27 tests)*
 
 ---
 

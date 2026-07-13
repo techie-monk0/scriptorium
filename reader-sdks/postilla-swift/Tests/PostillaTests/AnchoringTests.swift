@@ -1,6 +1,6 @@
 import XCTest
 import Octavo
-import PostillaUI
+import PostillaRender
 @testable import Postilla
 
 /// PS-U3 — Annotation ⇄ Locator anchoring.

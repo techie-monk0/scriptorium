@@ -9,7 +9,7 @@ let package = Package(
     ],
     products: [
         .library(name: "Postilla", targets: ["Postilla"]),
-        .library(name: "PostillaUI", targets: ["PostillaUI"]),
+        .library(name: "PostillaRender", targets: ["PostillaRender"]),
     ],
     dependencies: [
         // Local path dependency on the base Reader SDK.
@@ -27,7 +27,7 @@ let package = Package(
         // the CoreGraphics renderer (FreehandRenderer) + DecorationHost mapping
         // still compile/run on macOS via `swift test`.
         .target(
-            name: "PostillaUI",
+            name: "PostillaRender",
             dependencies: [
                 "Postilla",
                 .product(name: "Octavo", package: "octavo-swift"),
@@ -37,7 +37,7 @@ let package = Package(
         // Pure unit tests — run fully on macOS via `swift test`.
         .testTarget(
             name: "PostillaTests",
-            dependencies: ["Postilla", "PostillaUI"]
+            dependencies: ["Postilla", "PostillaRender"]
         ),
     ]
 )

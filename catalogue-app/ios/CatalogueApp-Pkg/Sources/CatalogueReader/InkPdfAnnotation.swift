@@ -2,7 +2,7 @@
 import UIKit
 import PDFKit
 import Postilla
-import PostillaUI
+import PostillaRender
 
 /// A display-only `PDFAnnotation` that draws postilla freehand ink onto a PDF
 /// page via the shared `InkLayerRenderer`. By living *inside* a `PDFAnnotation`,

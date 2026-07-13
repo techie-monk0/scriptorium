@@ -8,7 +8,7 @@ import OctavoPDFKit
 import OctavoEPUB
 import OctavoAdapters
 import Postilla
-import PostillaUI
+import PostillaRender
 import CatalogueCore
 import CatalogueData
 import CatalogueDesign
