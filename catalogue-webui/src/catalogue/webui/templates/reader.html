@@ -136,6 +136,19 @@
     const FILE_URL = `/holding/${HID}/file`;
     const POS_URL  = `/holding/${HID}/position`;
 
+    // The catalogue.reader_sync wire-contract version this reader was built for. Every /sync/reader
+    // response advertises the server's live `contract_version`; warn once on drift so a mismatch is
+    // visible instead of silently mis-syncing (server spec: db_store/reader_sync_contract.json).
+    const READER_SYNC_CONTRACT = 1;
+    let _contractWarned = false;
+    const _checkContract = (d) => {
+      const v = d && d.contract_version;
+      if (v >= READER_SYNC_CONTRACT || _contractWarned) return d;
+      _contractWarned = true;
+      console.warn(`reader_sync contract mismatch: server=${v == null ? 'none' : v}, built-for=${READER_SYNC_CONTRACT}`);
+      return d;
+    };
+
     // POST one bookmark op (add / rename / delete) to the offline-first sync endpoint.
     const _bmPost = (fields) =>
       fetch('/sync/reader', { method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -229,6 +242,7 @@
       bookmarks: {
         list: () => fetch(`/sync/reader?holding=${HID}`)   // holding-scoped: tiny, not a whole-table pull
           .then(r => r.ok ? r.json() : { bookmarks: [] })
+          .then(_checkContract)
           .then(d => (d.bookmarks || []).sort((a, b) => (a.fraction || 0) - (b.fraction || 0)))
           .catch(() => []),
         add: ({ locator, fraction, label }) => {
@@ -251,6 +265,7 @@
       annotations: {
         list: () => fetch(`/sync/reader?holding=${HID}`)   // holding-scoped: only this book's marks
           .then(r => r.ok ? r.json() : { annotations: [] })
+          .then(_checkContract)
           .then(d => (d.annotations || []))
           .catch(() => []),
         add: (a) => {   // a = {kind, cfi_range?|page?+rect?, color, note_text?, ink?}

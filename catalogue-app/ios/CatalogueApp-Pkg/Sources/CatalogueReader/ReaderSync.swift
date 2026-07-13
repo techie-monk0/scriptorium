@@ -44,6 +44,7 @@ public struct ReaderSync: AnnotationStore, Sendable {
         let (data, resp) = try await session.data(for: req)
         try Self.check(resp)
         let wire = try JSONDecoder().decode(LegacyPull.self, from: data)
+        ReaderSyncContract.check(wire.contract_version)
         return PullResult(rev: wire.rev,
                           ops: wire.annotations.compactMap { $0.toAnnotation(publicationId: publicationId) })
     }
@@ -62,6 +63,7 @@ public struct ReaderSync: AnnotationStore, Sendable {
         let (data, resp) = try await session.data(for: req)
         try Self.check(resp)
         let r = try JSONDecoder().decode(LegacyPushResp.self, from: data)
+        ReaderSyncContract.check(r.contract_version)
         // `applied` carries {id, rev} for accepted ops, {id, skipped} for dropped ones.
         return PushResult(rev: r.rev,
                           applied: r.applied.compactMap { $0.rev != nil ? UUID(uuidString: $0.id) : nil })
@@ -69,9 +71,9 @@ public struct ReaderSync: AnnotationStore, Sendable {
 
     // MARK: Legacy /sync/reader wire shapes
 
-    private struct LegacyPull: Decodable { var rev: Int; var annotations: [LegacyAnnotation] }
+    private struct LegacyPull: Decodable { var rev: Int; var annotations: [LegacyAnnotation]; var contract_version: Int? }
     private struct LegacyPush: Encodable { var ops: [LegacyOp] }
-    private struct LegacyPushResp: Decodable { var rev: Int; var applied: [Applied] }
+    private struct LegacyPushResp: Decodable { var rev: Int; var applied: [Applied]; var contract_version: Int? }
     private struct Applied: Decodable { var id: String; var rev: Int? }
 
     /// One annotation record as the catalogue store serialises it (snake_case; `rect`/`ink` are

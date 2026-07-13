@@ -95,4 +95,24 @@ final class ReaderSyncTests: XCTestCase {
         let result = try await makeSync().push(publicationId: "holding:7", ops: [sampleAnnotation()])
         XCTAssertEqual(result.applied, [])
     }
+
+    /// The client asserts the server's advertised `catalogue.reader_sync` version: same-or-newer is
+    /// compatible; a missing or older version is not (surfaces as a one-time log warning).
+    func testContractVersionCompatibility() {
+        XCTAssertEqual(ReaderSyncContract.builtFor, 1)
+        XCTAssertTrue(ReaderSyncContract.compatible(1))     // exact match
+        XCTAssertTrue(ReaderSyncContract.compatible(2))     // newer server (additive) is fine
+        XCTAssertFalse(ReaderSyncContract.compatible(nil))  // server predates the contract
+        XCTAssertFalse(ReaderSyncContract.compatible(0))    // server older than we were built for
+    }
+
+    /// Pull tolerates the advertised `contract_version` on the response without disturbing decode.
+    func testPullToleratesContractVersion() async throws {
+        MockURLProtocol.routes["/sync/reader"] = (200, Data("""
+        {"rev":9,"bookmarks":[],"annotations":[],"contract_version":1}
+        """.utf8))
+        let result = try await makeSync().pull(publicationId: "holding:7", since: 0)
+        XCTAssertEqual(result.rev, 9)
+        XCTAssertEqual(result.ops.count, 0)
+    }
 }

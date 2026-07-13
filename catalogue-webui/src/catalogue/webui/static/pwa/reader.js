@@ -10,6 +10,18 @@
  */
 'use strict';
 (function () {
+  // The catalogue.reader_sync wire-contract version this client was built for. Every /sync/reader
+  // response advertises the server's live `contract_version`; warn once if it drifts from ours so a
+  // mismatch is visible instead of silently mis-syncing (server spec: db_store/reader_sync_contract.json).
+  const READER_SYNC_CONTRACT = 1;
+  let _contractWarned = false;
+  function checkReaderSyncContract(d) {
+    const v = d && d.contract_version;
+    if (v >= READER_SYNC_CONTRACT || _contractWarned) return;
+    _contractWarned = true;
+    console.warn(`reader_sync contract mismatch: server=${v == null ? 'none' : v}, built-for=${READER_SYNC_CONTRACT}`);
+  }
+
   function loadScript(src) {
     return new Promise((res, rej) => {
       const s = document.createElement('script');
@@ -91,7 +103,7 @@
       if (navigator.onLine !== false) {
         try {
           const r = await Net.fetch(`/sync/reader?holding=${HID}&since=0`);
-          if (r && r.ok) { const d = await r.json(); for (const rec of (d[field] || [])) m[rec.id] = rec; await cachePut(m); }
+          if (r && r.ok) { const d = await r.json(); checkReaderSyncContract(d); for (const rec of (d[field] || [])) m[rec.id] = rec; await cachePut(m); }
         } catch (e) {}
       }
       return Object.values(m).filter(r => !r.deleted_at);

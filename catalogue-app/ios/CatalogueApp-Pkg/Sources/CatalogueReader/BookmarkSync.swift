@@ -32,6 +32,7 @@ public struct BookmarkSync: BookmarkStore, Sendable {
         let (data, resp) = try await session.data(for: req)
         try Self.check(resp)
         let wire = try JSONDecoder().decode(LegacyPull.self, from: data)
+        ReaderSyncContract.check(wire.contract_version)
         return BookmarkPullResult(rev: wire.rev,
                                   ops: wire.bookmarks.compactMap { $0.toBookmark(publicationId: publicationId) })
     }
@@ -50,15 +51,16 @@ public struct BookmarkSync: BookmarkStore, Sendable {
         let (data, resp) = try await session.data(for: req)
         try Self.check(resp)
         let r = try JSONDecoder().decode(LegacyPushResp.self, from: data)
+        ReaderSyncContract.check(r.contract_version)
         return PushResult(rev: r.rev,
                           applied: r.applied.compactMap { $0.rev != nil ? UUID(uuidString: $0.id) : nil })
     }
 
     // MARK: Legacy wire
 
-    private struct LegacyPull: Decodable { var rev: Int; var bookmarks: [LegacyBookmark] }
+    private struct LegacyPull: Decodable { var rev: Int; var bookmarks: [LegacyBookmark]; var contract_version: Int? }
     private struct LegacyPush: Encodable { var ops: [LegacyOp] }
-    private struct LegacyPushResp: Decodable { var rev: Int; var applied: [Applied] }
+    private struct LegacyPushResp: Decodable { var rev: Int; var applied: [Applied]; var contract_version: Int? }
     private struct Applied: Decodable { var id: String; var rev: Int? }
 
     private struct LegacyBookmark: Decodable {
