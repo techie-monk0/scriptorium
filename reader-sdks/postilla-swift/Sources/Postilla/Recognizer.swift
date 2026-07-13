@@ -1,5 +1,5 @@
 import Foundation
-import Octavo
+import ReaderContract
 
 /// What a recognizer was handed.
 public enum RecognizerInput: Sendable {

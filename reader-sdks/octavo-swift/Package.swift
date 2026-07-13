@@ -13,9 +13,18 @@ let package = Package(
         .library(name: "OctavoEPUB", targets: ["OctavoEPUB"]),
         .library(name: "OctavoAdapters", targets: ["OctavoAdapters"]),
     ],
+    dependencies: [
+        // The neutral seam (Locator / Decoration / DecorationHost) — shared with
+        // postilla, owned by neither. Octavo re-exports it (see Exports.swift) so
+        // `import Octavo` still surfaces these types unchanged.
+        .package(path: "../reader-contract"),
+    ],
     targets: [
         // Pure contract mirror — no UIKit/PDFKit/WebKit.
-        .target(name: "Octavo"),
+        .target(
+            name: "Octavo",
+            dependencies: [.product(name: "ReaderContract", package: "reader-contract")]
+        ),
 
         // Navigator engine — PDF (PDFKit; available on iOS AND macOS).
         .target(name: "OctavoPDFKit", dependencies: ["Octavo"]),

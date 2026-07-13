@@ -1,5 +1,5 @@
 import XCTest
-import Octavo
+import ReaderContract
 @testable import Postilla
 
 /// N2 — `Annotation` → `InkRegion` projection (the placement-layer's typed view over the row).

@@ -1,5 +1,5 @@
 import Foundation
-import Octavo
+import ReaderContract
 
 /// How an ink writing-surface relates to the laid-out content. The three modes
 /// generalize the strategies real readers actually use, so one data model serves

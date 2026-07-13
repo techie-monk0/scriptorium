@@ -1,5 +1,5 @@
 import XCTest
-import Octavo
+import ReaderContract
 import PostillaRender
 @testable import Postilla
 

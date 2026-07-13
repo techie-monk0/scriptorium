@@ -1,5 +1,5 @@
 import Foundation
-import Octavo
+import ReaderContract
 
 /// The kinds of mark a reader can make. `ink` carries freehand handwriting;
 /// the rest are text-anchored marks.

@@ -1,5 +1,5 @@
 import Foundation
-import Octavo
+import ReaderContract
 @testable import Postilla
 
 /// Shared fixtures for the Postilla unit suite.

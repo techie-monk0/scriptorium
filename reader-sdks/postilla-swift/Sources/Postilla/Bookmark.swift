@@ -1,5 +1,5 @@
 import Foundation
-import Octavo
+import ReaderContract
 
 /// A reading bookmark — the bookmark sibling of `Annotation` (same offline-first shape: client-minted
 /// `UUID`, `updatedAt`+`rev` LWW, `deletedAt` tombstone). `locator` is where it points (a PDF page /

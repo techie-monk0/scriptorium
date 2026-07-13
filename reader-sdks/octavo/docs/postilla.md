@@ -1,10 +1,13 @@
 # Reader SDK — annotations / handwriting / recognition extension (plan)
 
-Package **`postilla`** (Italian/Latin: a marginal note added to a text) — an **extension** built on
-the base Reader SDK **`octavo`** (`octavo.md`). The base SDK reads, paginates, searches, and exposes a **Locator** + a
-**DecorationHost** seam; this extension turns that seam into the full annotation stack: highlights,
-underline/strikeout, notes, **freehand handwriting**, a **structured sync-of-record** (not baked
-into files), **portable export**, **recognition** (ink→text, ink→shape, search-in-ink), and the
+Package **`postilla`** (Italian/Latin: a marginal note added to a text) — the annotation layer for a
+reader. It builds on a neutral seam — a **`Locator`** ("where in the text") + a **`DecorationHost`**
+("draw a mark here") — which lives in the shared **`reader-contract`** package (`reader-contract/README.md`),
+**not** in any reading engine. Postilla depends on that contract and on no reader: **`octavo`**
+(`octavo.md`) is the reference reader that speaks it, but any reader that implements `DecorationHost`
+and emits `Locator`s can host postilla. From that seam postilla builds the full annotation stack:
+highlights, underline/strikeout, notes, **freehand handwriting**, a **structured sync-of-record** (not
+baked into files), **portable export**, **recognition** (ink→text, ink→shape, search-in-ink), and the
 **integration hooks** that let an LLM/research layer "open the text at a location."
 
 This is a near-direct productization of what the web reader already does (`handwriting_TODO.md`,
@@ -19,8 +22,10 @@ landed `2acb341`) — generalized off the catalogue and split into a clean, plug
   swap (their backend, their recognizer, their export targets) → they belong behind ports, opt-in.
 - It keeps the base SDK's stability surface small. The extension can iterate faster.
 
-The extension plugs into the base via `DecorationHost` (render marks at Locators) + the input/overlay
-seam (capture pen/touch). Nothing here reaches around the base contract.
+Postilla plugs into a reader via `DecorationHost` (render marks at Locators) + the input/overlay
+seam (capture pen/touch), both defined in `reader-contract`. Nothing here reaches around that
+contract into a specific engine — which is why octavo and postilla are independent siblings, each
+depending only on the shared contract.
 
 ---
 

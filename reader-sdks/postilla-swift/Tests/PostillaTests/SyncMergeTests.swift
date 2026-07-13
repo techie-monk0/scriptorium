@@ -1,5 +1,5 @@
 import XCTest
-import Octavo
+import ReaderContract
 @testable import Postilla
 
 /// PS-U1 — Sync LWW merge (the correctness core).

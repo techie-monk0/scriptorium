@@ -1,5 +1,5 @@
 import Foundation
-import Octavo
+import ReaderContract
 import Postilla
 
 /// Maps a Postilla `Annotation` onto an Octavo `Decoration` anchored at its

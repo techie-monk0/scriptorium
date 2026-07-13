@@ -2,8 +2,10 @@
 
 The Swift binding of **`postilla`** (`postilla.md`): the SwiftPM package the **`catalogue-app`**
 (`../../../catalogue-app/docs/ios_native_plan.md`, impl step 7) hosts for in-app annotation, handwriting,
-and export. It depends on **`octavo-swift`** (`octavo-swift_plan.md`) and plugs into its
-**`DecorationHost`** seam + input/overlay layer — it never reaches around the base contract.
+and export. It depends only on **`reader-contract`** (the shared `Locator` / `Decoration` /
+**`DecorationHost`** seam) — **not** on `octavo-swift` — and plugs into that seam + the input/overlay
+layer. `octavo-swift` is the reference reader that implements the same contract; postilla never
+reaches into it, so the two are independent siblings.
 
 It mirrors **`postilla-core`** in Swift (annotation model, ink model, the `AnnotationStore` +
 `Recognizer` ports, the offline-first LWW sync engine) and adds the Apple capture/render stack:
@@ -17,11 +19,12 @@ agent environment cannot build it. `xcodebuild test` runs locally.
 
 ## 1. Package layout
 
-SwiftPM package, product/import root **`Postilla`**; depends on `Octavo`. Sibling of `catalogue-app`,
+SwiftPM package, product/import root **`Postilla`**; depends on `ReaderContract` (re-exported, so
+`import Postilla` still surfaces `Locator`/`Decoration`). Sibling of `catalogue-app`,
 not under it.
 
 ```
-postilla-swift/                     # → SwiftPM package "Postilla", deps: Octavo
+postilla-swift/                     # → SwiftPM package "Postilla", deps: ReaderContract (not Octavo)
   Package.swift
   Sources/
     Postilla/                       # mirror of postilla-core, in Swift (no UIKit here)

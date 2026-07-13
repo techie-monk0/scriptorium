@@ -57,12 +57,17 @@ work is mostly **decoupling** (remove every catalogue/Flask reference) + **docum
 ```
 octavo-core        (platform-neutral spec + core logic; ZERO platform/host deps)
   ├─ Publication model         {format, metadata?, resources}
-  ├─ Locator                   {format-tagged location + progression + textContext}
+  ├─ Locator                   {format-tagged location + progression + textContext}   ← from reader-contract
   ├─ Navigator (interface)     open · goTo(locator) · next/prev · search(q)->[Locator] · outline
   ├─ Source (PORT)             read(range)->bytes · length · contentType   (integrator supplies)
   ├─ ReadingStore (PORT)       getPosition · setPosition · recent(n)        (integrator supplies)
   ├─ Capabilities              canAnnotate · canExport · …                  (integrator supplies)
-  └─ DecorationHost (interface, EXTENSION plugs here)
+  └─ DecorationHost (interface, EXTENSION plugs here)                       ← from reader-contract
+
+Note: `Locator` + `Decoration` + `DecorationHost` now live in the shared **`reader-contract`**
+package (`reader-contract/README.md`), which both octavo and postilla depend on — so the annotation
+extension no longer depends on octavo. octavo re-exports them (`@_exported import ReaderContract`), so
+`import Octavo` still surfaces these types unchanged.
 
 octavo-web         (Navigator impls: PdfJsNavigator, EpubJsNavigator)   — reference renderer
 octavo-swift       (Navigator impls: PdfKitNavigator, EpubWebNavigator) — iOS/macOS

@@ -1,11 +1,16 @@
 # postilla-swift
 
-The Swift binding of **postilla** — the annotation and handwriting layer that sits
-on top of the base reader SDK, **octavo**. Octavo reads, paginates, and searches a
-book and exposes two seams (a `Locator` for "where in the text" and a
-`DecorationHost` for "draw something there"). Postilla turns those seams into the
-full annotation stack: highlights, underline/strikeout, notes, freehand
-handwriting, an offline-first sync-of-record, and a recognition (ink → text) port.
+The Swift binding of **postilla** — the annotation and handwriting layer for a
+reader. It turns two neutral seams — a `Locator` for "where in the text" and a
+`DecorationHost` for "draw something there" — into the full annotation stack:
+highlights, underline/strikeout, notes, freehand handwriting, an offline-first
+sync-of-record, and a recognition (ink → text) port.
+
+Those seams live in a tiny shared package, **`ReaderContract`** (`Locator`,
+`Decoration`, `DecorationHost`), that postilla depends on. It does **not** depend
+on any reading engine — **octavo** is the reference reader, but any reader that
+speaks `ReaderContract` (implements `DecorationHost` and emits `Locator`s) can host
+postilla. See [Which readers can host it](#which-readers-can-host-it).
 
 The package ships **two products**, and the split is the important thing to
 understand before you use it.
@@ -37,7 +42,7 @@ This is **not a set of UI views.** There is no `View`, `UIView`, or
   (`InkCanvas` / `InkSampler`; the only PencilKit code lives here, behind
   `#if canImport`),
 - **render** — turns stored ink strokes into pixels (`FreehandRenderer`,
-  `InkLayerRenderer`) and maps annotations onto octavo decorations
+  `InkLayerRenderer`) and maps annotations onto `ReaderContract` decorations
   (`Decorations`, `MarkOverlay`),
 - **seams** — the `InkHost` and `InkRegionResolver` protocols a host implements to
   say *where* on the current layout a stroke should be drawn.
@@ -49,15 +54,20 @@ leaves the actual views to the host app.
 ### How they relate
 
 ```
+ReaderContract   Locator · Decoration · DecorationHost (the seam; Foundation-only)
+   ▲
+   │ depends on
 Postilla         model + sync   (no platform deps)          ← import for logic only
    ▲
    │ depends on
 PostillaRender   capture + render engine + seams (CoreGraphics)  ← import to draw ink/marks
 ```
 
-`PostillaRender` depends on `Postilla` (and on `Octavo` for the `Locator` /
-`Decoration` contract). You never import `PostillaRender` *instead of* `Postilla` —
-importing `PostillaRender` gives you both.
+`Postilla` depends on `ReaderContract` (for `Locator`); `PostillaRender` depends on
+`Postilla`. Both re-export `ReaderContract`, so importing either surfaces the
+contract types without a separate `import ReaderContract`. You never import
+`PostillaRender` *instead of* `Postilla` — importing `PostillaRender` gives you
+both. Neither depends on octavo or any other reader.
 
 | | `Postilla` | `PostillaRender` |
 |---|---|---|
@@ -81,6 +91,21 @@ The catalogue app is the reference host — see
 `catalogue-app/ios/CatalogueApp-Pkg/Sources/CatalogueReader/` (`PdfInkHost.swift`,
 `PdfDecorationHost.swift`, `PencilKitInkCanvas.swift`), which are exactly these
 adapters against PDFKit. Another app writes its own equivalents.
+
+## Which readers can host it
+
+Postilla is not tied to octavo. It targets `ReaderContract`, so a reader hosts it
+by meeting that seam:
+
+- conform its view to **`DecorationHost`** (`apply([Decoration])` / `clear()`) to
+  get highlights/underline/strikeout, and
+- produce **`Locator`**s (or map its own position model onto one) to anchor marks.
+
+The **ink/handwriting half is lighter still** — `FreehandRenderer`,
+`InkLayerRenderer`, and `InkCanvas` touch no contract type at all; a reader that
+can hand them a rect + a `CGContext` gets Apple Pencil handwriting with nothing but
+`Postilla`/`PostillaRender` linked. Octavo is simply the reference reader that
+already speaks `ReaderContract`; nothing here reaches into it.
 
 ## Build and test
 
@@ -112,7 +137,7 @@ region's content anchor to an on-screen rect; the renderer never learns the form
 and the resolver never learns how strokes are shaped.
 
 **Marks vs. ink take different routes.** Highlight / underline / strikeout / note
-render as octavo `Decoration`s via `Decorations` + `MarkOverlay` (anchored at a
+render as `ReaderContract` `Decoration`s via `Decorations` + `MarkOverlay` (anchored at a
 `Locator`, carrying a `cfiRange` for EPUB text or a `region` rect for a PDF).
 Freehand ink does *not* go through the `DecorationHost`; it renders through the
 `FreehandRenderer` / `InkHost` overlay path. `Decorations.style(for:)` returns

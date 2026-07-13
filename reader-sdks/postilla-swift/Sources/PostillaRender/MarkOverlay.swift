@@ -1,5 +1,5 @@
 import Foundation
-import Octavo
+import ReaderContract
 import Postilla
 
 /// Drives an Octavo `DecorationHost` from a set of annotations — the

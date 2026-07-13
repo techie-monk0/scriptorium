@@ -1,5 +1,5 @@
 import XCTest
-import Octavo
+import ReaderContract
 @testable import Postilla
 
 /// Bookmark sync — LWW source-of-record contract (sibling of the annotation sync tests).
