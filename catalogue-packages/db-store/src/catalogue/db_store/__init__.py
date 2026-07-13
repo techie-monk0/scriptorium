@@ -44,3 +44,9 @@ from .external_contract import (
     descriptor as external_read_contract,
     verify as verify_external_read_contract,
 )
+from .reader_sync_contract import (
+    CONTRACT_VERSION as READER_SYNC_CONTRACT_VERSION,
+    api_version_payload as reader_sync_contract_version_payload,
+    descriptor as reader_sync_contract_descriptor,
+    verify as verify_reader_sync_contract,
+)

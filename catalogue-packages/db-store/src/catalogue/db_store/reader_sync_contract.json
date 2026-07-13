@@ -1,0 +1,94 @@
+{
+  "contract": "catalogue.reader_sync",
+  "version": 1,
+  "description": "The stable wire surface for offline-first reader-state sync (bookmarks + annotations) over GET/POST /sync/reader. Normative prose: docs/frontend/sync_architecture.md (Shape B). This descriptor is language-neutral on purpose: every client (web reader, PWA, the native app's postilla AnnotationStore adapter) targets THIS, not the reader_sync.py implementation, and verifies its version without importing catalogue code. Reading position is a separate surface (Shape C: /holding/<id>/position) and is NOT covered here.",
+  "identity_key": "id",
+  "cursor": "rev",
+  "cursor_semantics": "Monotonic integer. A pull returns the server cursor; a delta pull with ?since=<rev> returns only rows with rev > since, INCLUDING tombstones, so a deletion on one device propagates instead of reappearing.",
+  "conflict": "Last-write-wins keyed by the client-minted uuid `id`, with `rev` as tiebreaker. Deletions are tombstones (`deleted_at` set), never row removal.",
+  "auth": "Pull: any authenticated session. Push: editor-only — a read-only viewer gets 403 {\"error\": \"read-only\"} (reader marks are the library owner's).",
+  "endpoints": {
+    "pull": {
+      "method": "GET",
+      "path": "/sync/reader",
+      "query": {
+        "since": "delta pull across ALL holdings: rows with rev > since, incl. tombstones (the offline-sync pull)",
+        "holding": "reader-scoped LIVE paint for one copy (no tombstones) — what the reader loads on open so it never pulls the whole library",
+        "holding+since": "per-copy delta incl. tombstones (the native/PWA reader's offline-sync pull for one open book)"
+      },
+      "response": {
+        "rev": "server cursor (int)",
+        "bookmarks": "array of bookmark records (see records.bookmark)",
+        "annotations": "array of annotation records (see records.annotation)"
+      }
+    },
+    "push": {
+      "method": "POST",
+      "path": "/sync/reader",
+      "request": {
+        "ops": "array of {type: 'bookmark'|'annotation', ...op fields}; each is an idempotent LWW upsert keyed by id"
+      },
+      "response": {
+        "rev": "server cursor (int)",
+        "applied": "array, one per op, of {id, rev} on success or {id, skipped: true} when the op was malformed or its holding no longer exists (best-effort: one bad op never fails the batch)"
+      },
+      "errors": {
+        "403": "{\"error\": \"read-only\"} — the session cannot edit"
+      }
+    }
+  },
+  "records": {
+    "bookmark": {
+      "source": "catalogue.db_store.reader_state.Bookmark",
+      "purpose": "A pull row for a bookmark (server-authoritative, carries rev).",
+      "fields": {
+        "id": "client-minted uuid (identity key)",
+        "holding_id": "the copy this mark belongs to (int) — may be null on a tombstone",
+        "locator": "opaque position string (PDF page number / EPUB CFI)",
+        "fraction": "reading progress 0..1 (float)",
+        "label": "optional user label",
+        "created_at": "ISO-8601 client timestamp",
+        "updated_at": "ISO-8601 client timestamp (LWW basis)",
+        "deleted_at": "ISO-8601 tombstone timestamp; null when live",
+        "rev": "server-assigned monotonic revision (int)",
+        "content_hash": "holding version token for orphan relink; never a join key"
+      },
+      "required": ["id", "rev"]
+    },
+    "annotation": {
+      "source": "catalogue.db_store.reader_state.Annotation",
+      "purpose": "A pull row for an annotation (highlight/underline/strikeout/note/ink).",
+      "fields": {
+        "id": "client-minted uuid (identity key)",
+        "holding_id": "the copy this mark belongs to (int) — may be null on a tombstone",
+        "kind": "'highlight' | 'underline' | 'strikeout' | 'note' | 'ink'",
+        "cfi_range": "EPUB text range (CFI)",
+        "page": "PDF page, or EPUB spine index for ink (int)",
+        "rect": "JSON region for a PDF mark",
+        "color": "#rrggbb tint",
+        "note_text": "note body (kind='note')",
+        "ink": "JSON vector strokes (kind='ink')",
+        "created_at": "ISO-8601 client timestamp",
+        "updated_at": "ISO-8601 client timestamp (LWW basis)",
+        "deleted_at": "ISO-8601 tombstone timestamp; null when live",
+        "rev": "server-assigned monotonic revision (int)",
+        "content_hash": "holding version token for orphan relink; never a join key"
+      },
+      "required": ["id", "rev"]
+    }
+  },
+  "ops": {
+    "bookmark": {
+      "applies_via": "catalogue.db_store.reader_state.ReaderStateStore.apply_bookmark",
+      "purpose": "A push op that upserts a bookmark (LWW by id).",
+      "fields": ["id", "holding_id", "locator", "fraction", "label", "created_at", "updated_at", "deleted_at", "content_hash"],
+      "required": ["type", "id"]
+    },
+    "annotation": {
+      "applies_via": "catalogue.db_store.reader_state.ReaderStateStore.apply_annotation",
+      "purpose": "A push op that upserts an annotation (LWW by id).",
+      "fields": ["id", "holding_id", "kind", "cfi_range", "page", "rect", "color", "note_text", "ink", "created_at", "updated_at", "deleted_at", "content_hash"],
+      "required": ["type", "id"]
+    }
+  }
+}

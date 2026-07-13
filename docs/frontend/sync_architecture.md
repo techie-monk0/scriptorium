@@ -85,6 +85,28 @@ Reading position rides along: iOS mirrors it to the server on background/close/p
 - **Flatten/export** (`GET /holding/<id>/annotated.pdf` copy, `POST …/annotated` in-place) is a separate
   on-demand path, decoupled from sync.
 
+### 4.1 The wire contract (versioned)
+
+The `/sync/reader` shape is a **published, versioned contract** — `catalogue.reader_sync` — not just a
+docstring, so the three clients (web reader, PWA, and the native app's `postilla` `AnnotationStore`
+adapter) target one artifact instead of each re-deriving the shape. It mirrors the external read-contract
+pattern:
+
+- `db_store/reader_sync_contract.json` — the machine-readable, language-neutral spec (endpoints, the
+  `bookmark`/`annotation` pull-row records, the push ops, and the cursor/auth/conflict semantics), each
+  record `source`-linked to the `reader_state` dataclass it comes from.
+- Every `/sync/reader` response carries `contract_version`, and `GET /sync/reader/contract` serves the full
+  descriptor — so a client asserts the live version ≥ what it was built for (a few lines it owns, no
+  catalogue import).
+- `db_store/reader_sync_contract.py`'s `verify()` is the provider-side truthfulness check: every field the
+  descriptor declares must be a real `reader_state` dataclass field / `apply_*` parameter, so a future edit
+  that drops a field fails loudly (`tests/test_reader_sync_contract.py`) instead of silently breaking
+  clients.
+
+Layering note: `postilla`'s generic `AnnotationStore` port (in the sibling `octavo-postilla` repo) knows
+nothing about this contract — the catalogue-specific wire binding lives only in the app's `ReaderSync`
+adapter. The contract is what the adapter targets; octavo-postilla stays reusable.
+
 ## 5. Cross-language parity
 
 The decidable Tier-2 pieces (`syncVM`, `readerChromeVM`, the VMs) are generated from the real
@@ -111,6 +133,9 @@ surface's UI — pull silently upgrades to push.
 
 ## 8. Where the pieces live
 
+- Wire contract (Shape B): `db-store/.../db_store/reader_sync_contract.json` + `reader_sync_contract.py`
+  (`verify()`), served/advertised by `catalogue-webui/.../routes/reader_sync.py`; guarded by
+  `tests/test_reader_sync_contract.py`.
 - Shared VM: `catalogue-webui/.../static/js/library-core.js` (`syncVM`), `CatalogueCore/Sync.swift`.
 - iOS engine: `CatalogueData/SyncEngine.swift`; wired in `CatalogueUI/AppModel.swift`, `RootShell.swift`,
   `Components.swift` (`SyncStatusPill`, `catalogueRefreshable`), `Screens.swift`.

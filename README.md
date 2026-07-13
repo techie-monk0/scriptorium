@@ -65,7 +65,7 @@ Dependency direction is one-way; nothing imports "upward".
 | Package | Import | What it does |
 |---------|--------|--------------|
 | `contracts` | `catalogue.contracts` | Shared data types, open vocabularies, and the authorization contracts (`Principal`, `Policy`, `Action`, `Denied`) — no behavior |
-| `db-store` | `catalogue.db_store` | Lowest data layer: connections (read-only vs read-write), schema, migrations, vocab seeding, integrity guard |
+| `db-store` | `catalogue.db_store` | Lowest data layer: connections (read-only vs read-write), schema, migrations, vocab seeding, integrity guard. Also publishes the versioned, language-neutral **contracts** consumers verify against without importing catalogue code — the external read-contract (edition identity) and the **`catalogue.reader_sync`** wire contract (`/sync/reader`, consumed by the web/PWA readers and the native `postilla` adapter) |
 | `access-api` | `catalogue.access_api` | The one and only API for touching the database — per-concern reader/writer surfaces behind the policy gateway |
 | `services` | `catalogue.services` | Business logic: cataloguing, classification, resolution, sweep, editions/works, covers, export |
 | `populate` | `catalogue.populate` | The pipelines that populate the DB: scan sweeps, staging→load, batch imports |

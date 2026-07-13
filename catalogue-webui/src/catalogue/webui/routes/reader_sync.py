@@ -28,12 +28,23 @@ from flask import g, jsonify, request
 
 from catalogue.webui import auth as auth_mod
 from catalogue.db_store.reader_state import SqliteReaderStateStore
+from catalogue.db_store import (
+    reader_sync_contract_descriptor,
+    reader_sync_contract_version_payload as _contract_version,
+)
 
 
 def register(app, ctx):
     # The store is the swappable seam: default to the SQLite adapter over the request's
     # connection; a host (tests, a future remote backend) can inject `ctx.reader_store_factory`.
     store_factory = getattr(ctx, "reader_store_factory", None) or SqliteReaderStateStore
+
+    @app.get("/sync/reader/contract")
+    def reader_sync_contract_route():
+        # The published, versioned wire contract (catalogue.reader_sync). A client fetches this
+        # once to learn the shape + version it must speak; every /sync/reader response also carries
+        # `contract_version` so drift is caught on each sync. See db_store/reader_sync_contract.py.
+        return jsonify(reader_sync_contract_descriptor())
 
     @app.get("/sync/reader")
     def reader_sync_pull():
@@ -58,7 +69,8 @@ def register(app, ctx):
                 bookmarks = [asdict(bm) for bm in store.bookmarks_for_holding(holding)]
                 annotations = [asdict(a) for a in store.annotations_for_holding(holding)]
             return jsonify({"rev": store.cursor(),
-                            "bookmarks": bookmarks, "annotations": annotations})
+                            "bookmarks": bookmarks, "annotations": annotations,
+                            **_contract_version()})
         try:
             since = int(request.args.get("since", "0"))
         except (TypeError, ValueError):
@@ -66,7 +78,8 @@ def register(app, ctx):
         bookmarks = [asdict(bm) for bm in store.bookmarks_since(since)]
         annotations = [asdict(a) for a in store.annotations_since(since)]
         return jsonify({"rev": store.cursor(),
-                        "bookmarks": bookmarks, "annotations": annotations})
+                        "bookmarks": bookmarks, "annotations": annotations,
+                        **_contract_version()})
 
     @app.post("/sync/reader")
     def reader_sync_push():
@@ -104,4 +117,4 @@ def register(app, ctx):
             applied.append({"id": row.id, "rev": row.rev} if row is not None
                            else {"id": oid, "skipped": True})
         g.db.commit()
-        return jsonify({"rev": store.cursor(), "applied": applied})
+        return jsonify({"rev": store.cursor(), "applied": applied, **_contract_version()})
