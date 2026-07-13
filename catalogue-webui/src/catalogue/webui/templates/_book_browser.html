@@ -1094,12 +1094,26 @@
     }
   });
 
-  // Restore the previously-selected row (e.g. after a promote/revert round-trip).
-  let start = 0;
+  // Restore the previously-selected row (e.g. after a promote/revert round-trip),
+  // or honour a deep-link (#i<id>) from another page's "Edit this edition" link.
+  let start = 0, missingAnchor = null;
   const m = location.hash.match(/^#i(\d+)$/);
-  if (m) { const i = rows.findIndex(r => r.id === 'i' + m[1]); if (i >= 0) start = i; }
+  if (m) {
+    const i = rows.findIndex(r => r.id === 'i' + m[1]);
+    if (i >= 0) start = i;
+    else missingAnchor = m[1];      // deep-linked edition isn't in this worklist
+  }
   applyMasterFilter();              // collapse old reviewed rows on load (no-op if disabled)
-  if (rows.length) select(start);
+  if (missingAnchor !== null) {
+    // The requested edition has no row here. Do NOT fall through to select(0) —
+    // that silently lands the operator on the FIRST (wrong) edition with no hint.
+    // Leave nothing selected and say why. (The Browse "Edit this edition" link now
+    // seeds a detection first, so this only fires for stale/hand-typed anchors.)
+    if (typeof bbToast === 'function')
+      bbToast('Edition ' + missingAnchor + " isn't in this review list.");
+  } else if (rows.length) {
+    select(start);
+  }
 })();
 
 // Open a non-PDF file (EPUB, …) in the OS default reader. Falls back to a

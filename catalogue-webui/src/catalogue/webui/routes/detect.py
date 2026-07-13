@@ -122,6 +122,33 @@ def register(app, ctx):
     def works_detect_single():
         return _detect_view("single")
 
+    @app.get("/works/detect/<int:eid>/review")
+    def works_detect_review(eid):
+        """Deep-link target for the Browse pane's "Edit this edition on the Review
+        page" link. The Review worklist only lists editions that carry a
+        `work_detection` row; an edition that was never detected (a rare orphan)
+        has none, so the client-side `#i<eid>` anchor would find no row and the
+        book-browser used to silently fall back to the FIRST card — landing the
+        operator on the wrong edition. Seed a detection row on demand so the anchor
+        always resolves, then redirect to the worklist deep-linked to this edition.
+
+        Seeding is NON-DESTRUCTIVE: `detect_single` only reads the edition (resolving
+        its classical/modern determination) and returns the payload — it does not
+        rewrite the edition's own title/authors/etc. If there's no holding/context to
+        detect from, fall back to a minimal 'modern' stub so the row still appears."""
+        from catalogue.services import work_detect as WD
+        acc = _acc(g.db)
+        if acc.editions.reads.get(eid) is None:
+            abort(404)
+        if acc.editions.reads.detection(eid) is None:
+            det = WD.detect_single(g.db, eid)
+            if det is None:                       # no holding/context to detect from
+                ed = acc.editions.reads.get(eid)
+                det = {"determination": "modern",
+                       "stored_title": (ed.title if ed else None)}
+            WD.store_detection(g.db, eid, "single", det, commit=True)
+        return redirect(url_for("works_detect_single") + f"#i{eid}")
+
     @app.get("/works/detect/multi")
     def works_detect_multi():
         from catalogue.services.features import feature_enabled
