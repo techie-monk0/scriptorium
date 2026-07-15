@@ -63,6 +63,8 @@ public struct ReaderView: View {
     @State private var documentBarPinned = false
     @State private var generalBarPanel = PanelPlacementModel(placement: .floating(x: 0.24, y: 0.07))
     @State private var documentBarPanel = PanelPlacementModel(placement: .floating(x: 0.76, y: 0.07))
+    // Shared across the palette + both bars so panels docked to the same edge pack instead of overlapping.
+    @StateObject private var dockCoordinator = DockCoordinator()
     @State private var showNoteEntry = false
     @State private var noteDraft = ""
     @State private var noteAnchor: (page: Int, point: [Double])?   // page index (0-based) + top-left point
@@ -124,6 +126,7 @@ public struct ReaderView: View {
     }
 
     public var body: some View {
+      ZStack {
         NavigationStack {
             Group {
                 if let pdfNavigator {
@@ -184,17 +187,9 @@ public struct ReaderView: View {
                     locationBadge.allowsHitTesting(false)   // read-only page/percent, never blocks scroll
                 }
             }
-            .overlay {
-                // The pencil tool palette — only while drawing. A thin renderer of the portable
-                // `InkToolController` + `InkPaletteController`, positioned by the reusable `FloatingPanel`;
-                // the move handle repositions it (any edge or floating), Done exits draw mode.
-                if drawMode && (pdfNavigator != nil || epubNavigator != nil) {
-                    paletteFloating.transition(.opacity)
-                }
-            }
-            // Pinned reader bars float here (the SAME `FloatingPanel` pattern as the palette).
-            .overlay { if generalBarPinned { floatingBar(.general) } }
-            .overlay { if documentBarPinned { floatingBar(.document) } }
+            // The draw palette + pinned bars are NOT overlaid on the content here — they float in a
+            // full-window layer above the NavigationStack (see `floatingPanelsLayer`), so `FloatingPanel`
+            // sees the true device size + safe insets and can dock against the real screen edges.
             .overlay {
                 if let themeToast {
                     Text(themeToast)
@@ -316,6 +311,22 @@ public struct ReaderView: View {
                 Task { await pushPosition() }             // closing the book → mirror final position
             }
         }
+        floatingPanelsLayer   // full-window, above the nav bar (empty areas stay touch-transparent)
+      }
+    }
+
+    /// The pinned bars + draw palette, floated in one layer that spans the whole window (over the nav bar
+    /// and into the safe area) so `FloatingPanel` positions against the true device geometry. It only
+    /// intercepts touches where a panel actually is — the reader below stays interactive.
+    @ViewBuilder private var floatingPanelsLayer: some View {
+        ZStack {
+            if drawMode && (pdfNavigator != nil || epubNavigator != nil) {
+                paletteFloating.transition(.opacity)
+            }
+            if generalBarPinned { floatingBar(.general) }
+            if documentBarPinned { floatingBar(.document) }
+        }
+        .ignoresSafeArea()
     }
 
     private func open() async {
@@ -604,10 +615,14 @@ public struct ReaderView: View {
     /// floating; a column when docked to a side); `FloatingPanel` keeps it fully on-screen.
     @ViewBuilder private func floatingBar(_ bar: BarKind) -> some View {
         let model = bar == .general ? generalBarPanel : documentBarPanel
+        // One panel per edge: a docked panel is centred on its edge; a drag that would snap onto an edge
+        // another panel already holds stays floating instead (see settleBarDock).
         FloatingPanel(placement: model.placement,
                       onDrag: { nx, ny in updateBarPanel(bar) { $0.drag(toX: nx, y: ny) } },
-                      onDragEnd: { nx, ny in updateBarPanel(bar) { $0.endDrag(atX: nx, y: ny) } },
-                      coordinateSpace: bar == .general ? "reader-bar-general" : "reader-bar-document") { handlers in
+                      onDragEnd: { nx, ny in settleBarDock(bar, nx: nx, ny: ny) },
+                      coordinateSpace: bar == .general ? "reader-bar-general" : "reader-bar-document",
+                      dock: dockCoordinator,
+                      dockID: barDockID(bar), dockAnchor: .center, dockOrder: 0) { handlers in
             PanelChrome(handlers: handlers, axis: model.axis) {
                 barItems(bar)
             }
@@ -620,6 +635,20 @@ public struct ReaderView: View {
         switch bar {
         case .general: mutate(&generalBarPanel)
         case .document: mutate(&documentBarPanel)
+        }
+    }
+
+    private func barDockID(_ bar: BarKind) -> String {
+        bar == .general ? "reader-bar-general" : "reader-bar-document"
+    }
+
+    /// Finish a bar drag: dock/float via the model, then enforce one-panel-per-edge — if it snapped onto an
+    /// edge another panel already holds, keep it floating at the drop point instead of stacking.
+    private func settleBarDock(_ bar: BarKind, nx: Double, ny: Double) {
+        updateBarPanel(bar) { $0.endDrag(atX: nx, y: ny) }
+        let placement = (bar == .general ? generalBarPanel : documentBarPanel).placement
+        if case .docked(let edge) = placement, dockCoordinator.isOccupied(edge, excluding: barDockID(bar)) {
+            updateBarPanel(bar) { $0.drag(toX: nx, y: ny) }
         }
     }
 
@@ -1173,8 +1202,15 @@ public struct ReaderView: View {
     private var paletteFloating: some View {
         FloatingPanel(placement: palette.placement,
                       onDrag: { palette.drag(toX: $0, y: $1) },
-                      onDragEnd: { palette.endDrag(atX: $0, y: $1) },
-                      coordinateSpace: "ink-palette") { handlers in
+                      onDragEnd: { nx, ny in
+                          palette.endDrag(atX: nx, y: ny)
+                          if case .docked(let edge) = palette.placement,
+                             dockCoordinator.isOccupied(edge, excluding: "ink-palette") {
+                              palette.drag(toX: nx, y: ny)   // edge taken → stay floating
+                          }
+                      },
+                      coordinateSpace: "ink-palette",
+                      dock: dockCoordinator, dockID: "ink-palette", dockAnchor: .center, dockOrder: 0) { handlers in
             PanelChrome(handlers: handlers, axis: palette.axis) {
                 InkToolbar(tool: $ink, palette: palette, canUndo: ink.canUndo, canRedo: ink.canRedo,
                            onUndo: undoInk, onRedo: redoInk, onDone: { drawMode = false })
