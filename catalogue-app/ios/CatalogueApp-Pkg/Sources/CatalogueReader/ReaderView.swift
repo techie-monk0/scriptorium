@@ -1,6 +1,7 @@
 #if canImport(UIKit)
 import SwiftUI
 import Combine
+import UniformTypeIdentifiers
 import PDFKit
 import PencilKit
 import WebKit
@@ -68,6 +69,12 @@ public struct ReaderView: View {
     @State private var showNoteEntry = false
     @State private var noteDraft = ""
     @State private var noteAnchor: (page: Int, point: [Double])?   // page index (0-based) + top-left point
+    @State private var noteAnchorCfi: String?                      // EPUB: the selection CFI a note anchors to
+    @State private var noteAnchorText: String?                     // EPUB: the selected quote (Web Annotation TextQuote)
+    @State private var noteEditing: Annotation?                    // the existing note being edited (vs a new one)
+    @State private var showImportNotes = false                     // Web Annotation import file picker
+    @State private var noteMarks: [Annotation] = []                // notes render as an `MarkerOverlay` layer, not marks
+    @State private var epubRelocateToken = 0                       // bumped on EPUB relocation to re-place note markers
     @State private var epubSelection: (cfiRange: String, text: String)?   // EPUB: last text selection
     @State private var shareItem: ShareItem?          // the annotated PDF to share (Phase 6)
     @State private var exportMessage: String?         // brief export failure notice
@@ -138,7 +145,19 @@ public struct ReaderView: View {
                                        onPrev: { goPrev() }, onNext: { goNext() })
                     } else {
                         ZStack {
-                            PDFViewContainer(pdfView: pdfNavigator.pdfView).ignoresSafeArea(edges: .bottom)
+                            PDFViewContainer(pdfView: pdfNavigator.pdfView)
+                                .ignoresSafeArea(edges: .bottom)
+                                // Notes float above the page as `MarkerOverlay` markers (drag / tap-to-expand /
+                                // long-press-delete), tracking the page as it scrolls. Overlaid so the layer
+                                // matches the PDF view's coordinate space exactly. Hidden while drawing.
+                                .overlay {
+                                    if !drawMode {
+                                        PdfNoteLayer(pdfView: pdfNavigator.pdfView, notes: noteMarks, canEdit: true,
+                                                     onPersist: { note in Task { await persistNoteMove(note) } },
+                                                     onDelete: { note in Task { await deleteNote(note) } },
+                                                     onEdit: { note in editNote(note) })
+                                    }
+                                }
                             if drawMode {
                                 // PencilKit captures; we render via FreehandRenderer/PdfInkHost (canonical ink).
                                 PencilKitInkCanvas(pdfView: pdfNavigator.pdfView, color: ink.color, width: ink.width,
@@ -162,6 +181,15 @@ public struct ReaderView: View {
                     ZStack {
                         WebViewContainer(webView: epubNavigator.webView)
                             .ignoresSafeArea(edges: .bottom)
+                            .overlay {
+                                if !drawMode {
+                                    EpubNoteLayer(navigator: epubNavigator, notes: noteMarks,
+                                                  relocateToken: epubRelocateToken, canEdit: true,
+                                                  onPersist: { note in Task { await persistNoteMove(note) } },
+                                                  onDelete: { note in Task { await deleteNote(note) } },
+                                                  onEdit: { note in editNote(note) })
+                                }
+                            }
                         if drawMode {
                             // Ink capture over the book; strokes anchor to the block under them (CFI).
                             EpubInkCanvas(color: ink.color, width: ink.width,
@@ -250,6 +278,11 @@ public struct ReaderView: View {
                         Button { Task { await addEpubTextMark(.underline) } } label: {
                             Label("Underline", systemImage: ReaderIcons.sf("underline"))
                         }
+                        // Note anchors to the selection's CFI (the standard EPUB pointer) and renders as an
+                        // `MarkerOverlay` marker — the EPUB entry point, since epub.js has no in-book note.
+                        Button { beginNote() } label: {
+                            Label("Note", systemImage: ReaderIcons.sf("note"))
+                        }
                         Button { epubSelection = nil } label: { Image(systemName: "xmark") }
                             .foregroundStyle(.secondary)
                     }
@@ -283,12 +316,15 @@ public struct ReaderView: View {
             .sheet(isPresented: $showToc) { tocSheet }
             .sheet(isPresented: $showSearch) { searchSheet }
             .sheet(isPresented: $showBookmarks) { bookmarksSheet }
-            .alert("Add Note", isPresented: $showNoteEntry) {
+            .alert(noteEditing == nil ? "Add Note" : "Edit Note", isPresented: $showNoteEntry) {
                 TextField("Note", text: $noteDraft)
-                Button("Add") { Task { await commitNote() } }
-                Button("Cancel", role: .cancel) {}
-            } message: { Text("A note anchored to the selected text.") }
+                Button(noteEditing == nil ? "Add" : "Save") { Task { await commitNote() } }
+                Button("Cancel", role: .cancel) { noteEditing = nil }
+            } message: { Text(noteEditing == nil ? "A note anchored to the selected text." : "Edit the note text.") }
             .sheet(item: $shareItem) { item in ActivityView(items: [item.url]) }
+            .fileImporter(isPresented: $showImportNotes, allowedContentTypes: [.json]) { result in
+                if case .success(let url) = result { Task { await importNotes(from: url) } }
+            }
             .alert("Couldn’t export", isPresented: Binding(get: { exportMessage != nil },
                                                            set: { if !$0 { exportMessage = nil } })) {
                 Button("OK", role: .cancel) {}
@@ -403,7 +439,7 @@ public struct ReaderView: View {
             self.locLabel = Self.label(for: loc)
             if self.reflowMode { self.updateReflow() }   // page turned in reflow mode → re-extract
             // EPUB is paginated: re-place CFI-anchored marks/ink on the newly displayed page.
-            if self.epubNavigator != nil { self.renderMarks() }
+            if self.epubNavigator != nil { self.renderMarks(); self.epubRelocateToken &+= 1 }
         }
         if let loc = reader?.currentLocation { locLabel = Self.label(for: loc) }
     }
@@ -515,8 +551,8 @@ public struct ReaderView: View {
             zoom: pdf,                              // PDF: magnifier zoom ± + fit-width (no font resize)
             reflow: pdf,                            // reflow-to-text is PDF-only
             markText: canAnnotate,                  // highlight + underline: both formats (PDF quads / EPUB CFI)
-            strike: canAnnotate && pdf,             // strike/note/erase: PDF-only until EPUB CFI support lands
-            note: canAnnotate && pdf,
+            strike: canAnnotate && pdf,             // strikethrough stays PDF-only (epub.js has no strike style)
+            note: canAnnotate,                      // notes: both formats — a CFI-anchored `MarkerOverlay` marker
             draw: canAnnotate,                      // ink: both formats on iOS
             erase: false,                           // ink eraser lives in the draw palette; text marks toggle off
             annList: false,                         // iOS has no annotations-list surface yet
@@ -595,7 +631,7 @@ public struct ReaderView: View {
         case .document:
             ForEach(chromeControls.filter { $0.bar == "text" && !$0.overflow }) { barControl($0) }
             let overflow = chromeControls.filter { $0.overflow }
-            if !overflow.isEmpty { overflowMenu(overflow) }
+            if !overflow.isEmpty || !noteMarks.isEmpty { overflowMenu(overflow) }
         }
         // The standard pin toggle from the reusable floating-panel component (pin ⇄ pin.fill).
         PanelPinButton(pinned: pinnedBinding(bar),
@@ -671,6 +707,12 @@ public struct ReaderView: View {
         Menu {
             ForEach(controls) { menuControl($0) }
             // Pen colour / width / eraser now live in the on-screen `InkToolbar` while drawing.
+            // Notes as an open Web Annotation file — export what's here, or import someone else's.
+            Divider()
+            if !noteMarks.isEmpty {
+                Button { Task { await exportNotes() } } label: { Label("Export Notes…", systemImage: "square.and.arrow.up") }
+            }
+            Button { showImportNotes = true } label: { Label("Import Notes…", systemImage: "square.and.arrow.down") }
         } label: { Image(systemName: "ellipsis.circle") }
     }
 
@@ -991,7 +1033,10 @@ public struct ReaderView: View {
     /// position — a cross-device mark appearing must never reposition the reader.
     private func renderMarks() {
         marks = marksById.values.filter { !$0.isTombstone }
-        renderLayer?.render(marks)   // marks + ink, via the per-format rendering layer
+        // Notes render as a native SwiftUI `MarkerOverlay` layer (drag/expand/delete), not through the
+        // decoration host — so keep them out of the mark set the host paints.
+        noteMarks = marks.filter { $0.kind == .note }
+        renderLayer?.render(marks.filter { $0.kind != .note })   // marks + ink, via the per-format rendering layer
     }
 
     // MARK: Cross-device reading position (Shape-C, advisory resume)
@@ -1143,27 +1188,129 @@ public struct ReaderView: View {
         }
     }
 
-    /// Note: capture the selection's first-line top-left as the anchor point, then prompt for text.
+    /// Begin adding a note anchored to the current selection — PDF by page + the first line's top-left
+    /// point, EPUB by the selection's CFI — then prompt for text.
     private func beginNote() {
-        guard let g = selectionQuads().first, let first = g.quads.first else { return }
-        noteAnchor = (page: g.page, point: [first[0], first[1]])
+        noteEditing = nil
         noteDraft = ""
+        if epubNavigator != nil {
+            guard let sel = epubSelection, !sel.cfiRange.isEmpty else { return }
+            noteAnchor = nil; noteAnchorCfi = sel.cfiRange
+            noteAnchorText = sel.text.isEmpty ? nil : sel.text   // the quote → Web Annotation TextQuote selector
+            showNoteEntry = true
+            return
+        }
+        guard let g = selectionQuads().first, let first = g.quads.first else { return }
+        noteAnchor = (page: g.page, point: [first[0], first[1]]); noteAnchorCfi = nil; noteAnchorText = nil
+        showNoteEntry = true
+    }
+
+    /// Open the text editor for an EXISTING note (the marker popover's "Edit").
+    private func editNote(_ note: Annotation) {
+        noteEditing = note
+        noteDraft = note.noteText ?? ""
+        noteAnchor = nil; noteAnchorCfi = nil
         showNoteEntry = true
     }
 
     private func commitNote() async {
-        guard let anchor = noteAnchor, !noteDraft.isEmpty else { return }
+        guard !noteDraft.isEmpty else { return }
         let now = Date()
-        let loc = Locator(publicationId: pubId, format: .pdf, locations: .init(page: anchor.page + 1))
-        let mark = Annotation(publicationId: pubId, kind: .note, locator: loc,
-                              region: anchor.point, color: "#ffd54a", noteText: noteDraft,
+        // Editing an existing note: update its text in place.
+        if let existing = noteEditing {
+            var m = existing
+            m.noteText = noteDraft; m.updatedAt = now; m.rev = rev + 1
+            marksById[m.id] = m; noteEditing = nil
+            renderMarks()
+            _ = try? await annotations.push(publicationId: pubId, ops: [m])
+            await pullMarks(reset: false)
+            return
+        }
+        // A new note: EPUB anchors by CFI (+ a zero offset within the block); PDF by page + point.
+        let mark: Annotation
+        if let cfi = noteAnchorCfi {
+            // Anchor the note to its CFI and keep the quoted text — the two together are the Web Annotation
+            // (FragmentSelector + TextQuoteSelector) so an exported note re-anchors in another reader.
+            let loc = Locator(publicationId: pubId, format: .epub, locations: .init(cfi: cfi),
+                              text: noteAnchorText.map { Locator.Text(highlight: $0) })
+            mark = Annotation(publicationId: pubId, kind: .note, locator: loc, cfiRange: cfi,
+                              region: [0, 0], color: "#ffd54a", noteText: noteDraft,
                               createdAt: now, updatedAt: now, rev: rev + 1)
+            epubSelection = nil; noteAnchorText = nil
+        } else if let anchor = noteAnchor {
+            let loc = Locator(publicationId: pubId, format: .pdf, locations: .init(page: anchor.page + 1))
+            mark = Annotation(publicationId: pubId, kind: .note, locator: loc, region: anchor.point,
+                              color: "#ffd54a", noteText: noteDraft, createdAt: now, updatedAt: now, rev: rev + 1)
+            pdfNavigator?.pdfView.clearSelection()
+        } else { return }
         marksById[mark.id] = mark
-        pdfNavigator?.pdfView.clearSelection()
         renderMarks()
         ink.record(.added([mark.id]))
         _ = try? await annotations.push(publicationId: pubId, ops: [mark])
         await pullMarks(reset: false)
+    }
+
+    /// Persist a note the user dragged to a new spot. The `NoteAnchor` adapter already updated the note's
+    /// location fields (PDF page+point / EPUB CFI+offset); the reader just stamps the revision and pushes —
+    /// one path for both formats.
+    private func persistNoteMove(_ moved: Annotation) async {
+        guard marksById[moved.id] != nil else { return }
+        var m = moved
+        m.updatedAt = Date(); m.rev = rev + 1
+        marksById[m.id] = m
+        renderMarks()
+        _ = try? await annotations.push(publicationId: pubId, ops: [m])
+    }
+
+    /// Export this book's notes as a **W3C Web Annotation** JSON array — an open, standard-shaped file for
+    /// getting notes out (or into a Readium-style tool). Not automatic interop with other apps: EPUB has no
+    /// note-exchange every viewer implements, so this is a portable format, not a guarantee.
+    private func exportNotes() async {
+        let anns = noteMarks.compactMap { $0.webAnnotation() }
+        guard !anns.isEmpty else { exportMessage = "No notes to export yet."; return }
+        do {
+            let enc = JSONEncoder()
+            enc.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+            let data = try enc.encode(anns)
+            let safe = title.replacingOccurrences(of: "/", with: "-")
+            let out = FileManager.default.temporaryDirectory
+                .appendingPathComponent("\(safe.isEmpty ? "book" : safe)-notes.json")
+            try data.write(to: out, options: .atomic)
+            shareItem = ShareItem(url: out)
+        } catch { exportMessage = "Couldn’t write the notes file." }
+    }
+
+    /// Import notes from a Web Annotation JSON file (an array, or a single object). Each anchored note is
+    /// merged in and pushed to the store like any local edit.
+    private func importNotes(from url: URL) async {
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        guard let data = try? Data(contentsOf: url) else { exportMessage = "Couldn’t read that file."; return }
+        let dec = JSONDecoder()
+        let list: [WebAnnotation]
+        if let arr = try? dec.decode([WebAnnotation].self, from: data) { list = arr }
+        else if let one = try? dec.decode(WebAnnotation.self, from: data) { list = [one] }
+        else { exportMessage = "That isn’t a Web Annotation file."; return }
+        let now = Date()
+        var imported = 0
+        for w in list {
+            guard var m = Annotation(webAnnotation: w, publicationId: pubId) else { continue }
+            m.updatedAt = now; m.rev = rev + 1
+            marksById[m.id] = m
+            _ = try? await annotations.push(publicationId: pubId, ops: [m])
+            imported += 1
+        }
+        if imported > 0 { renderMarks() } else { exportMessage = "No importable notes found in that file." }
+    }
+
+    /// Tombstone a note (long-press → Delete) so the removal propagates to the server and other devices.
+    private func deleteNote(_ note: Annotation) async {
+        guard var m = marksById[note.id] else { return }
+        let now = Date()
+        m.deletedAt = now; m.updatedAt = now; m.rev = m.rev + 1
+        marksById[m.id] = m
+        renderMarks()
+        _ = try? await annotations.push(publicationId: pubId, ops: [m])
     }
 
     /// Erase text marks whose quads intersect the current selection (object-erase for marks).
