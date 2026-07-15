@@ -588,6 +588,12 @@
     return content.slice(0, cut).trim();
   }
 
+  // The backend hides its /source multi-turn state in an HTML comment (<!--BDRAG_SCOPE …-->).
+  // It MUST stay in the message history we send back (so scoping survives across turns), but must
+  // never be shown — and since renderMarkdown escapes HTML first, an un-stripped comment would leak
+  // as visible text. So strip HTML comments for DISPLAY only.
+  function stripHtmlComments(s) { return (s || '').replace(/<!--[\s\S]*?-->/g, ''); }
+
   // Minimal, safe markdown → HTML: escape FIRST, then a few inlines + paragraphs. Enough for a
   // skeleton; a real markdown renderer can drop in here without touching the rest of the component.
   function renderMarkdown(src) {
@@ -678,7 +684,8 @@
       // place. Against a backend that returns markdown-only (no structured sources/timing), keep
       // the content verbatim so citations still show.
       var hasStructured = (vm.sources && vm.sources.length) || (vm.timing && vm.timing.total_ms != null);
-      b.innerHTML = renderMarkdown(hasStructured ? stripFooters(vm.content) : vm.content);
+      var shown = hasStructured ? stripFooters(vm.content) : vm.content;
+      b.innerHTML = renderMarkdown(stripHtmlComments(shown).trim());
       turn.appendChild(b);
       if (vm.sources && vm.sources.length) turn.appendChild(askSources(vm.sources, platform));
       var tl = askTiming(vm.timing); if (tl) turn.appendChild(tl);
