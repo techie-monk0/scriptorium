@@ -46,7 +46,7 @@
 
   const NS = 'http://www.w3.org/2000/svg';
   const DEFAULT_COLORS = { highlight: '#ffd54a', underline: '#90caf9',
-                           strikeout: '#f48fb1', ink: '#222222', note: '#ffd54a' };
+                           strikeout: '#f48fb1', ink: '#222222', note: '#ffb74d' };
 
   // ════════════════════════════════════════════════════════════════════════════
   // PDF overlay — PDF.js text layer (text marks) + per-page SVG (ink). All marks
@@ -59,6 +59,10 @@
     const inkByPage = new Map();        // page -> [annotation]  (kind:'ink')
     const noteByPage = new Map();       // page -> [annotation]  (kind:'note')
     const all = new Map();              // id -> annotation (for the list panel)
+    // Web/PWA is a READ-ONLY reading surface: highlights/underlines/notes DISPLAY, but there is no
+    // capture (that's the iOS app) and INK is not shown. In read-only we block the capture gestures
+    // and skip painting ink — a mark tap only VIEWS a note (ctx.editExisting is a read-only viewer).
+    const readOnly = ctx.readOnly === true;
 
     const pageW = (d) => d.offsetWidth || 1, pageH = (d) => d.offsetHeight || 1;
     const pageDivFromEl = (el) => el && el.closest && el.closest('.pdf-page');
@@ -111,10 +115,12 @@
           d.appendChild(box);
         }
       }
-      const inks = inkByPage.get(n);
-      if (inks && inks.length) {
-        const svg = inkSvg(d);
-        for (const a of inks) paintInk(svg, a, W, H);
+      if (!readOnly) {                          // ink is an iOS-only capability — not shown on web
+        const inks = inkByPage.get(n);
+        if (inks && inks.length) {
+          const svg = inkSvg(d);
+          for (const a of inks) paintInk(svg, a, W, H);
+        }
       }
       for (const a of (noteByPage.get(n) || [])) {
         let pt; try { pt = JSON.parse(a.rect); } catch (e) { pt = [0.5, 0.5]; }
@@ -194,6 +200,8 @@
     // selection is unreliable for an Apple Pencil. So mouseup here handles only highlight + the
     // select-mode click-to-edit.
     ctx.viewer.addEventListener('mouseup', (ev) => {
+      // Read-only: a click never creates a mark; it only hit-tests an existing one to VIEW its note.
+      if (readOnly) { hitTestEdit(ev); return; }
       const sel = window.getSelection();
       if (sel && !sel.isCollapsed && sel.rangeCount && tool === 'highlight') {
         const hit = rectsFromSelection(sel); if (!hit) return;
@@ -270,6 +278,7 @@
     function rejectTouch(ev) { return ev.pointerType === 'touch' && ctx.penActive && ctx.penActive(); }
 
     ctx.viewer.addEventListener('pointerdown', (ev) => {
+      if (readOnly) return;                                   // no capture on the web reading surface
       if (rejectTouch(ev)) { ev.preventDefault(); return; }   // palm while writing
       if (tool === 'erase') { eraseAt(ev); return; }
       if (tool === 'note') { placeNote(ev); return; }
@@ -402,29 +411,58 @@
     let pen = ctx.getPenDefault ? ctx.getPenDefault() : { color: '#222', width: 3, mode: 'pen' };
     const all = new Map();              // id -> annotation
     const painted = new Map();          // id -> cfiRange (epub.js text marks, to unpaint)
+    let selectedBound = false, inkBound = false;   // bind the 'selected' / ink handlers only once
+    // Web/PWA is a READ-ONLY reading surface: existing highlights/underlines/notes DISPLAY, but
+    // there is no capture (that's the iOS app) and INK is not shown. So in read-only we never bind
+    // the selection/ink capture handlers and never paint ink — only text marks.
+    const readOnly = ctx.readOnly === true;
 
     const rendition = () => ctx.rendition();
 
+    // epub.js only paints two mark types — 'highlight' (filled) and 'underline' (stroked). A NOTE
+    // has no native type, so we anchor it as a filled highlight in the note colour (a tint over the
+    // noted text); tapping it opens the note editor. So: notes + highlights → 'highlight', underline
+    // → 'underline'. `epubType` keeps add/remove agreeing on the type.
+    function epubType(a) { return a.kind === 'underline' ? 'underline' : 'highlight'; }
+    function isTextKind(a) { return a && (a.kind === 'highlight' || a.kind === 'underline' || a.kind === 'note'); }
+    // A highlight reads like a real highlighter via `mix-blend-mode: multiply` on a light page —
+    // but multiply over a DARK (night-theme) page renders the mark invisible. So on a dark reading
+    // theme we switch to `screen`, which brightens the mark instead. Underline is a solid stroke,
+    // visible on any background. `restyle()` (below) re-applies this when the theme is toggled.
+    function isDarkTheme() {
+      try { return document.body.getAttribute('data-reader-theme') === 'night'; } catch (e) { return false; }
+    }
+    function markStyle(a) {
+      if (a.kind === 'underline') return { stroke: a.color || DEFAULT_COLORS.underline, 'stroke-width': '2' };
+      const fill = a.color || (a.kind === 'note' ? DEFAULT_COLORS.note : DEFAULT_COLORS.highlight);
+      return isDarkTheme()
+        ? { fill, 'fill-opacity': '0.4', 'mix-blend-mode': 'screen' }
+        : { fill, 'fill-opacity': '0.35', 'mix-blend-mode': 'multiply' };
+    }
     function paintTextMark(a) {
       if (!a || a.deleted_at || painted.has(a.id) || !a.cfi_range) return;
-      if (a.kind !== 'highlight' && a.kind !== 'underline') return;
-      const type = a.kind;             // epub.js supports 'highlight' and 'underline'
+      if (!isTextKind(a)) return;
+      const type = epubType(a);
       try {
         rendition().annotations.add(type, a.cfi_range, { id: a.id },
           () => ctx.editExisting(a, {
             onRemove: async () => { unpaintTextMark(a); deindex(a); try { await ctx.annotations.remove(a); } catch (e) {} },
             onSave: async (text) => { try { await ctx.annotations.update(a, { note_text: text }); a.note_text = text; } catch (e) {} },
           }),
-          'reader-' + type,
-          type === 'highlight'
-            ? { fill: a.color || DEFAULT_COLORS.highlight, 'fill-opacity': '0.35', 'mix-blend-mode': 'multiply' }
-            : { stroke: a.color || DEFAULT_COLORS.underline, 'stroke-width': '2' });
+          'reader-' + a.kind, markStyle(a));
         painted.set(a.id, a.cfi_range);
       } catch (e) {}
     }
+    // Re-paint every text mark with the current theme's style (called on a theme toggle).
+    function restyleTextMarks() {
+      for (const id of Array.from(painted.keys())) {
+        const a = all.get(id); if (!a) continue;
+        unpaintTextMark(a); paintTextMark(a);
+      }
+    }
     function unpaintTextMark(a) {
       const cfi = painted.get(a.id); if (!cfi) return;
-      try { rendition().annotations.remove(cfi, a.kind === 'underline' ? 'underline' : 'highlight'); } catch (e) {}
+      try { rendition().annotations.remove(cfi, epubType(a)); } catch (e) {}
       painted.delete(a.id);
     }
 
@@ -469,6 +507,8 @@
     let drawing = null;
     function inkActive() { return tool === 'ink'; }
     function attachInkCapture() {
+      if (inkBound) return;   // load() may run again (refresh); bind capture listeners only once
+      inkBound = true;
       const svg = ensureInkSvg();
       svg.addEventListener('pointerdown', (ev) => {
         if (!inkActive()) return;
@@ -516,6 +556,8 @@
     }
 
     // text-mark capture: epub.js fires 'selected' with the cfiRange.
+    // Capture (highlight/underline creation) is iOS-only; the web reader never binds this in
+    // read-only mode. Kept for a hypothetical editing host, but unreachable on web.
     function onSelected(cfiRange) {
       if (tool === 'highlight' && ctx.pickColor) {
         ctx.pickColor(async (color) => { clearSel(); await createTextMark('highlight', cfiRange, color); });
@@ -542,11 +584,16 @@
       tool() { return tool; },
       supports(kind) { return kind !== 'strikeout'; },   // no native epub.js strikethrough
       async load() {
-        try { rendition().on('selected', onSelected); } catch (e) {}
-        attachInkCapture();
+        // Capture is iOS-only. On the web (read-only) we never bind selection/ink handlers — we only
+        // pull the holding's marks and paint the text ones. load() can run again (the "refresh marks"
+        // button), so bind-once guards protect the non-read-only path too.
+        if (!readOnly) {
+          if (!selectedBound) { try { rendition().on('selected', onSelected); selectedBound = true; } catch (e) {} }
+          attachInkCapture();
+        }
         let list = []; try { list = await ctx.annotations.list(); } catch (e) {}
-        list.forEach(a => { index(a); if (a.kind === 'highlight' || a.kind === 'underline') paintTextMark(a); });
-        repaintInk();
+        list.forEach(a => { index(a); if (isTextKind(a)) paintTextMark(a); });
+        if (!readOnly) repaintInk();
       },
       list() {
         return Array.from(all.values()).filter(a => !a.deleted_at).map(a => ({
@@ -555,8 +602,9 @@
         }));
       },
       pageRendered() {},
-      repaint() { repaintInk(); },
-      relocated() { repaintInk(); },     // engine calls this on epub 'relocated'
+      repaint() { if (!readOnly) repaintInk(); },
+      relocated() { if (!readOnly) repaintInk(); },     // engine calls this on epub 'relocated'
+      restyle() { restyleTextMarks(); }, // engine calls this on a reading-theme change
     };
     function labelFor(a) {
       const tag = a.kind === 'ink' ? '✎' : a.kind === 'note' ? '🅝' : a.kind === 'underline' ? 'U̲' : '▮';

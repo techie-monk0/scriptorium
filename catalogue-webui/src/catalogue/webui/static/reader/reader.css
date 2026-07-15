@@ -81,6 +81,8 @@
        clicks are resolved by hit-testing in JS so text selection still works everywhere. */
     .pdf-hl { position: absolute; z-index: 1; pointer-events: none; border-radius: 2px;
       opacity: .38; mix-blend-mode: multiply; }
+    /* multiply hides a highlight on the dark night page — screen brightens it so it stays visible. */
+    [data-reader-theme="night"] .pdf-hl { mix-blend-mode: screen; opacity: .42; }
     /* max-content + center keeps a zoomed page centred (and scrollable) instead of
        left-aligning once it's wider than the screen. */
     #pdfStack { display: flex; flex-direction: column; align-items: center;
@@ -193,7 +195,10 @@
       color: inherit; opacity: .6; padding: .45rem .6rem; border-radius: 999px; }
     .reader-backpill .rbp-go:hover, .reader-backpill .rbp-x:hover { background: rgba(128,128,128,.18); }
 
-    /* Highlight popup — colour picker on text-select; note + remove on highlight tap. */
+    /* Note viewer — tapping a note (read-only) shows its text in this bar; ✕ closes it. */
+    .hl-note-text { padding: .3rem .5rem; max-width: min(24rem, 70vw); white-space: pre-wrap;
+      word-break: break-word; font: inherit; }
+    /* Highlight popup — read-only note viewer (web); iOS owns capture. */
     .hlpopup { position: fixed; top: 2.7rem; left: 50%; transform: translateX(-50%); z-index: 40;
       display: flex; gap: .4rem; align-items: center; background: var(--bar); color: var(--bar-fg);
       border-radius: 10px; padding: .4rem .5rem; box-shadow: 0 4px 20px rgba(0,0,0,.55); }
@@ -208,12 +213,7 @@
     .hl-del:hover { background: rgba(255,90,90,.25); }
     .hlpopup .bm-edit-input { min-width: 12rem; margin: 0; }
 
-    /* Reading mode by default: the annotation tools are hidden until ✍ arms annotate mode
-       (body.annotate-on). display:contents keeps the buttons in the top-bar flex when shown. */
-    .anntools { display: none; }
-    body.annotate-on .anntools { display: contents; }
-    /* Annotation toolbar: active tool is lit; a thin separator groups the tools. */
-    .topbar .fbtn.tool-active { background: rgba(120,150,255,.4); }
+    /* A thin separator grouping the read-only mark/bookmark buttons in the text bar. */
     .toolsep { flex: 0 0 auto; width: 1px; align-self: stretch; margin: .15rem .15rem;
       background: rgba(255,255,255,.18); }
 
@@ -225,7 +225,7 @@
       pointer-events: none; }
     .epub-ink { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 5;
       pointer-events: none; }
-    /* PDF note marker — a small badge at the note's anchor; click to edit/remove. */
+    /* PDF note marker — a small badge at the note's anchor; tap to read the note (read-only). */
     .pdf-note { position: absolute; z-index: 4; transform: translate(-50%, -50%);
       background: #ffd54a; color: #222; border: none; border-radius: 50%;
       width: 1.4rem; height: 1.4rem; font-size: .8rem; line-height: 1; cursor: pointer;

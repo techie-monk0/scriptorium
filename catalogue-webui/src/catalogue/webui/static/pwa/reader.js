@@ -162,13 +162,8 @@
           <button type="button" class="fbtn" id="reflowBtn" title="Reflow to text" aria-pressed="false">¶</button>
           <button type="button" class="fbtn" id="gotoBtn" title="Go to page">⇥</button>
           <button type="button" class="fbtn" id="themeBtn" title="Reading theme">◐</button>
-          <button type="button" class="fbtn tool" id="annotateBtn" title="Annotate">✍</button>
-          <button type="button" class="fbtn tool" id="hlBtn" title="Highlight">🖍</button>
-          <button type="button" class="fbtn tool" id="ulBtn" title="Underline">U̲</button>
-          <button type="button" class="fbtn tool" id="strikeBtn" title="Strikethrough">S̶</button>
-          <!-- No ink/handwriting on web/PWA — ink annotation is iOS-only. -->
-          <button type="button" class="fbtn tool" id="noteBtn" title="Note">🅝</button>
-          <button type="button" class="fbtn tool" id="eraseBtn" title="Erase">⌫</button>
+          <!-- Web/PWA is READ-ONLY: marks (highlight/underline/note) DISPLAY while reading; creating/
+               editing marks + ink live in the iOS app. So no annotate/draw tools here — just view. -->
           <button type="button" class="fbtn" id="annBtn" title="Annotations">▦</button>
           <button type="button" class="fbtn" id="bmAdd" title="Bookmark this spot">★</button>
           <button type="button" class="fbtn" id="bmList" title="Bookmarks">▤</button>
@@ -179,7 +174,6 @@
       <div id="searchPanel" class="bmpanel searchpanel hidden"></div>
       <div id="bmPanel" class="bmpanel hidden"></div>
       <div id="annPanel" class="bmpanel annpanel hidden"></div>
-      <div id="penOpts" class="penopts hidden"></div>
       <div id="hlPopup" class="hlpopup hidden"></div>
       <button type="button" class="pager left" id="pgPrev" aria-label="Previous page">‹</button>
       <button type="button" class="pager right" id="pgNext" aria-label="Next page">›</button>`;
@@ -197,9 +191,7 @@
       fitWidth: g('fitWidth'), reflowBtn: g('reflowBtn'), gotoBtn: g('gotoBtn'),
       refreshBtn: g('refreshBtn'),
       searchBtn: g('searchBtn'), searchPanel: g('searchPanel'), hlPopup: g('hlPopup'),
-      annotateBtn: g('annotateBtn'), hlBtn: g('hlBtn'), ulBtn: g('ulBtn'), strikeBtn: g('strikeBtn'),
-      noteBtn: g('noteBtn'), eraseBtn: g('eraseBtn'),
-      annBtn: g('annBtn'), annPanel: g('annPanel'), penOpts: g('penOpts'),
+      annBtn: g('annBtn'), annPanel: g('annPanel'),   // read-only: browse marks; no capture tools
     };
   }
 
@@ -283,6 +275,7 @@
 
       window.ReaderCore.mount({
         ext: EXT,
+        docId: HID,   // per-document reading settings (font %, zoom, reflow size) are keyed by this
         els: elsOf(root),
         io, position,
         // A read-only guest never owns marks; editors get the full annotation/bookmark surface.

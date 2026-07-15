@@ -34,6 +34,21 @@
     const downloadUrl = opts.downloadUrl || null;
     const onExit = opts.onExit || (() => { location.href = '/'; });
 
+    // Per-document reading settings. The host passes `docId` (the holding id) so LAYOUT/FIT
+    // settings that genuinely differ per book — EPUB font %, PDF zoom, PDF reflow font — are
+    // remembered per book instead of globally. `docPref(base)` namespaces a localStorage key
+    // with the doc id; reads fall back to the un-namespaced (legacy global) value so a book
+    // not yet customised starts from your last global choice. Theme + pen stay global (device
+    // prefs), and reading POSITION stays server-side per-holding (the `position` adapter).
+    const DOC_ID = (opts.docId != null) ? String(opts.docId) : null;
+    const docPref = (base) => (DOC_ID ? base + ':' + DOC_ID : base);
+    function readDocPref(base) {           // per-doc value, else the legacy global as the default
+      let v = null;
+      try { v = localStorage.getItem(docPref(base)); if (v == null && DOC_ID) v = localStorage.getItem(base); } catch (e) {}
+      return v;
+    }
+    function writeDocPref(base, val) { try { localStorage.setItem(docPref(base), val); } catch (e) {} }
+
     const viewer = els.viewer;
     const progEl = els.prog;
 
@@ -46,8 +61,7 @@
       const map = {
         toc: els.tocBtn, search: els.searchBtn, refresh: els.refreshBtn,
         textSmaller: els.fdec, textLarger: els.finc, fitWidth: els.fitWidth, reflow: els.reflowBtn,
-        goto: els.gotoBtn, theme: els.themeBtn, highlight: els.hlBtn, underline: els.ulBtn,
-        strike: els.strikeBtn, note: els.noteBtn, erase: els.eraseBtn, annList: els.annBtn,
+        goto: els.gotoBtn, theme: els.themeBtn, annList: els.annBtn,   // no capture tools on web (read-only)
         bookmarkAdd: els.bmAdd, bookmarkList: els.bmList,
       };
       Object.keys(map).forEach((id) => { const el = map[id], g = iconGlyph(id); if (el && g) el.textContent = g; });
@@ -338,6 +352,7 @@
     // (PDF filter / EPUB themes). Legacy light/dark keys migrate to white/night.
     const THEMES = ['auto', 'white', 'sepia', 'gray', 'night'];   // 'auto' follows the device theme
     const THEME_ALIAS = { light: 'white', dark: 'night' };
+    const themeHooks = [];   // run on every theme change (e.g. restyle painted marks for dark/light)
     function readerTheme() {
       let t = localStorage.getItem('readerTheme');
       t = THEME_ALIAS[t] || t;
@@ -351,6 +366,7 @@
       document.body.setAttribute('data-reader-theme', resolved);
       document.body.setAttribute('data-reader-theme-pref', t);   // remember 'auto' vs an explicit pick
       try { ctrl.setTheme(resolved); } catch (e) {}
+      themeHooks.forEach((fn) => { try { fn(resolved); } catch (e) {} });
     }
     applyTheme(readerTheme());                         // honour the persisted choice on open
     if (_darkMQ) { try { _darkMQ.addEventListener('change', () => { if (readerTheme() === 'auto') applyTheme('auto'); }); } catch (e) {} }
@@ -402,61 +418,34 @@
     }
     if (els.gotoBtn) els.gotoBtn.addEventListener('click', () => { closeAllPanels(); openGoto(); });
 
-    // Shared annotation popup — PURE CHROME (no persistence here; the overlay owns that). Two
-    // modes: a colour picker (pickColor) and an existing/new mark editor with a note field +
-    // Remove (editExisting). The overlay (L2) calls these seams; the engine never touches a
-    // renderer. Exposed below as opts-level `pickColor`/`editExisting` passed into the overlay.
+    // Read-only note viewer — the web reader DISPLAYS marks but never edits them (creating/editing
+    // highlights, notes, and ink is the iOS app's job). The overlay (L2) calls `editExisting(a)` when
+    // a mark is tapped; here that only SHOWS the note's text (no input, no Remove). A mark with no
+    // note text (a plain highlight/underline) shows nothing. Exposed to the overlay as `editExisting`.
     function makePopup() {
       const pop = els.hlPopup;
-      const COLORS = [['#ffd54a', 'Yellow'], ['#a5d6a7', 'Green'], ['#90caf9', 'Blue'], ['#f48fb1', 'Pink']];
       const hide = () => { pop.classList.add('hidden'); pop.innerHTML = ''; };
-      function pickColor(onPick) {
+      function viewNote(a) {
+        const text = ((a && a.note_text) || '').trim();
+        if (!text) return;                       // nothing to show for a plain highlight/underline
         pop.innerHTML = '';
-        COLORS.forEach(([c, name]) => {
-          const b = document.createElement('button'); b.className = 'hl-swatch';
-          b.style.background = c; b.title = name; b.setAttribute('aria-label', 'Colour ' + name);
-          b.addEventListener('click', async () => { hide(); try { await onPick(c); } catch (e) {} });
-          pop.appendChild(b);
-        });
+        const span = document.createElement('span'); span.className = 'hl-note-text'; span.textContent = text;
         const x = document.createElement('button'); x.className = 'hl-x'; x.textContent = '✕';
-        x.addEventListener('click', hide); pop.appendChild(x);
+        x.addEventListener('click', hide);
+        pop.append(span, x);
         pop.classList.remove('hidden');
       }
-      // editExisting(a, {onRemove?, onSave?}) — `a.note_text` prefills the field; Enter (or blur)
-      // calls onSave(text); Remove calls onRemove. A new note (a._isNew) shows no Remove.
-      function editExisting(a, handlers) {
-        handlers = handlers || {};
-        pop.innerHTML = '';
-        const input = document.createElement('input');
-        input.className = 'bm-edit-input'; input.placeholder = 'Note…'; input.value = a.note_text || '';
-        let done = false;
-        const commit = async () => {
-          if (done) return; done = true;
-          const note = input.value.trim();
-          if (handlers.onSave && note !== (a.note_text || '')) { try { await handlers.onSave(note); } catch (e) {} }
-          hide();
-        };
-        input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); commit(); }
-          else if (e.key === 'Escape') { e.preventDefault(); done = true; hide(); } });
-        pop.appendChild(input);
-        if (handlers.onRemove) {
-          const del = document.createElement('button'); del.className = 'hl-del'; del.textContent = 'Remove';
-          del.addEventListener('click', async () => { done = true; try { await handlers.onRemove(); } catch (e) {} hide(); });
-          pop.appendChild(del);
-        }
-        pop.classList.remove('hidden'); input.focus();
-      }
-      return { pickColor, editExisting, hide };
+      return { editExisting: viewNote, hide };
     }
     const popup = (opts.annotations && els.hlPopup) ? makePopup() : null;
 
-    // ── Annotation tools (toolbar) + pencil-smart + palm rejection ────────────
-    // The engine owns the active tool + the shared pen/palm state; the overlay receives the tool
-    // via setTool and consults `penActive()` for palm rejection (so pan/swipe and capture agree).
+    // ── Mark display layer + palm rejection ───────────────────────────────────
+    // The web reader is read-only: `tool` stays 'select' (there are no capture tools) and the overlay
+    // is a display layer. `penActive()` still feeds palm rejection so a resting palm doesn't hijack
+    // pan/swipe. The overlay is built once on open (armDisplay) to paint existing marks.
     let tool = 'select';
-    let overlay = null;                              // the L2 capture/render layer (armed on demand)
+    let overlay = null;                              // the L2 display layer (built on open)
     let armAnnotate = null;                          // each engine registers how to build its overlay
-    let annotateOn = false;                          // reading mode by default; toggle arms annotation
     const penIds = new Set(); let lastPenTs = 0;     // pen pointer tracking → palm rejection
     const PEN_GRACE = 700;                            // ms after the last pen event we still reject touch
     function penActive() { return penIds.size > 0 || (Date.now() - lastPenTs) < PEN_GRACE; }
@@ -484,62 +473,43 @@
       if (overlay) overlay.setPen(merged);
     }
 
+    // Web is read-only, so `t` is only ever 'select' (there are no capture tools); the overlay uses
+    // it to keep its ink layer click-through. Kept as a seam for a hypothetical editing host.
     function setTool(t) {
       tool = t;
       if (overlay) overlay.setTool(t);
-      // Reflect the active tool on the toolbar + take over touch-action while a tool is live so
-      // the browser doesn't scroll/select under a draw/mark gesture.
-      [['select', els.selectBtn], ['underline', els.ulBtn], ['strikeout', els.strikeBtn],
-       ['note', els.noteBtn], ['erase', els.eraseBtn],
-       ['highlight', els.hlBtn]].forEach(([name, btn]) => {          // no 'ink' — web has no ink tool
-        if (btn) btn.classList.toggle('tool-active', tool === name);
-      });
-      if (els.penOpts) els.penOpts.classList.add('hidden');          // ink pen options never shown on web
     }
-    // The overlay seam the engines hand to ReaderOverlay.create — pure host capabilities.
+    // The overlay seam the engines hand to ReaderOverlay.create — pure host capabilities. `readOnly`
+    // makes the overlay a display-only layer: it paints existing marks (highlight/underline/note) but
+    // binds no capture, shows no ink, and a mark tap only VIEWS a note. Web/PWA is read-only; editing
+    // lives in the iOS app.
     const overlaySeam = popup ? {
-      annotations: opts.annotations, pickColor: popup.pickColor, editExisting: popup.editExisting,
-      penActive, getPenDefault: getPen,
+      annotations: opts.annotations, editExisting: popup.editExisting,
+      penActive, getPenDefault: getPen, readOnly: true,
     } : null;
 
-    // ── Reading mode vs annotate mode ─────────────────────────────────────────
-    // An edition opens in PURE READING mode: NO overlay, NO annotation fetch, NO ink library, NO
-    // per-page paint hooks — identical cost to the reader before annotations existed. Flipping the
-    // ✍ toggle ARMS annotation (the engine builds its overlay + loads marks then, once). This keeps
-    // open/scroll fast and makes handwriting strictly opt-in.
-    function enableAnnotate() {
-      if (annotateOn) return;
-      annotateOn = true;
-      document.body.classList.add('annotate-on');
-      if (els.annotateBtn) els.annotateBtn.classList.add('tool-active');
-      // Build the overlay (async: loads the ink lib + the holding's marks); flag `annotate-ready`
-      // when live so the UI/tests know the tools are wired.
-      Promise.resolve(armAnnotate && armAnnotate())
-        .then(() => document.body.classList.add('annotate-ready')).catch(() => {});
-    }
-    function disableAnnotate() {
-      annotateOn = false;
-      document.body.classList.remove('annotate-on');
-      if (els.annotateBtn) els.annotateBtn.classList.remove('tool-active');
-      setTool('select');
+    // ── Display existing marks (read-only) ────────────────────────────────────
+    // For an owner (an overlaySeam exists) the overlay is built once on open and the holding's marks
+    // are painted, so you SEE your highlights/underlines/notes while reading. A read-only viewer has
+    // no overlaySeam, so nothing is built and reading stays zero-overlay for them.
+    let themeHookWired = false;
+    function armDisplay() {
+      return Promise.resolve(armAnnotate && armAnnotate()).then(() => {
+        // Once the overlay exists, keep its marks legible across a reading-theme toggle.
+        if (overlay && overlay.restyle && !themeHookWired) {
+          themeHookWired = true;
+          themeHooks.push(() => { try { if (overlay && overlay.restyle) overlay.restyle(); } catch (e) {} });
+        }
+      }).catch(() => {});
     }
 
-    // Toolbar buttons → setTool. A tool toggles off (back to select) on a second click.
+    // Read-only mark chrome: a "refresh" (re-pull from other devices) + a browse list. No capture
+    // tools — the web reader only shows marks.
     if (overlaySeam) {
-      if (els.annotateBtn)
-        els.annotateBtn.addEventListener('click', () => annotateOn ? disableAnnotate() : enableAnnotate());
-      const wire = (btn, name) => {
-        if (!btn) return;
-        btn.addEventListener('click', () => { closeAllPanels(); setTool(tool === name ? 'select' : name); });
-      };
-      wire(els.hlBtn, 'highlight'); wire(els.ulBtn, 'underline'); wire(els.strikeBtn, 'strikeout');
-      wire(els.noteBtn, 'note'); wire(els.eraseBtn, 'erase');   // no ink tool on web
-      if (els.selectBtn) els.selectBtn.addEventListener('click', () => { closeAllPanels(); setTool('select'); });
-
       // Manual "refresh marks": re-pull the holding's annotations from the server and repaint, so a
-      // highlight/ink/note made on ANOTHER device appears without closing the book. Pull-to-refresh
-      // would fight the reading scroll, so it's a chrome button (mirrors iOS's foreground/poll refresh);
-      // also fires on tab-return. No-op until marks are painted (`overlay` armed) — nothing to refresh.
+      // highlight/note made on ANOTHER device appears without closing the book. Pull-to-refresh would
+      // fight the reading scroll, so it's a chrome button (mirrors iOS's foreground/poll refresh);
+      // also fires on tab-return. No-op until the display overlay is built — nothing to refresh.
       async function reloadMarks() {
         if (!overlay) return;
         if (els.viewer && !document.body.contains(els.viewer)) return;   // reader closed → stale-listener no-op
@@ -548,32 +518,7 @@
       if (els.refreshBtn) els.refreshBtn.addEventListener('click', () => { closeAllPanels(); reloadMarks(); });
       document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reloadMarks(); });
 
-      // Pen options popover (Draw tool): colour swatches, width, pen/marker. Persisted device-local.
-      if (els.penOpts) {
-        const pen0 = getPen();
-        const COLORS = ['#222222', '#e53935', '#1e88e5', '#43a047', '#fb8c00'];
-        const sw = document.createElement('div'); sw.className = 'pen-swatches';
-        COLORS.forEach(c => {
-          const b = document.createElement('button'); b.className = 'hl-swatch'; b.style.background = c;
-          b.addEventListener('click', () => { setPen({ color: c }); markPenUI(); });
-          b.dataset.color = c; sw.appendChild(b);
-        });
-        const range = document.createElement('input');
-        range.type = 'range'; range.min = '1'; range.max = '10'; range.value = String(pen0.width);
-        range.className = 'pen-width';
-        range.addEventListener('input', () => setPen({ width: +range.value }));
-        const modeBtn = document.createElement('button'); modeBtn.className = 'pen-mode';
-        const syncMode = () => { modeBtn.textContent = getPen().mode === 'marker' ? 'Marker' : 'Pen'; };
-        modeBtn.addEventListener('click', () => { setPen({ mode: getPen().mode === 'marker' ? 'pen' : 'marker' }); syncMode(); });
-        els.penOpts.append(sw, range, modeBtn);
-        function markPenUI() {
-          const cur = getPen().color;
-          sw.querySelectorAll('.hl-swatch').forEach(b => b.classList.toggle('sel', b.dataset.color === cur));
-        }
-        syncMode(); markPenUI();
-      }
-
-      // Annotation list panel — every mark in the book; tap to jump, × to remove. Reuses the
+      // Annotation list panel — every mark in the book; tap to jump. Read-only (no remove). Reuses the
       // bookmark-panel chrome over the overlay's indexed records (overlay.list()/.goto()).
       if (els.annBtn && els.annPanel) {
         const panel = els.annPanel;
@@ -585,15 +530,7 @@
             const row = document.createElement('div'); row.className = 'bm-row';
             const go = document.createElement('button'); go.className = 'bm-go'; go.textContent = it.label;
             go.addEventListener('click', () => { panel.classList.add('hidden'); try { it.go(); } catch (e) {} });
-            const del = document.createElement('button'); del.className = 'bm-del'; del.textContent = '×';
-            del.title = 'Remove'; del.setAttribute('aria-label', 'Remove annotation');
-            del.addEventListener('click', async (e) => {
-              e.stopPropagation();
-              try { await opts.annotations.remove(it.a); } catch (x) {}
-              if (overlay && overlay.repaint) overlay.repaint();
-              renderAnns();
-            });
-            row.append(go, del); panel.appendChild(row);
+            row.append(go); panel.appendChild(row);   // read-only: tap to jump, no remove
           }
         }
         els.annBtn.addEventListener('click', () => {
@@ -701,10 +638,10 @@
       const numPages = doc.numPages;
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
 
-      // PDFs always open at fit-to-width (userZoom 1). The buttons zoom IN from there
-      // (zoom-out floors at fit-width); pinch goes finer. Not persisted — fit-width is the
-      // starting view every time. Relabel the shared A−/A+ buttons as zoom controls.
-      let userZoom = 1;
+      // PDF zoom (userZoom 1 = fit-to-width, up to 3). The buttons zoom IN from there
+      // (zoom-out floors at fit-width); pinch goes finer. PERSISTED PER-DOCUMENT so a book
+      // reopens at the zoom you left it at. Relabel the shared A−/A+ buttons as zoom controls.
+      let userZoom = Math.max(1, Math.min(3, parseFloat(readDocPref('readerPdfZoom')) || 1));
       const fdec = els.fdec, finc = els.finc;
       fdec.textContent = iconGlyph('zoomOut') || '−'; fdec.title = 'Zoom out'; fdec.setAttribute('aria-label', 'Zoom out');
       finc.textContent = iconGlyph('zoomIn') || '+';  finc.title = 'Zoom in';  finc.setAttribute('aria-label', 'Zoom in');
@@ -827,6 +764,7 @@
       // lands off-centre. Both default to the viewport centre (the A−/A+ buttons).
       function zoomTo(z, ax, ay) {
         userZoom = Math.max(1, Math.min(3, z));   // never smaller than fit-to-width
+        writeDocPref('readerPdfZoom', userZoom);   // remember this book's zoom for next open
         ax = (ax == null) ? viewer.clientWidth / 2 : ax;
         ay = (ay == null) ? viewer.clientHeight / 2 : ay;
         const cY = viewer.scrollTop + ay;
@@ -848,7 +786,7 @@
 
       // Reflow-to-text: the CURRENT page's text as paragraphs (shared LibraryCore.reflowPageText) — a
       // phone reading mode. Hides the page stack while on; the pager turns pages + re-renders.
-      let reflowDiv = null, reflowFontPx = 18;
+      let reflowDiv = null, reflowFontPx = Math.max(12, Math.min(28, parseInt(readDocPref('readerReflowPx')) || 18));
       const reflowIsOn = () => !!reflowDiv && !reflowDiv.classList.contains('hidden');
       async function pageRawText(n) {
         const page = await doc.getPage(n);
@@ -890,9 +828,9 @@
         else viewer.scrollBy({ top: -(viewer.clientHeight - 48), behavior: 'smooth' }); };
       ctrl.next = () => { if (reflowIsOn()) { if (cur < numPages) { cur++; renderReflow(); reflowDiv.scrollTop = 0; } }
         else viewer.scrollBy({ top: (viewer.clientHeight - 48), behavior: 'smooth' }); };
-      ctrl.bigger = () => { if (reflowIsOn()) { reflowFontPx = Math.min(28, reflowFontPx + 2); reflowDiv.style.fontSize = reflowFontPx + 'px'; }
+      ctrl.bigger = () => { if (reflowIsOn()) { reflowFontPx = Math.min(28, reflowFontPx + 2); reflowDiv.style.fontSize = reflowFontPx + 'px'; writeDocPref('readerReflowPx', reflowFontPx); }
         else zoomTo(Math.min(3, userZoom + 0.15)); };
-      ctrl.smaller = () => { if (reflowIsOn()) { reflowFontPx = Math.max(12, reflowFontPx - 2); reflowDiv.style.fontSize = reflowFontPx + 'px'; }
+      ctrl.smaller = () => { if (reflowIsOn()) { reflowFontPx = Math.max(12, reflowFontPx - 2); reflowDiv.style.fontSize = reflowFontPx + 'px'; writeDocPref('readerReflowPx', reflowFontPx); }
         else zoomTo(Math.max(1, userZoom - 0.15)); };   // zoom-out stops at fit-width
       ctrl.fitWidth = () => { if (!reflowIsOn()) zoomTo(1); };   // fit-to-width is userZoom 1
       // Bookmark a PDF spot by page number (the same opaque locator the position save uses).
@@ -956,11 +894,11 @@
       attachPdfPan(viewer);
 
       // ── Annotations (PDF) — delegated to the L2 overlay ─────────────────────
-      // Highlights/underline/strikeout/notes/ink all live in overlay.js (PdfOverlay); the engine
-      // only feeds it the page geometry + the host seam, and repaints a page after (re)render.
-      // Annotation overlay is built ONLY when the ✍ toggle arms it — never on the reading-open
-      // path. Arming loads the ink library + the holding's marks, wires the per-page paint hook,
-      // and repaints the pages already on screen.
+      // Highlights/underline/notes live in overlay.js (PdfOverlay), which the web builds in READ-ONLY
+      // mode — it paints existing marks but captures nothing and doesn't show ink. For an OWNER the
+      // overlay is built once on open (armDisplay) so marks are painted while reading; a guest has no
+      // overlaySeam, so this stays unregistered and their reading path is zero-overlay. Building wires
+      // the per-page paint hook and repaints the pages already on screen.
       if (overlaySeam && window.ReaderOverlay) armAnnotate = async () => {
         if (overlay) return;
         const fh = await ReaderVendor.ensureFreehand().catch(() => null);
@@ -1013,6 +951,9 @@
 
       let rt;
       window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => zoomTo(userZoom), 200); });
+
+      // Paint the owner's existing marks now (read-only display; the web never captures).
+      armDisplay();
     }
 
     // ── EPUB (epub.js) ───────────────────────────────────────────────────────
@@ -1041,7 +982,7 @@
       // so a book that hard-codes font-size on its text elements changes only spacing (not glyphs); we
       // ALSO inject a stylesheet into each rendered section forcing text elements to inherit the scaled
       // base, so the letters actually resize.
-      let fontPct = parseInt(localStorage.getItem('readerEpubFontPct')) || 100;
+      let fontPct = parseInt(readDocPref('readerEpubFontPct')) || 100;
       const applyFont = () => {
         const css = 'html,body{font-size:' + fontPct + '% !important;}' +
           'p,li,dd,dt,blockquote,span,a,em,strong,i,b,small,sub,sup,td,th,cite,q,figcaption,label' +
@@ -1059,7 +1000,7 @@
         } catch (e) {}
       };
       const setFont = (p) => { fontPct = Math.max(60, Math.min(250, p));
-        localStorage.setItem('readerEpubFontPct', fontPct); applyFont(); };
+        writeDocPref('readerEpubFontPct', fontPct); applyFont(); };
       applyFont();
       rendition.on('rendered', () => { if (fontPct !== 100) applyFont(); });   // new sections start fresh
 
@@ -1121,8 +1062,9 @@
       // and pings overlay.relocated() on page turns so the spine-anchored ink repaints. The
       // current spine index for ink anchoring is tracked off `relocated` (see below).
       let curSpine = 0;
-      // Built only when the ✍ toggle arms it (see PDF note) — never on the reading-open path, so
-      // the EPUB's first rendition.display() is never blocked by the annotation layer.
+      // Built once on open for an owner via armDisplay (see PDF note), AFTER the first
+      // rendition.display() so it never blocks the initial paint. Read-only (display only); a guest
+      // never registers this.
       if (overlaySeam && window.ReaderOverlay) armAnnotate = async () => {
         if (overlay) return;
         const fh = await ReaderVendor.ensureFreehand().catch(() => null);
@@ -1215,10 +1157,13 @@
       }).catch(() => {});
 
       const saved = await getSaved();
-      // Hide the loading overlay once the first section has actually painted.
+      // Hide the loading overlay once the first section has actually painted. Then paint the owner's
+      // existing marks (read-only display). We arm AFTER the first display so epub.js has a rendered
+      // section to inject the CFI-anchored marks into.
       rendition.display(saved.locator || undefined)
         .catch(() => rendition.display())
-        .finally(hideLoad);
+        .finally(hideLoad)
+        .finally(armDisplay);
 
       rendition.on('relocated', (loc) => {
         const start = loc && loc.start;

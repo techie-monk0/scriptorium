@@ -29,20 +29,12 @@
       {% if ext == 'pdf' %}<button type="button" class="fbtn" id="reflowBtn" title="Reflow to text" aria-label="Reflow page to text" aria-pressed="false">¶</button>{% endif %}
       <button type="button" class="fbtn" id="gotoBtn" title="Go to page" aria-label="Go to page">⇥</button>
       <button type="button" class="fbtn" id="themeBtn" title="Reading theme" aria-label="Cycle reading theme">◐</button>
-      {% if can_download() %}{# annotation tools + bookmarks are the owner's — hidden for viewers #}
+      {% if can_download() %}{# marks + bookmarks are the owner's — hidden for viewers #}
       <span class="toolsep"></span>
-      {# Reading mode by default; ✍ arms annotation (handwriting) — keeps opening/scrolling fast. #}
-      <button type="button" class="fbtn tool" id="annotateBtn" title="Annotate (handwriting)" aria-label="Toggle annotation mode">✍</button>
-      <span id="anntools" class="anntools">{# revealed only in annotate mode (body.annotate-on) #}
-        <button type="button" class="fbtn tool" id="hlBtn" title="Highlight" aria-label="Highlight tool">🖍</button>
-        <button type="button" class="fbtn tool" id="ulBtn" title="Underline" aria-label="Underline tool">U̲</button>
-        <button type="button" class="fbtn tool" id="strikeBtn" title="Strikethrough" aria-label="Strikethrough tool">S̶</button>
-        {# No ink/handwriting on web — ink annotation is an iOS-only capability. #}
-        <button type="button" class="fbtn tool" id="noteBtn" title="Add a note" aria-label="Note tool">🅝</button>
-        <button type="button" class="fbtn tool" id="eraseBtn" title="Erase" aria-label="Erase tool">⌫</button>
-        <button type="button" class="fbtn" id="annBtn" title="Annotations" aria-label="Show annotations">▦</button>
-        {% if ext == 'pdf' %}<button type="button" class="fbtn" id="exportBtn" title="Export annotated PDF" aria-label="Export annotated PDF">⬇</button>{% endif %}
-      </span>
+      {# Web is READ-ONLY: existing highlights/underlines/notes DISPLAY while reading (tap a note to
+         read it), but creating/editing marks + ink live in the iOS app — so no annotate/draw tools. #}
+      <button type="button" class="fbtn" id="annBtn" title="Annotations" aria-label="Show annotations">▦</button>
+      {% if ext == 'pdf' %}<button type="button" class="fbtn" id="exportBtn" title="Export annotated PDF" aria-label="Export annotated PDF">⬇</button>{% endif %}
       <span class="toolsep"></span>
       <button type="button" class="fbtn" id="bmAdd" title="Bookmark this spot" aria-label="Add bookmark">★</button>
       <button type="button" class="fbtn" id="bmList" title="Bookmarks" aria-label="Show bookmarks">▤</button>
@@ -55,13 +47,12 @@
   <div id="tocPanel" class="bmpanel tocpanel hidden"></div>{# contents: available to viewers too #}
   <div id="searchPanel" class="bmpanel searchpanel hidden"></div>{# in-book search #}
   {% if can_download() %}<div id="bmPanel" class="bmpanel hidden"></div>
-  <div id="annPanel" class="bmpanel annpanel hidden"></div>{# annotation list — editor-only #}
-  <div id="penOpts" class="penopts hidden"></div>{# Draw-tool pen options (colour/width/marker) #}
+  <div id="annPanel" class="bmpanel annpanel hidden"></div>{# annotation list — read-only browse #}
   {% if ext == 'pdf' %}<div id="exportMenu" class="penopts hidden">
     <a class="pen-mode" id="exportCopy" download href="/holding/{{ hid }}/annotated.pdf">Download annotated copy</a>
     {% if is_local %}<button type="button" class="pen-mode" id="exportInplace">Write into original</button>{% endif %}
   </div>{% endif %}
-  <div id="hlPopup" class="hlpopup hidden"></div>{# colour picker / note — editor-only #}{% endif %}
+  <div id="hlPopup" class="hlpopup hidden"></div>{# read-only note viewer (tap a note) — owner-only #}{% endif %}
   <button type="button" class="pager left" id="pgPrev" aria-label="Previous page">‹</button>
   <button type="button" class="pager right" id="pgNext" aria-label="Next page">›</button>
   <div class="vrail left"></div>
@@ -162,6 +153,7 @@
 
     ReaderCore.mount({
       ext: "{{ ext }}",
+      docId: HID,   // per-document reading settings (font %, zoom, reflow size) are keyed by this
       els: {
         viewer:  document.getElementById('viewer'),
         prog:    document.getElementById('prog'),
@@ -182,17 +174,10 @@
         searchBtn: document.getElementById('searchBtn'),
         refreshBtn: document.getElementById('refreshBtn'),   // re-pull marks from other devices
         searchPanel: document.getElementById('searchPanel'),
-        hlPopup: document.getElementById('hlPopup'),   // null for a read-only viewer
-        // Annotation tools (editor-only; null for a read-only viewer → tools stay off).
-        annotateBtn: document.getElementById('annotateBtn'),
-        hlBtn:    document.getElementById('hlBtn'),
-        ulBtn:    document.getElementById('ulBtn'),
-        strikeBtn: document.getElementById('strikeBtn'),
-        noteBtn:  document.getElementById('noteBtn'),
-        eraseBtn: document.getElementById('eraseBtn'),
-        annBtn:   document.getElementById('annBtn'),
+        hlPopup: document.getElementById('hlPopup'),   // read-only note viewer (null for a guest)
+        // Mark display chrome (owner-only; null for a guest). Web is read-only — no capture tools.
+        annBtn:   document.getElementById('annBtn'),     // annotations list (browse, tap to jump)
         annPanel: document.getElementById('annPanel'),
-        penOpts:  document.getElementById('penOpts'),
       },
       // Byte source. PDF streams by URL (range requests — never loads a 50M file whole), but with
       // a 1MB rangeChunkSize instead of pdf.js's 64KB default: a non-linearized PDF makes pdf.js
