@@ -50,6 +50,7 @@ public struct ReaderCaps: Equatable, Sendable {
 public func readerChromeVM(format: String, caps: ReaderCaps,
                            reflow: Bool = false, draw: Bool = false,
                            compact: Bool = false) -> [ReaderControl] {
+    let canEdit = caps.markText || caps.strike || caps.note || caps.draw || caps.erase   // any annotation ability
     var out: [ReaderControl] = []
     func c(_ id: String, _ bar: String, _ overflow: Bool = false, _ active: Bool = false) {
         out.append(ReaderControl(id: id, bar: bar, overflow: overflow, active: active))
@@ -68,6 +69,7 @@ public func readerChromeVM(format: String, caps: ReaderCaps,
         if caps.reflow { tool("reflow", reflow) }
         c("goto", "text")                   // jump to a page (PDF) / position (EPUB)
         c("theme", "text")                  // a direct cycle button (never in the ⋯)
+        if canEdit { tool("undo"); tool("redo") }   // document-level; renderer disables when empty
         if caps.markText { tool("highlight"); tool("underline") }
         if caps.strike { tool("strike") }
         if caps.note { tool("note") }

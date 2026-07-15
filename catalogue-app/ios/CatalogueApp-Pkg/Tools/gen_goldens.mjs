@@ -78,3 +78,9 @@ const goldens = {
 
 writeFileSync(join(goldensDir, 'goldens.json'), JSON.stringify(goldens, null, 2) + '\n');
 console.log('wrote goldens.json');
+
+// The shared reader-icon config → a JSON the iOS app bundles and reads at runtime, so library-core.js
+// stays the single source of truth for icons across web/PWA/iOS (iOS uses the `sf` SF Symbol names).
+const iconsOut = join(here, '..', 'Sources', 'CatalogueCore', 'Resources', 'reader-icons.json');
+writeFileSync(iconsOut, JSON.stringify(LC.READER_ICONS, null, 2) + '\n');
+console.log('wrote reader-icons.json');

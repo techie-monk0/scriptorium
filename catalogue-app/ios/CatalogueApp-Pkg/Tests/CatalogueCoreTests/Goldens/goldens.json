@@ -92,6 +92,18 @@
         "active": false
       },
       {
+        "id": "undo",
+        "bar": "text",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "redo",
+        "bar": "text",
+        "overflow": false,
+        "active": false
+      },
+      {
         "id": "highlight",
         "bar": "text",
         "overflow": false,
@@ -214,6 +226,18 @@
         "active": false
       },
       {
+        "id": "undo",
+        "bar": "text",
+        "overflow": true,
+        "active": false
+      },
+      {
+        "id": "redo",
+        "bar": "text",
+        "overflow": true,
+        "active": false
+      },
+      {
         "id": "highlight",
         "bar": "text",
         "overflow": true,
@@ -324,6 +348,18 @@
         "active": false
       },
       {
+        "id": "undo",
+        "bar": "text",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "redo",
+        "bar": "text",
+        "overflow": false,
+        "active": false
+      },
+      {
         "id": "highlight",
         "bar": "text",
         "overflow": false,
@@ -401,6 +437,18 @@
         "id": "theme",
         "bar": "text",
         "overflow": false,
+        "active": false
+      },
+      {
+        "id": "undo",
+        "bar": "text",
+        "overflow": true,
+        "active": false
+      },
+      {
+        "id": "redo",
+        "bar": "text",
+        "overflow": true,
         "active": false
       },
       {
@@ -499,6 +547,18 @@
       },
       {
         "id": "theme",
+        "bar": "text",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "undo",
+        "bar": "text",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "redo",
         "bar": "text",
         "overflow": false,
         "active": false

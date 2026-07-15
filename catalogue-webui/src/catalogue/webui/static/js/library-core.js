@@ -697,6 +697,41 @@
     return paras;
   }
 
+  // ── Reader icon config: the SINGLE source of truth for every reader-chrome control's icon, shared by
+  // all surfaces. Keyed by the control `id` from `readerChromeVM`. `sf` is the iOS SF Symbol name (iOS
+  // renders SF Symbols, never glyphs); `sfActive` is the toggled-on variant where one exists; `web` is
+  // the glyph the web/PWA toolbars show. Change an icon HERE and it updates everywhere: web/PWA read this
+  // object directly; iOS reads a generated `reader-icons.json` copy (see Tools/gen_goldens.mjs).
+  // Note: SF Symbols has no straight-tip highlighter — `highlighter` is the only one; swap `highlight.sf`
+  // here if a different symbol is preferred.
+  var READER_ICONS = {
+    done:         { sf: 'chevron.left',              web: '‹' },
+    toc:          { sf: 'list.bullet',               web: '☰' },
+    search:       { sf: 'magnifyingglass',           web: '🔍' },
+    refresh:      { sf: 'arrow.clockwise',           web: '⟳' },
+    textSmaller:  { sf: 'textformat.size.smaller',   web: 'A' },
+    textLarger:   { sf: 'textformat.size.larger',    web: 'A' },
+    zoomOut:      { sf: 'minus.magnifyingglass',     web: '−' },
+    zoomIn:       { sf: 'plus.magnifyingglass',      web: '+' },
+    fitWidth:     { sf: 'arrow.left.and.right',      web: '↔' },
+    reflow:       { sf: 'doc.plaintext', sfActive: 'doc.richtext.fill', web: '¶' },
+    goto:         { sf: 'arrow.forward.to.line',     web: '⇥' },
+    theme:        { sf: 'circle.lefthalf.filled',    web: '◐' },
+    undo:         { sf: 'arrow.uturn.backward',      web: '↶' },
+    redo:         { sf: 'arrow.uturn.forward',       web: '↷' },
+    highlight:    { sf: 'highlighter',               web: '🖍' },
+    underline:    { sf: 'underline',                 web: 'U̲' },
+    strike:       { sf: 'strikethrough',             web: 'S̶' },
+    note:         { sf: 'note.text',                 web: '🅝' },
+    draw:         { sf: 'pencil.tip.crop.circle', sfActive: 'pencil.tip.crop.circle.fill', web: '✎' },
+    erase:        { sf: 'eraser.line.dashed',        web: '⌫' },
+    annList:      { sf: 'list.bullet.rectangle',     web: '▦' },
+    export:       { sf: 'square.and.arrow.up',       web: '⬇' },
+    bookmarkAdd:  { sf: 'bookmark',                  web: '★' },
+    bookmarkList: { sf: 'bookmark.circle',           web: '▤' },
+    pin:          { sf: 'pin', sfActive: 'pin.fill', web: '📌' }   // iOS: pin a reader bar to float it
+  };
+
   // ── Reader chrome spec: the SHARED "bars" abstraction. Enumerates the reader's control set ONCE —
   // which bar each control lives in (general = leading, text = trailing), whether it collapses into the
   // ⋯ overflow, and its active state. It is CAPABILITY-DRIVEN: the caller passes the caps its surface +
@@ -714,6 +749,7 @@
     var caps = input.caps || {};
     var st = input.state || {};
     var compact = !!input.compact;   // narrow width → annotation + mode controls go to the ⋯ overflow
+    var canEdit = !!(caps.markText || caps.strike || caps.note || caps.draw || caps.erase);  // any annotation ability
     var out = [];
     function c(id, bar, overflow, active) { out.push({ id: id, bar: bar, overflow: !!overflow, active: !!active }); }
     // Annotation + mode-specific controls: inline on a regular width, collapsed into ⋯ on a phone.
@@ -733,6 +769,9 @@
       if (caps.reflow) tool('reflow', !!st.reflow);
       c('goto', 'text', false, false);    // jump to a page (PDF) / position (EPUB)
       c('theme', 'text', false, false);   // a direct cycle button (never in the ⋯)
+      // Document-level undo/redo — present whenever the surface can annotate; the renderer disables each
+      // when its history is empty.
+      if (canEdit) { tool('undo', false); tool('redo', false); }
       // The shared annotation vocabulary — each gated by its own capability so a mode/surface excludes
       // only what it can't do.
       if (caps.markText) { tool('highlight', false); tool('underline', false); }
@@ -793,7 +832,8 @@
 
   window.LibraryCore = {
     fold: fold, nameKey: nameKey, editionRef: editionRef, refFromUrl: refFromUrl, artFor: artFor,
-    reflowPageText: reflowPageText, readerChromeVM: readerChromeVM, subjectSections: subjectSections,
+    reflowPageText: reflowPageText, readerChromeVM: readerChromeVM, READER_ICONS: READER_ICONS,
+    subjectSections: subjectSections,
     syncVM: syncVM,
     subjectTopLevel: subjectTopLevel, isUnderSubject: isUnderSubject,
     searchVM: searchVM, browseVM: browseVM, contentVM: contentVM, detailVM: detailVM,

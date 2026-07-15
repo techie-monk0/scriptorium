@@ -19,16 +19,12 @@ struct InkToolbar: View {
     let onUndo: () -> Void
     let onRedo: () -> Void
     let onDone: () -> Void
-    /// Drag of the move handle, in the shared reader coordinate space (`InkToolbar.coordinateSpace`).
-    let onMove: (CGPoint) -> Void
-    let onMoveEnd: (CGPoint) -> Void
-
-    /// The coordinate space the reader must name on the palette's container so drag points are relative
-    /// to the reader area (the placement controller expects normalized area coordinates).
-    static let coordinateSpace = "InkPaletteArea"
 
     private let tokens = Tokens(.default)
 
+    /// The palette's ITEMS only. The floating-panel chrome — the move grips, material background, and
+    /// on-screen clamping — is supplied by the shared `PanelChrome` / `FloatingPanel` the host wraps this
+    /// in, exactly like the pinned reader bars. So the palette no longer renders its own grip/background.
     var body: some View {
         axisStack {
             ForEach(Array(palette.layout.groups.enumerated()), id: \.offset) { gi, group in
@@ -38,10 +34,6 @@ struct InkToolbar: View {
                 }
             }
         }
-        .padding(.horizontal, 14).padding(.vertical, 10)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .shadow(radius: 6, y: 2)
-        .fixedSize()   // hug content so a floating palette isn't full-width
     }
 
     // MARK: item dispatch — the abstract vocabulary → concrete controls
@@ -57,7 +49,6 @@ struct InkToolbar: View {
             Button(action: onRedo) { Image(systemName: "arrow.uturn.forward") }.disabled(!canRedo)
         case .done:
             Button("Done", action: onDone).font(.body.weight(.semibold))
-        case .moveHandle: moveHandle
         }
     }
 
@@ -129,19 +120,6 @@ struct InkToolbar: View {
         }
     }
 
-    private var moveHandle: some View {
-        Image(systemName: "arrow.up.and.down.and.arrow.left.and.right")
-            .imageScale(.medium)
-            .foregroundStyle(.secondary)
-            .frame(width: 30, height: 28)
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 2, coordinateSpace: .named(Self.coordinateSpace))
-                    .onChanged { onMove($0.location) }
-                    .onEnded { onMoveEnd($0.location) }
-            )
-            .accessibilityLabel(Text("Move palette"))
-    }
 
     // MARK: width helpers
 

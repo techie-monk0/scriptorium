@@ -37,6 +37,22 @@
     const viewer = els.viewer;
     const progEl = els.prog;
 
+    // Icons come from the SHARED config (LibraryCore.READER_ICONS) so web/PWA/iOS use one source — change
+    // a glyph there and it updates everywhere. Map each chrome element to its control id and stamp the
+    // `web` glyph. (fdec/finc show the EPUB font A± here; the PDF engine relabels them to zoom below.)
+    const READER_ICONS = (window.LibraryCore && window.LibraryCore.READER_ICONS) || {};
+    function iconGlyph(id) { return (READER_ICONS[id] && READER_ICONS[id].web) || null; }
+    (function applyIcons() {
+      const map = {
+        toc: els.tocBtn, search: els.searchBtn, refresh: els.refreshBtn,
+        textSmaller: els.fdec, textLarger: els.finc, fitWidth: els.fitWidth, reflow: els.reflowBtn,
+        goto: els.gotoBtn, theme: els.themeBtn, highlight: els.hlBtn, underline: els.ulBtn,
+        strike: els.strikeBtn, note: els.noteBtn, erase: els.eraseBtn, annList: els.annBtn,
+        bookmarkAdd: els.bmAdd, bookmarkList: els.bmList,
+      };
+      Object.keys(map).forEach((id) => { const el = map[id], g = iconGlyph(id); if (el && g) el.textContent = g; });
+    })();
+
     // Shared controller: each viewer fills these in; the chevrons / keys / A± call them.
     // `current()` returns the current spot as {locator, fraction, label} (for a bookmark);
     // `goto(locator)` jumps to one; `toc()` returns the outline as [{label, depth, go()}];
@@ -690,8 +706,8 @@
       // starting view every time. Relabel the shared A−/A+ buttons as zoom controls.
       let userZoom = 1;
       const fdec = els.fdec, finc = els.finc;
-      fdec.textContent = '−'; fdec.title = 'Zoom out'; fdec.setAttribute('aria-label', 'Zoom out');
-      finc.textContent = '+'; finc.title = 'Zoom in';  finc.setAttribute('aria-label', 'Zoom in');
+      fdec.textContent = iconGlyph('zoomOut') || '−'; fdec.title = 'Zoom out'; fdec.setAttribute('aria-label', 'Zoom out');
+      finc.textContent = iconGlyph('zoomIn') || '+';  finc.title = 'Zoom in';  finc.setAttribute('aria-label', 'Zoom in');
       const first = await doc.getPage(1);
       const base = first.getViewport({ scale: 1 });
       const targetW = () => Math.min(viewer.clientWidth - 16, 1100);

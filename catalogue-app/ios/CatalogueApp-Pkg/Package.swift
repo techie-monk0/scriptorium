@@ -29,7 +29,7 @@ let package = Package(
     ],
     targets: [
         .target(name: "CatalogueDesign"),
-        .target(name: "CatalogueCore"),
+        .target(name: "CatalogueCore", resources: [.process("Resources")]),
         .target(name: "CatalogueData", dependencies: ["CatalogueCore"]),
 
         // Neutral server⇄model wire layer (Foundation only, no UIKit/URLSession): the `/sync/reader`

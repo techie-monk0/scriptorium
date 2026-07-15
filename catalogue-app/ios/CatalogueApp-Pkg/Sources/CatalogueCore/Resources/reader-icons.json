@@ -1,0 +1,105 @@
+{
+  "done": {
+    "sf": "chevron.left",
+    "web": "‹"
+  },
+  "toc": {
+    "sf": "list.bullet",
+    "web": "☰"
+  },
+  "search": {
+    "sf": "magnifyingglass",
+    "web": "🔍"
+  },
+  "refresh": {
+    "sf": "arrow.clockwise",
+    "web": "⟳"
+  },
+  "textSmaller": {
+    "sf": "textformat.size.smaller",
+    "web": "A"
+  },
+  "textLarger": {
+    "sf": "textformat.size.larger",
+    "web": "A"
+  },
+  "zoomOut": {
+    "sf": "minus.magnifyingglass",
+    "web": "−"
+  },
+  "zoomIn": {
+    "sf": "plus.magnifyingglass",
+    "web": "+"
+  },
+  "fitWidth": {
+    "sf": "arrow.left.and.right",
+    "web": "↔"
+  },
+  "reflow": {
+    "sf": "doc.plaintext",
+    "sfActive": "doc.richtext.fill",
+    "web": "¶"
+  },
+  "goto": {
+    "sf": "arrow.forward.to.line",
+    "web": "⇥"
+  },
+  "theme": {
+    "sf": "circle.lefthalf.filled",
+    "web": "◐"
+  },
+  "undo": {
+    "sf": "arrow.uturn.backward",
+    "web": "↶"
+  },
+  "redo": {
+    "sf": "arrow.uturn.forward",
+    "web": "↷"
+  },
+  "highlight": {
+    "sf": "highlighter",
+    "web": "🖍"
+  },
+  "underline": {
+    "sf": "underline",
+    "web": "U̲"
+  },
+  "strike": {
+    "sf": "strikethrough",
+    "web": "S̶"
+  },
+  "note": {
+    "sf": "note.text",
+    "web": "🅝"
+  },
+  "draw": {
+    "sf": "pencil.tip.crop.circle",
+    "sfActive": "pencil.tip.crop.circle.fill",
+    "web": "✎"
+  },
+  "erase": {
+    "sf": "eraser.line.dashed",
+    "web": "⌫"
+  },
+  "annList": {
+    "sf": "list.bullet.rectangle",
+    "web": "▦"
+  },
+  "export": {
+    "sf": "square.and.arrow.up",
+    "web": "⬇"
+  },
+  "bookmarkAdd": {
+    "sf": "bookmark",
+    "web": "★"
+  },
+  "bookmarkList": {
+    "sf": "bookmark.circle",
+    "web": "▤"
+  },
+  "pin": {
+    "sf": "pin",
+    "sfActive": "pin.fill",
+    "web": "📌"
+  }
+}

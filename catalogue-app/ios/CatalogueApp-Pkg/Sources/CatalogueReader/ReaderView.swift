@@ -56,6 +56,13 @@ public struct ReaderView: View {
     // Portable palette layout/arrangement/moveability (Postilla SDK). Starts docked to the bottom; the
     // move handle drags it to any edge or free-floating. This view only renders the spec.
     @State private var palette = InkPaletteController()
+    // Pin-to-float for the two reader bars. Unpinned = the native nav-bar toolbar (auto-hides with the
+    // chrome). Pinned = the bar's controls float as a moveable `FloatingPanel` (same portable
+    // `PanelPlacementModel` as the ink palette), starting near its usual corner.
+    @State private var generalBarPinned = false
+    @State private var documentBarPinned = false
+    @State private var generalBarPanel = PanelPlacementModel(placement: .floating(x: 0.24, y: 0.07))
+    @State private var documentBarPanel = PanelPlacementModel(placement: .floating(x: 0.76, y: 0.07))
     @State private var showNoteEntry = false
     @State private var noteDraft = ""
     @State private var noteAnchor: (page: Int, point: [Double])?   // page index (0-based) + top-left point
@@ -178,15 +185,16 @@ public struct ReaderView: View {
                 }
             }
             .overlay {
-                // The pencil tool palette — only while drawing on a PDF. A thin renderer of the portable
-                // `InkToolController` + `InkPaletteController`; the move handle repositions it (any edge
-                // or floating), Done exits draw mode.
+                // The pencil tool palette — only while drawing. A thin renderer of the portable
+                // `InkToolController` + `InkPaletteController`, positioned by the reusable `FloatingPanel`;
+                // the move handle repositions it (any edge or floating), Done exits draw mode.
                 if drawMode && (pdfNavigator != nil || epubNavigator != nil) {
-                    GeometryReader { geo in positionedPalette(in: geo.size) }
-                        .coordinateSpace(.named(InkToolbar.coordinateSpace))
-                        .transition(.opacity)
+                    paletteFloating.transition(.opacity)
                 }
             }
+            // Pinned reader bars float here (the SAME `FloatingPanel` pattern as the palette).
+            .overlay { if generalBarPinned { floatingBar(.general) } }
+            .overlay { if documentBarPinned { floatingBar(.document) } }
             .overlay {
                 if let themeToast {
                     Text(themeToast)
@@ -242,10 +250,10 @@ public struct ReaderView: View {
                 if epubSelection != nil && epubNavigator != nil {
                     HStack(spacing: 16) {
                         Button { Task { await addEpubTextMark(.highlight) } } label: {
-                            Label("Highlight", systemImage: "highlighter")
+                            Label("Highlight", systemImage: ReaderIcons.sf("highlight"))
                         }
                         Button { Task { await addEpubTextMark(.underline) } } label: {
-                            Label("Underline", systemImage: "underline")
+                            Label("Underline", systemImage: ReaderIcons.sf("underline"))
                         }
                         Button { epubSelection = nil } label: { Image(systemName: "xmark") }
                             .foregroundStyle(.secondary)
@@ -269,19 +277,12 @@ public struct ReaderView: View {
                 // Each bar is ONE toolbar item holding an HStack — so SwiftUI never auto-collapses the
                 // group into its own second ⋯ (a single tap on our ⋯ opens the menu). `.imageScale(.small)`
                 // keeps the symbols compact on a phone.
+                // A pinned bar leaves the nav bar entirely and floats (rendered in an overlay below).
                 ToolbarItem(placement: .topBarLeading) {
-                    HStack(spacing: 8) {
-                        ForEach(chromeControls.filter { $0.bar == "general" }) { barControl($0) }
-                    }
-                    .imageScale(.small)
+                    if !generalBarPinned { HStack(spacing: 8) { barItems(.general) }.imageScale(.small) }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    HStack(spacing: 8) {
-                        ForEach(chromeControls.filter { $0.bar == "text" && !$0.overflow }) { barControl($0) }
-                        let overflow = chromeControls.filter { $0.overflow }
-                        if !overflow.isEmpty { overflowMenu(overflow) }
-                    }
-                    .imageScale(.small)
+                    if !documentBarPinned { HStack(spacing: 8) { barItems(.document) }.imageScale(.small) }
                 }
             }
             .sheet(isPresented: $showToc) { tocSheet }
@@ -506,7 +507,7 @@ public struct ReaderView: View {
             strike: canAnnotate && pdf,             // strike/note/erase: PDF-only until EPUB CFI support lands
             note: canAnnotate && pdf,
             draw: canAnnotate,                      // ink: both formats on iOS
-            erase: canAnnotate && pdf,
+            erase: false,                           // ink eraser lives in the draw palette; text marks toggle off
             annList: false,                         // iOS has no annotations-list surface yet
             export: (reader?.capabilities.canExport == true) && pdf)
         return readerChromeVM(format: pdf ? "pdf" : "epub", caps: caps,
@@ -514,66 +515,111 @@ public struct ReaderView: View {
     }
 
     /// A bar (leading/trailing) control, dispatched by its shared `id` to a native SwiftUI subcomponent.
+    /// The ACTION is per-`id`; the ICON is sourced uniformly from the shared `ReaderIcons` config (its
+    /// toggled-on variant used when `c.active`), so an icon is changed once in `library-core.js`.
     @ViewBuilder private func barControl(_ c: ReaderControl) -> some View {
+        let icon = Image(systemName: ReaderIcons.sf(c.id, active: c.active))
         switch c.id {
         case "done":
-            Button { dismiss() } label: { Image(systemName: "chevron.left") }.accessibilityLabel("Done")
+            Button { dismiss() } label: { icon }.accessibilityLabel("Done")
         case "toc":
-            Button { tocItems = reader?.outline() ?? []; showToc = true } label: {
-                Image(systemName: "list.bullet")
-            }.accessibilityLabel("Contents")
+            Button { tocItems = reader?.outline() ?? []; showToc = true } label: { icon }
+                .accessibilityLabel("Contents")
         case "search":
-            Button { showSearch = true } label: { Image(systemName: "magnifyingglass") }.accessibilityLabel("Search")
+            Button { showSearch = true } label: { icon }.accessibilityLabel("Search")
         case "star":
             topBarAccessory
         case "textSmaller":
-            Button { smallerText() } label: { Text("A").font(.footnote) }.accessibilityLabel("Smaller text")
+            Button { smallerText() } label: { icon }.accessibilityLabel("Smaller text")
         case "textLarger":
-            Button { biggerText() } label: { Text("A").font(.title3) }.accessibilityLabel("Larger text")
+            Button { biggerText() } label: { icon }.accessibilityLabel("Larger text")
         case "zoomOut":
-            Button { zoomPdf(by: 1 / 1.25) } label: { Image(systemName: "minus.magnifyingglass") }
-                .accessibilityLabel("Zoom out")
+            Button { zoomPdf(by: 1 / 1.25) } label: { icon }.accessibilityLabel("Zoom out")
         case "zoomIn":
-            Button { zoomPdf(by: 1.25) } label: { Image(systemName: "plus.magnifyingglass") }
-                .accessibilityLabel("Zoom in")
+            Button { zoomPdf(by: 1.25) } label: { icon }.accessibilityLabel("Zoom in")
         case "fitWidth":
-            Button { fitPdfWidth() } label: { Image(systemName: "arrow.left.and.right") }
-                .accessibilityLabel("Fit width")
+            Button { fitPdfWidth() } label: { icon }.accessibilityLabel("Fit width")
         case "reflow":
-            Button { toggleReflow() } label: {
-                Image(systemName: c.active ? "doc.richtext.fill" : "doc.plaintext")
-            }.accessibilityLabel("Reflow to text")
+            Button { toggleReflow() } label: { icon }.accessibilityLabel("Reflow to text")
         case "goto":
-            Button { prepareGoto(); showGoto = true } label: { Image(systemName: "arrow.forward.to.line") }
-                .accessibilityLabel("Go to")
+            Button { prepareGoto(); showGoto = true } label: { icon }.accessibilityLabel("Go to")
         case "theme":
-            Button { cycleTheme() } label: { Image(systemName: "circle.lefthalf.filled") }
-                .accessibilityLabel("Reading theme")
+            Button { cycleTheme() } label: { icon }.accessibilityLabel("Reading theme")
+        case "undo":
+            Button { undoInk() } label: { icon }.disabled(!ink.canUndo).accessibilityLabel("Undo")
+        case "redo":
+            Button { redoInk() } label: { icon }.disabled(!ink.canRedo).accessibilityLabel("Redo")
         // Annotation vocabulary — rendered inline on a regular width (iPad); on a phone the spec marks
         // these `overflow` and they render as menu rows in `menuControl` instead.
         case "highlight":
-            Button { Task { await doHighlight() } } label: { Image(systemName: "highlighter") }
-                .accessibilityLabel("Highlight")
+            Button { Task { await doHighlight() } } label: { icon }.accessibilityLabel("Highlight")
         case "underline":
-            Button { Task { await doUnderline() } } label: { Image(systemName: "underline") }
-                .accessibilityLabel("Underline")
+            Button { Task { await doUnderline() } } label: { icon }.accessibilityLabel("Underline")
         case "strike":
-            Button { Task { await addTextMark(.strikeout) } } label: { Image(systemName: "strikethrough") }
-                .accessibilityLabel("Strikethrough")
+            Button { Task { await addTextMark(.strikeout) } } label: { icon }.accessibilityLabel("Strikethrough")
         case "note":
-            Button { beginNote() } label: { Image(systemName: "note.text") }.accessibilityLabel("Note")
+            Button { beginNote() } label: { icon }.accessibilityLabel("Note")
         case "draw":
-            Button { toggleDraw() } label: {
-                Image(systemName: c.active ? "pencil.tip.crop.circle.fill" : "pencil.tip.crop.circle")
-            }.accessibilityLabel("Draw")
+            Button { toggleDraw() } label: { icon }.accessibilityLabel("Draw")
         case "erase":
-            Button { Task { await eraseTextMarks() } } label: { Image(systemName: "eraser.line.dashed") }
-                .accessibilityLabel("Erase marks")
+            Button { Task { await eraseTextMarks() } } label: { icon }.accessibilityLabel("Erase marks")
         case "export":
-            Button { Task { await exportAnnotatedPdf() } } label: { Image(systemName: "square.and.arrow.up") }
-                .accessibilityLabel("Share annotated PDF")
+            Button { Task { await exportAnnotatedPdf() } } label: { icon }.accessibilityLabel("Share annotated PDF")
         default:
             EmptyView()
+        }
+    }
+
+    // MARK: reader bars — pin to float (same `FloatingPanel` pattern as the ink palette)
+
+    /// Which of the two reader bars.
+    private enum BarKind { case general, document }
+
+    /// A bar's controls plus its pin toggle — rendered either in the nav-bar toolbar (unpinned) or inside
+    /// the floating panel (pinned), so the two paths never drift.
+    @ViewBuilder private func barItems(_ bar: BarKind) -> some View {
+        switch bar {
+        case .general:
+            ForEach(chromeControls.filter { $0.bar == "general" }) { barControl($0) }
+        case .document:
+            ForEach(chromeControls.filter { $0.bar == "text" && !$0.overflow }) { barControl($0) }
+            let overflow = chromeControls.filter { $0.overflow }
+            if !overflow.isEmpty { overflowMenu(overflow) }
+        }
+        // The standard pin toggle from the reusable floating-panel component (pin ⇄ pin.fill).
+        PanelPinButton(pinned: pinnedBinding(bar),
+                       symbol: ReaderIcons.sf("pin"), filledSymbol: ReaderIcons.sf("pin", active: true))
+    }
+
+    private func pinnedBinding(_ bar: BarKind) -> Binding<Bool> {
+        switch bar {
+        case .general: return $generalBarPinned
+        case .document: return $documentBarPinned
+        }
+    }
+
+    /// A pinned bar, floated via the reusable `FloatingPanel` + `PanelChrome` — dockable/moveable exactly
+    /// like the ink palette, driven by that bar's portable `PanelPlacementModel`. `PanelChrome` supplies
+    /// the move handle and lays the controls out along the panel's axis (a row when docked top/bottom or
+    /// floating; a column when docked to a side); `FloatingPanel` keeps it fully on-screen.
+    @ViewBuilder private func floatingBar(_ bar: BarKind) -> some View {
+        let model = bar == .general ? generalBarPanel : documentBarPanel
+        FloatingPanel(placement: model.placement,
+                      onDrag: { nx, ny in updateBarPanel(bar) { $0.drag(toX: nx, y: ny) } },
+                      onDragEnd: { nx, ny in updateBarPanel(bar) { $0.endDrag(atX: nx, y: ny) } },
+                      coordinateSpace: bar == .general ? "reader-bar-general" : "reader-bar-document") { handlers in
+            PanelChrome(handlers: handlers, axis: model.axis) {
+                barItems(bar)
+            }
+            .imageScale(.small)   // grip keeps its own scale; the controls inherit this
+        }
+        .transition(.opacity)
+    }
+
+    private func updateBarPanel(_ bar: BarKind, _ mutate: (inout PanelPlacementModel) -> Void) {
+        switch bar {
+        case .general: mutate(&generalBarPanel)
+        case .document: mutate(&documentBarPanel)
         }
     }
 
@@ -599,43 +645,45 @@ public struct ReaderView: View {
         } label: { Image(systemName: "ellipsis.circle") }
     }
 
+    /// The ⋯ overflow rows. Text label is per-`id`; the icon comes from the shared `ReaderIcons` config.
     @ViewBuilder private func menuControl(_ c: ReaderControl) -> some View {
+        let sym = ReaderIcons.sf(c.id, active: c.active)
         switch c.id {
+        case "undo":
+            Button { undoInk() } label: { Label("Undo", systemImage: sym) }.disabled(!ink.canUndo)
+        case "redo":
+            Button { redoInk() } label: { Label("Redo", systemImage: sym) }.disabled(!ink.canRedo)
         case "bookmarkAdd":
-            Button { Task { await addBookmark() } } label: { Label("Add Bookmark", systemImage: "bookmark") }
+            Button { Task { await addBookmark() } } label: { Label("Add Bookmark", systemImage: sym) }
         case "bookmarkList":
-            Button { Task { await openBookmarkList() } } label: { Label("Bookmarks", systemImage: "bookmark.circle") }
+            Button { Task { await openBookmarkList() } } label: { Label("Bookmarks", systemImage: sym) }
         case "highlight":
-            Button { Task { await doHighlight() } } label: { Label("Highlight", systemImage: "highlighter") }
+            Button { Task { await doHighlight() } } label: { Label("Highlight", systemImage: sym) }
         case "underline":
-            Button { Task { await doUnderline() } } label: { Label("Underline", systemImage: "underline") }
+            Button { Task { await doUnderline() } } label: { Label("Underline", systemImage: sym) }
         case "strike":
-            Button { Task { await addTextMark(.strikeout) } } label: { Label("Strikethrough", systemImage: "strikethrough") }
+            Button { Task { await addTextMark(.strikeout) } } label: { Label("Strikethrough", systemImage: sym) }
         case "note":
-            Button { beginNote() } label: { Label("Note", systemImage: "note.text") }
+            Button { beginNote() } label: { Label("Note", systemImage: sym) }
         case "erase":
-            Button { Task { await eraseTextMarks() } } label: { Label("Erase Marks", systemImage: "eraser.line.dashed") }
+            Button { Task { await eraseTextMarks() } } label: { Label("Erase Marks", systemImage: sym) }
         case "export":
-            Button { Task { await exportAnnotatedPdf() } } label: { Label("Share Annotated PDF", systemImage: "square.and.arrow.up") }
+            Button { Task { await exportAnnotatedPdf() } } label: { Label("Share Annotated PDF", systemImage: sym) }
         case "draw":
-            Button { toggleDraw() } label: {
-                Label(c.active ? "Stop Drawing" : "Draw", systemImage: "pencil.tip.crop.circle")
-            }
+            Button { toggleDraw() } label: { Label(c.active ? "Stop Drawing" : "Draw", systemImage: sym) }
         // Mode-specific rows that collapse here on a phone (inline on iPad via `barControl`).
         case "textSmaller":
-            Button { smallerText() } label: { Label("Smaller Text", systemImage: "textformat.size.smaller") }
+            Button { smallerText() } label: { Label("Smaller Text", systemImage: sym) }
         case "textLarger":
-            Button { biggerText() } label: { Label("Larger Text", systemImage: "textformat.size.larger") }
+            Button { biggerText() } label: { Label("Larger Text", systemImage: sym) }
         case "zoomOut":
-            Button { zoomPdf(by: 1 / 1.25) } label: { Label("Zoom Out", systemImage: "minus.magnifyingglass") }
+            Button { zoomPdf(by: 1 / 1.25) } label: { Label("Zoom Out", systemImage: sym) }
         case "zoomIn":
-            Button { zoomPdf(by: 1.25) } label: { Label("Zoom In", systemImage: "plus.magnifyingglass") }
+            Button { zoomPdf(by: 1.25) } label: { Label("Zoom In", systemImage: sym) }
         case "fitWidth":
-            Button { fitPdfWidth() } label: { Label("Fit Width", systemImage: "arrow.left.and.right") }
+            Button { fitPdfWidth() } label: { Label("Fit Width", systemImage: sym) }
         case "reflow":
-            Button { toggleReflow() } label: {
-                Label(c.active ? "Stop Reflow" : "Reflow to Text", systemImage: "doc.plaintext")
-            }
+            Button { toggleReflow() } label: { Label(c.active ? "Stop Reflow" : "Reflow to Text", systemImage: sym) }
         default:
             EmptyView()
         }
@@ -989,27 +1037,50 @@ public struct ReaderView: View {
 
     /// EPUB text mark from the current selection — anchored by **cfiRange** (not quads), rendered via
     /// `EpubDecorationHost` (epub.js annotations). Highlight/underline only; strike/note are PDF-only.
+    /// **Toggles**: re-applying the same kind to the same selection removes it instead of stacking.
     private func addEpubTextMark(_ kind: AnnotationKind) async {
         guard let sel = epubSelection, !sel.cfiRange.isEmpty,
               let loc = currentLocation else { return }
+        epubSelection = nil
+        let existing = marks.filter { $0.kind == kind && !$0.isTombstone && $0.cfiRange == sel.cfiRange }
+        if !existing.isEmpty { await toggleOff(existing); return }
         let now = Date()
         let mark = Annotation(publicationId: pubId, kind: kind, locator: loc,
                               cfiRange: sel.cfiRange,
                               color: kind == .highlight ? "#ffd54a" : "#ff3b30",
                               createdAt: now, updatedAt: now, rev: rev + 1)
         marksById[mark.id] = mark
-        epubSelection = nil
         renderMarks()   // optimistic
+        ink.record(.added([mark.id]))
         _ = try? await annotations.push(publicationId: pubId, ops: [mark])
         await pullMarks(reset: false)
     }
 
     /// Anchor a text mark (highlight/underline/strikeout) to the current selection's per-line quads and
-    /// push it. One `Annotation` per page the selection spans. The structured store — not the file — is
-    /// the source of truth, so the mark reaches web/export in the same `rect` quad shape.
+    /// push it. One `Annotation` per page the selection spans. **Toggles**: if the selection already
+    /// carries this kind (overlapping quads on the page), it's removed instead of stacking another. The
+    /// structured store — not the file — is the source of truth, so the mark reaches web/export in the
+    /// same `rect` quad shape.
     private func addTextMark(_ kind: AnnotationKind) async {
         let groups = selectionQuads()
         guard !groups.isEmpty else { return }
+        // Toggle off: existing marks of this kind whose quads intersect the selection on the same page.
+        let existing = marks.filter { m -> Bool in
+            guard m.kind == kind, !m.isTombstone, let mq = m.quads else { return false }
+            return groups.contains { g in
+                guard m.locator.locations.page == g.page + 1 else { return false }
+                let selRects = g.quads.map { NormRect(x: $0[0], y: $0[1], w: $0[2], h: $0[3]) }
+                return mq.contains { q in
+                    let mr = NormRect(x: q[0], y: q[1], w: q[2], h: q[3])
+                    return selRects.contains { $0.intersects(mr) }
+                }
+            }
+        }
+        if !existing.isEmpty {
+            pdfNavigator?.pdfView.clearSelection()
+            await toggleOff(existing)
+            return
+        }
         let now = Date()
         var created: [Annotation] = []
         for g in groups {
@@ -1022,8 +1093,25 @@ public struct ReaderView: View {
         }
         pdfNavigator?.pdfView.clearSelection()
         renderMarks()   // optimistic
+        ink.record(.added(created.map(\.id)))
         for m in created { _ = try? await annotations.push(publicationId: pubId, ops: [m]) }
         await pullMarks(reset: false)
+    }
+
+    /// Tombstone marks as one undo step — the toggle-off path for text marks (and general mark removal).
+    private func toggleOff(_ hits: [Annotation]) async {
+        guard !hits.isEmpty else { return }
+        let now = Date()
+        var ids: [UUID] = []
+        for var m in hits {
+            m.deletedAt = now; m.updatedAt = now; m.rev = m.rev + 1
+            marksById[m.id] = m; ids.append(m.id)
+        }
+        renderMarks()   // optimistic
+        ink.record(.removed(ids))
+        for id in ids where marksById[id] != nil {
+            _ = try? await annotations.push(publicationId: pubId, ops: [marksById[id]!])
+        }
     }
 
     /// Note: capture the selection's first-line top-left as the anchor point, then prompt for text.
@@ -1044,6 +1132,7 @@ public struct ReaderView: View {
         marksById[mark.id] = mark
         pdfNavigator?.pdfView.clearSelection()
         renderMarks()
+        ink.record(.added([mark.id]))
         _ = try? await annotations.push(publicationId: pubId, ops: [mark])
         await pullMarks(reset: false)
     }
@@ -1078,40 +1167,18 @@ public struct ReaderView: View {
         if drawMode { ink.select(tool: .pen) }
     }
 
-    /// Render the palette at its current placement within the reader area. Docked = pinned to an edge
-    /// with a small inset; floating = centred at the normalized point. Drag maths (normalize by area
-    /// size, snap/float) live in the portable `InkPaletteController`; this only positions the view.
-    @ViewBuilder private func positionedPalette(in size: CGSize) -> some View {
-        let bar = InkToolbar(
-            tool: $ink, palette: palette, canUndo: ink.canUndo, canRedo: ink.canRedo,
-            onUndo: undoInk, onRedo: redoInk, onDone: { drawMode = false },
-            onMove: { pt in palette.drag(toX: pt.x / max(size.width, 1), y: pt.y / max(size.height, 1)) },
-            onMoveEnd: { pt in palette.endDrag(atX: pt.x / max(size.width, 1), y: pt.y / max(size.height, 1)) }
-        )
-        switch palette.placement {
-        case .docked(let edge):
-            bar.padding(padEdge(edge), 12)
-                .frame(width: size.width, height: size.height, alignment: alignment(for: edge))
-        case .floating(let x, let y):
-            bar.position(x: x * size.width, y: y * size.height)
-        }
-    }
-
-    private func padEdge(_ e: InkPaletteEdge) -> Edge.Set {
-        switch e {
-        case .top: return .top
-        case .bottom: return .bottom
-        case .leading: return .leading
-        case .trailing: return .trailing
-        }
-    }
-
-    private func alignment(for e: InkPaletteEdge) -> Alignment {
-        switch e {
-        case .top: return .top
-        case .bottom: return .bottom
-        case .leading: return .leading
-        case .trailing: return .trailing
+    /// The draw palette — the SAME floating-panel component as the pinned bars: `FloatingPanel`
+    /// (positioning + on-screen clamping) wrapping `PanelChrome` (dual move grips + axis + background),
+    /// with `InkToolbar` supplying only the palette's items. So the palette inherits identical chrome.
+    private var paletteFloating: some View {
+        FloatingPanel(placement: palette.placement,
+                      onDrag: { palette.drag(toX: $0, y: $1) },
+                      onDragEnd: { palette.endDrag(atX: $0, y: $1) },
+                      coordinateSpace: "ink-palette") { handlers in
+            PanelChrome(handlers: handlers, axis: palette.axis) {
+                InkToolbar(tool: $ink, palette: palette, canUndo: ink.canUndo, canRedo: ink.canRedo,
+                           onUndo: undoInk, onRedo: redoInk, onDone: { drawMode = false })
+            }
         }
     }
 
@@ -1125,7 +1192,7 @@ public struct ReaderView: View {
                                                publicationId: pubId, rev: rev + 1, now: Date())
         else { return }
         marksById[mark.id] = mark; renderMarks()   // optimistic: show immediately, even offline
-        ink.record(.added(mark.id))
+        ink.record(.added([mark.id]))
         _ = try? await annotations.push(publicationId: pubId, ops: [mark])
         await pullMarks(reset: false)              // reconcile with server (no-op when offline)
     }
@@ -1213,7 +1280,7 @@ public struct ReaderView: View {
         let mark = Annotation(publicationId: pubId, kind: .ink, locator: loc, cfiRange: hit.cfi,
                               ink: Ink(strokes: [s]), createdAt: now, updatedAt: now, rev: rev + 1)
         marksById[mark.id] = mark
-        ink.record(.added(mark.id))
+        ink.record(.added([mark.id]))
         renderMarks()   // optimistic
         _ = try? await annotations.push(publicationId: pubId, ops: [mark])
         await pullMarks(reset: false)
