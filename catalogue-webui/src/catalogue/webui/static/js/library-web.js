@@ -23,7 +23,16 @@
           });
         },
         content: function (q) { return getJSON('/api/v1/content?q=' + enc(q)); },
-        detail: function (eid) { return getJSON('/api/v1/edition/' + eid); }   // read-only book detail
+        detail: function (eid) { return getJSON('/api/v1/edition/' + eid); },  // read-only book detail
+        // Ask (grounded Q&A): POST the full OpenAI-style history to the same-origin proxy; the
+        // browser never touches the model host. Returns { available, content, sources, timing }.
+        ask: function (model, messages) {
+          return fetch('/api/v1/ask', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model: model, messages: messages })
+          }).then(function (r) { return r.json(); });
+        },
+        askModels: function () { return getJSON('/api/v1/ask/models'); }
       },
       nav: {
         hrefFor: function (ref) {

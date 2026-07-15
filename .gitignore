@@ -62,3 +62,6 @@ api_key.txt
 # MyScript SDK certificate — a licensed commercial credential, kept local, never
 # committed. Unanchored so it's ignored wherever it sits in the tree.
 MyScript_ios_certificate.c
+
+# Local archival scratch (scanned PDFs etc.) — never committed.
+/archival/

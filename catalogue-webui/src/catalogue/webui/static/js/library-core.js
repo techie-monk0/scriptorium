@@ -148,6 +148,45 @@
     }
   }
 
+  // "Ask": one grounded Q&A turn. `platform.data.ask(model, messages)` proxies to the RAG
+  // backend and returns { content, sources, timing, available }. The shared work here is turning
+  // each source's local `eid` into a neutral nav ref, so a citation deep-links into the catalogue
+  // on whatever surface renders it (web URL / PWA hash / native route) — identical logic everywhere.
+  // `messages` is the FULL OpenAI-style history (the backend's own multi-turn scoping needs it).
+  async function askVM(platform, model, messages) {
+    try {
+      var doc = await platform.data.ask(model, messages || []);
+      if (doc && doc.available === false) {
+        return { kind: 'ask', available: false, content: '', sources: [], timing: {},
+                 error: doc.error || 'Ask is offline.' };
+      }
+      var sources = (doc.sources || []).map(function (s) {
+        return { n: s.n, title: s.title, location: s.location || '', file: s.file || null,
+                 eid: s.eid != null ? s.eid : null,
+                 ref: s.eid != null ? editionRef(s.eid) : null };   // deep-link only when resolved
+      });
+      return { kind: 'ask', available: true, model: doc.model || model,
+               content: doc.content || '', sources: sources, timing: doc.timing || {} };
+    } catch (e) {
+      if (_offline(platform)) return { kind: 'ask', available: false, content: '', sources: [],
+                                       timing: {}, offline: true, error: 'Offline.' };
+      return { kind: 'ask', available: false, content: '', sources: [], timing: {}, error: _errMsg(e) };
+    }
+  }
+
+  // The models the Ask backend advertises (for the panel's picker). Thin passthrough with a
+  // safe fallback so the picker still renders if the backend is briefly unreachable.
+  async function askModelsVM(platform) {
+    try {
+      var doc = await platform.data.askModels();
+      if (doc && doc.available && (doc.models || []).length) {
+        return { kind: 'askModels', available: true, models: doc.models };
+      }
+    } catch (e) { /* fall through to defaults */ }
+    return { kind: 'askModels', available: false,
+             models: [{ id: 'library-fast', label: 'Fast' }, { id: 'library-deep', label: 'Deep' }] };
+  }
+
   // Book detail (read-only): one edition's full metadata. `platform.data.detail(eid)`
   // returns the per-edition row (replica shape) or null. The renderer turns `holdings`
   // into Read controls via `platform.openBook` (in-app reader) or `platform.nav.readHref`.
@@ -601,6 +640,7 @@
     { key: 'read',     label: 'Read',     icon: 'book',                protocol: 'default' },
     { key: 'search',   label: 'Search',   icon: 'magnifyingglass',     protocol: 'default' },
     { key: 'content',  label: 'Text',     icon: 'doc.text',            protocol: 'default' },
+    { key: 'ask',      label: 'Ask',      icon: 'text.bubble',         protocol: 'default' },
     { key: 'review',   label: 'Review',   icon: 'checklist',           protocol: 'desktop' },
     { key: 'scan',     label: 'Scan',     icon: 'viewfinder',          protocol: 'desktop' },
     { key: 'capture',  label: 'Capture',  icon: 'camera',              protocol: 'default' },
@@ -837,6 +877,7 @@
     syncVM: syncVM,
     subjectTopLevel: subjectTopLevel, isUnderSubject: isUnderSubject,
     searchVM: searchVM, browseVM: browseVM, contentVM: contentVM, detailVM: detailVM,
+    askVM: askVM, askModelsVM: askModelsVM,
     homeVM: homeVM, searchReplica: searchReplica, browseReplica: browseReplica, suggestReplica: suggestReplica,
     subjectVM: subjectVM, wishlistVM: wishlistVM,
     wishlistRequest: wishlistRequest, wishlistAddMessage: wishlistAddMessage,

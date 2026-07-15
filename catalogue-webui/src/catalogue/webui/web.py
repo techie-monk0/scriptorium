@@ -19,6 +19,7 @@ from flask import Flask, g, request
 
 from catalogue.db_store import DryRunConnection, Store, connect, init_db
 from catalogue.webui import auth as auth_mod
+from catalogue.webui.ask import OpenAIProxyBackend
 from catalogue.db_store import reader_state
 from catalogue.services.isbn import (
     lookup as isbn_lookup,
@@ -29,6 +30,7 @@ from catalogue.services import bookfile as bookfile_mod
 from catalogue.services.search import SearchService
 from catalogue.webui.routes import _shared
 from catalogue.webui.routes import api as api_routes
+from catalogue.webui.routes import ask as ask_routes
 from catalogue.webui.routes import bookfiles as bookfiles_routes
 from catalogue.webui.routes import browse_by_author as browse_by_author_routes
 from catalogue.webui.routes import capture as capture_routes
@@ -95,6 +97,12 @@ def create_app(db_path: str | os.PathLike | None = None, *,
     # banner + the promote/discard (swap-into-live) actions. See catalogue/sandbox.py.
     app.config["SANDBOX"] = app.config["DB_PATH"].endswith(".sandbox")
     app.config["SEARCH"] = SearchService()
+    # "Ask" backend (grounded Q&A) is config-swappable behind AskBackend: the catalogue
+    # never hard-codes the model host. Default: the BuddhistLLM RAG proxy on loopback; set
+    # CATALOGUE_ASK_URL="" to disable the feature. The browser only ever hits /api/v1/ask.
+    app.config["ASK_URL"] = os.environ.get("CATALOGUE_ASK_URL", "http://127.0.0.1:7070/v1")
+    app.config["ASK_BACKEND"] = (
+        OpenAIProxyBackend(app.config["ASK_URL"]) if app.config["ASK_URL"] else None)
     # ISBN resolver is config-swappable (§12.1: interfaces over tools) so
     # tests inject a fake without monkey-patching the module.
     app.config["ISBN_LOOKUP"] = isbn_lookup
@@ -349,6 +357,7 @@ def create_app(db_path: str | os.PathLike | None = None, *,
     wishlist_routes.register(app, ctx)  # /api/v1/wishlist (also reused by capture intent=wishlist)
     starred_routes.register(app, ctx)   # /api/v1/starred (the Starred rail + highlighted covers)
     api_routes.register(app, ctx)       # … which /api/v1/capture consumes
+    ask_routes.register(app, ctx)       # /api/v1/ask — grounded Q&A proxied to the RAG backend
 
     return app
 

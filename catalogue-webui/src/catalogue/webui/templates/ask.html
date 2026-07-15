@@ -1,0 +1,20 @@
+{% extends "_base.html" %}
+{% block title %}Ask{% endblock %}
+{% block body %}
+{# Converged onto the shared frontend layer (LibraryUI.ask): the SAME grounded-Q&A panel a
+   PWA/native surface would mount, driven by the web platform adapter (live /api/v1/ask, which
+   proxies server-side to the RAG backend). Citations deep-link back into the catalogue. #}
+<h1>Ask</h1>
+<p class="stub" style="margin:.2rem 0 .6rem">Ask a question in plain language; the answer is
+  grounded in the books, with sources. To search titles or the full text instead, use
+  <a href="/search">Search</a> or <a href="/text">Text</a>.</p>
+{# A tall host so the chat thread has room; the panel manages its own scroll. #}
+<div id="ask-host" style="height:min(72vh,720px)"></div>
+<script>
+  LibraryUI.ask(document.getElementById('ask-host'), LibraryWeb.adapter(), {
+    autofocus: true,
+    placeholder: 'Ask the library…',
+    greeting: 'Ask a question about the library — I’ll answer from the books and cite the sources.',
+  });
+</script>
+{% endblock %}

@@ -24,6 +24,7 @@ public let APP_SECTIONS: [AppSection] = [
     .init(key: "read",     label: "Read",     icon: "book",                protocol: "default"),
     .init(key: "search",   label: "Search",   icon: "magnifyingglass",     protocol: "default"),
     .init(key: "content",  label: "Text",     icon: "doc.text",            protocol: "default"),
+    .init(key: "ask",      label: "Ask",      icon: "text.bubble",         protocol: "default"),
     .init(key: "review",   label: "Review",   icon: "checklist",           protocol: "desktop"),
     .init(key: "scan",     label: "Scan",     icon: "viewfinder",          protocol: "desktop"),
     .init(key: "capture",  label: "Capture",  icon: "camera",              protocol: "default"),

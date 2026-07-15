@@ -108,7 +108,33 @@
       '.libui-barlink:hover { background: var(--nav-hover); }' +
       '.libui-barlink.active { background: var(--nav-active-bg); color: var(--nav-active-fg); }' +
       '.libui-barlink .libui-navsvg { width: 18px; height: 18px; }' +
-      '.libui-barlabel { font-size: .95rem; }';
+      '.libui-barlabel { font-size: .95rem; }' +
+      // ── Ask: grounded Q&A panel ─────────────────────────────────────────────
+      '.libui-ask { display: flex; flex-direction: column; height: 100%; max-width: 46rem; }' +
+      '.libui-ask-thread { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: .8rem; padding: .2rem 0 1rem; }' +
+      '.libui-ask-turn { display: flex; flex-direction: column; gap: .3rem; }' +
+      '.libui-ask-bubble { padding: .55rem .75rem; border-radius: 12px; border: 1px solid var(--border); line-height: 1.5; }' +
+      '.libui-ask-user { align-items: flex-end; }' +
+      '.libui-ask-user .libui-ask-bubble { background: var(--nav-active-bg); color: var(--nav-active-fg);' +
+      '  border-color: var(--nav-active-bg); max-width: 85%; }' +
+      '.libui-ask-assistant .libui-ask-bubble { background: var(--surface); color: var(--fg); }' +
+      '.libui-ask-bubble p { margin: .4rem 0; } .libui-ask-bubble p:first-child { margin-top: 0; }' +
+      '.libui-ask-bubble p:last-child { margin-bottom: 0; }' +
+      '.libui-ask-bubble code { background: var(--surface-2); padding: 0 .25em; border-radius: 4px; }' +
+      '.libui-ask-sources { padding: .4rem .6rem; border-left: 2px solid var(--border); font-size: .88rem; }' +
+      '.libui-ask-sources-head { color: var(--muted); font-weight: 700; margin-bottom: .25rem; }' +
+      '.libui-ask-src { display: block; text-decoration: none; color: var(--fg); padding: .12rem 0; }' +
+      'a.libui-ask-src { color: var(--link); } a.libui-ask-src:hover { text-decoration: underline; }' +
+      '.libui-ask-src-loc { color: var(--muted); } .libui-ask-src-file { color: var(--muted); font-size: .82rem; }' +
+      '.libui-ask-timing { color: var(--muted); font-size: .8rem; font-style: italic; }' +
+      '.libui-ask-form { display: flex; gap: .5rem; align-items: flex-end; padding-top: .5rem; border-top: 1px solid var(--border); }' +
+      '.libui-ask-input { flex: 1; resize: none; min-height: 2.4rem; max-height: 9rem; padding: .5rem .6rem; font: inherit;' +
+      '  border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--fg); box-sizing: border-box; }' +
+      '.libui-ask-model { padding: .45rem .5rem; font: inherit; border: 1px solid var(--border); border-radius: 8px;' +
+      '  background: var(--surface); color: var(--fg); }' +
+      '.libui-ask-send { padding: .5rem .9rem; border: 1px solid var(--accent); background: var(--accent); color: #fff;' +
+      '  border-radius: 8px; cursor: pointer; font: inherit; }' +
+      '.libui-ask-send:disabled { opacity: .5; cursor: default; }';
     var el = document.createElement('style');
     el.id = 'libui-ui-styles'; el.textContent = css;
     document.head.appendChild(el);
@@ -377,7 +403,8 @@
     'camera': '<rect x="3.5" y="7" width="17" height="12.5" rx="2.6"/><circle cx="12" cy="13.2" r="3.2"/><path d="M8.8 7 L10.2 4.6 H13.8 L15.2 7"/>',
     'checklist': '<path d="M3.8 6.4 l1.4 1.4 L8 5"/><line x1="11" y1="6.5" x2="20" y2="6.5"/><path d="M3.8 12 l1.4 1.4 L8 10.6"/><line x1="11" y1="12" x2="20" y2="12"/><path d="M3.8 17.6 l1.4 1.4 L8 16.2"/><line x1="11" y1="17.7" x2="20" y2="17.7"/>',
     'slider.horizontal.3': '<line x1="3.5" y1="8.5" x2="20.5" y2="8.5"/><line x1="3.5" y1="15.5" x2="20.5" y2="15.5"/><circle cx="15" cy="8.5" r="2.4"/><circle cx="9" cy="15.5" r="2.4"/>',
-    'book': '<path d="M12 6.4 C10 5 6.6 4.6 4.2 5 V17.8 C6.6 17.4 10 17.8 12 19.2 C14 17.8 17.4 17.4 19.8 17.8 V5 C17.4 4.6 14 5 12 6.4 Z"/><line x1="12" y1="6.4" x2="12" y2="19.2"/>'
+    'book': '<path d="M12 6.4 C10 5 6.6 4.6 4.2 5 V17.8 C6.6 17.4 10 17.8 12 19.2 C14 17.8 17.4 17.4 19.8 17.8 V5 C17.4 4.6 14 5 12 6.4 Z"/><line x1="12" y1="6.4" x2="12" y2="19.2"/>',
+    'text.bubble': '<path d="M4 6.6 A2.2 2.2 0 0 1 6.2 4.4 H17.8 A2.2 2.2 0 0 1 20 6.6 V13.4 A2.2 2.2 0 0 1 17.8 15.6 H9.5 L6 19 V15.6 A2.2 2.2 0 0 1 4 13.4 Z"/><line x1="7.5" y1="8.4" x2="16.5" y2="8.4"/><line x1="7.5" y1="11.6" x2="13.5" y2="11.6"/>'
   };
   function iconSVG(name) {
     var inner = SF_ICONS[name] || '<circle cx="12" cy="12" r="2.5"/>';
@@ -545,5 +572,145 @@
     return inp;
   }
 
-  window.LibraryUI = { search: search, browse: browse, finder: finder, content: content, detail: detail, settings: settings, nav: nav, prefs: prefs };
+  // ── Ask: grounded Q&A against the RAG backend ─────────────────────────────
+  // The DOM renderer for the "Ask" feature. It depends ONLY on the platform ADAPTER methods
+  // `data.ask(model, messages)` and `data.askModels()` (web → /api/v1/ask; a PWA or native
+  // adapter implements the same two). Everything here — history, citation deep-links, timing —
+  // is shared across surfaces, exactly like the other LibraryUI components.
+
+  // Cut the markdown Sources/⏱ footers off the answer body: we render those STRUCTURALLY
+  // (from vm.sources / vm.timing), so they mustn't also appear as text in the bubble.
+  function stripFooters(content) {
+    if (!content) return '';
+    var marks = ['\n\n---', '\n\n_⏱', '\n\n_(No sources retrieved'];
+    var cut = content.length;
+    marks.forEach(function (m) { var i = content.indexOf(m); if (i >= 0 && i < cut) cut = i; });
+    return content.slice(0, cut).trim();
+  }
+
+  // Minimal, safe markdown → HTML: escape FIRST, then a few inlines + paragraphs. Enough for a
+  // skeleton; a real markdown renderer can drop in here without touching the rest of the component.
+  function renderMarkdown(src) {
+    return esc(src || '').split(/\n{2,}/).map(function (para) {
+      var html = para
+        .replace(/`([^`]+)`/g, '<code>$1</code>')
+        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+        .replace(/(^|[^*])\*([^*]+)\*/g, '$1<em>$2</em>')
+        .replace(/\n/g, '<br>');
+      return '<p>' + html + '</p>';
+    }).join('');
+  }
+
+  function askSources(sources, platform) {
+    var box = el('div', 'libui-ask-sources');
+    var head = el('div', 'libui-ask-sources-head'); head.textContent = 'Sources'; box.appendChild(head);
+    sources.forEach(function (s) {
+      // Deep-link the citation into the catalogue when the source resolved to a local edition
+      // (s.ref set by askVM); otherwise render it as plain text.
+      var href = s.ref && platform.nav && platform.nav.hrefFor ? platform.nav.hrefFor(s.ref) : null;
+      var row = el(href ? 'a' : 'div', 'libui-ask-src'); if (href) row.href = href;
+      var label = '[' + esc(String(s.n)) + '] ' + esc(s.title || 'source');
+      if (s.location) label += ' <span class="libui-ask-src-loc">· ' + esc(s.location) + '</span>';
+      if (s.file) label += ' <span class="libui-ask-src-file">(' + esc(s.file) + ')</span>';
+      row.innerHTML = label; box.appendChild(row);
+    });
+    return box;
+  }
+
+  function askTiming(t) {
+    if (!t || t.total_ms == null) return null;
+    var sec = function (ms, dp) { return (Number(ms || 0) / 1000).toFixed(dp) + 's'; };
+    var gen = t.cached ? 'generate cached' : 'generate ' + sec(t.generate_ms, 1);
+    var p = el('div', 'libui-ask-timing');
+    p.textContent = '⏱ retrieve ' + sec(t.retrieve_ms, 2) + ' · rerank ' + sec(t.rerank_ms, 2) +
+      ' · ' + gen + ' · total ' + sec(t.total_ms, 1);
+    return p;
+  }
+
+  // opts: { model, placeholder, autofocus, greeting }. Returns { el, focus, reset }.
+  function ask(host, platform, opts) {
+    opts = opts || {}; host.innerHTML = '';
+    var messages = [];                       // OpenAI-style history — sent verbatim every turn
+    var model = opts.model || 'library-fast';
+    var busy = false;
+
+    var wrap = el('div', 'libui-feature libui-ask');
+    var thread = el('div', 'libui-ask-thread');
+    var form = el('form', 'libui-ask-form');
+    var modelSel = el('select', 'libui-ask-model'); modelSel.setAttribute('aria-label', 'Model');
+    var ta = el('textarea', 'libui-ask-input'); ta.rows = 1;
+    ta.placeholder = opts.placeholder || 'Ask the library…';
+    var send = el('button', 'libui-ask-send'); send.type = 'submit'; send.textContent = 'Ask';
+    form.appendChild(modelSel); form.appendChild(ta); form.appendChild(send);
+    wrap.appendChild(thread); wrap.appendChild(form); host.appendChild(wrap);
+
+    if (opts.greeting) {
+      var g = el('div', 'libui-ask-turn libui-ask-assistant');
+      var gb = el('div', 'libui-ask-bubble'); gb.innerHTML = renderMarkdown(opts.greeting);
+      g.appendChild(gb); thread.appendChild(g);
+    }
+
+    C.askModelsVM(platform).then(function (vm) {
+      modelSel.innerHTML = '';
+      vm.models.forEach(function (m) {
+        var o = document.createElement('option'); o.value = m.id; o.textContent = m.label || m.id;
+        if (m.id === model) o.selected = true; modelSel.appendChild(o);
+      });
+    });
+    modelSel.addEventListener('change', function () { model = modelSel.value; });
+
+    function scrollDown() { thread.scrollTop = thread.scrollHeight; }
+    function addUser(text) {
+      var turn = el('div', 'libui-ask-turn libui-ask-user');
+      var b = el('div', 'libui-ask-bubble'); b.textContent = text; turn.appendChild(b);
+      thread.appendChild(turn); scrollDown();
+    }
+    function addPending() {
+      var turn = el('div', 'libui-ask-turn libui-ask-assistant');
+      var b = el('div', 'libui-ask-bubble'); b.appendChild(msg('Thinking…')); turn.appendChild(b);
+      thread.appendChild(turn); scrollDown(); return turn;
+    }
+    function renderAssistant(turn, vm) {
+      turn.innerHTML = '';
+      var b = el('div', 'libui-ask-bubble');
+      if (!vm.available) { b.appendChild(msg(vm.error || 'Ask is offline.')); turn.appendChild(b); scrollDown(); return; }
+      // Strip the markdown Sources/⏱ footers ONLY when we have structured data to render in their
+      // place. Against a backend that returns markdown-only (no structured sources/timing), keep
+      // the content verbatim so citations still show.
+      var hasStructured = (vm.sources && vm.sources.length) || (vm.timing && vm.timing.total_ms != null);
+      b.innerHTML = renderMarkdown(hasStructured ? stripFooters(vm.content) : vm.content);
+      turn.appendChild(b);
+      if (vm.sources && vm.sources.length) turn.appendChild(askSources(vm.sources, platform));
+      var tl = askTiming(vm.timing); if (tl) turn.appendChild(tl);
+      scrollDown();
+    }
+
+    async function submit() {
+      var text = ta.value.trim();
+      if (!text || busy) return;
+      busy = true; send.disabled = true; ta.value = ''; ta.style.height = 'auto';
+      addUser(text);
+      messages.push({ role: 'user', content: text });
+      var pending = addPending();
+      var vm = await C.askVM(platform, model, messages);
+      renderAssistant(pending, vm);
+      // Keep the FULL assistant content in history (it may carry the backend's hidden /source
+      // scoping marker), so multi-turn scoping survives. Only push on a real answer.
+      if (vm.available) messages.push({ role: 'assistant', content: vm.content });
+      busy = false; send.disabled = false; ta.focus();
+    }
+
+    form.addEventListener('submit', function (e) { e.preventDefault(); submit(); });
+    ta.addEventListener('keydown', function (e) {              // Enter sends; Shift+Enter = newline
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); }
+    });
+    ta.addEventListener('input', function () {                 // auto-grow the textarea
+      ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 144) + 'px';
+    });
+    if (opts.autofocus) ta.focus();
+    return { el: wrap, focus: function () { ta.focus(); },
+             reset: function () { messages = []; thread.innerHTML = ''; } };
+  }
+
+  window.LibraryUI = { search: search, browse: browse, finder: finder, content: content, ask: ask, detail: detail, settings: settings, nav: nav, prefs: prefs };
 })();

@@ -95,8 +95,8 @@
       // declares WHICH section keys it implements + maps each to its own route; 'books' is the book
       // finder (the /search module). The cross-entity 'search' section has no web page yet (PWA/native
       // only). Editor sections are gated by can_edit (server also default-denies their GETs).
-      var keys = ['home', 'books', 'read', 'content', 'wishlist'{% if can_edit() %}, 'review', 'scan', 'capture', 'settings'{% endif %}];
-      var HREF = { home: '/', books: '/search', read: '/read', content: '/text', wishlist: '/wishlist',
+      var keys = ['home', 'books', 'read', 'content', 'ask', 'wishlist'{% if can_edit() %}, 'review', 'scan', 'capture', 'settings'{% endif %}];
+      var HREF = { home: '/', books: '/search', read: '/read', content: '/text', ask: '/ask', wishlist: '/wishlist',
                    review: '/review', scan: '/reconcile', capture: '/capture', settings: '/settings' };
       var items = LibraryCore.navItems(keys, function (k) { return HREF[k]; });
       {# Order matters: '/review' before '/reconcile'; '/search'/'/text' before fallbacks. '/search'
@@ -106,6 +106,7 @@
         'read'     if nav_path == '/read' else
         'books'    if nav_path.startswith('/search') or nav_path.startswith('/library') else
         'content'  if nav_path.startswith('/text') else
+        'ask'      if nav_path.startswith('/ask') else
         'wishlist' if nav_path.startswith('/wishlist') else
         'scan'     if nav_path.startswith('/reconcile') else
         'capture'  if nav_path.startswith('/capture') or nav_path.startswith('/staging') else

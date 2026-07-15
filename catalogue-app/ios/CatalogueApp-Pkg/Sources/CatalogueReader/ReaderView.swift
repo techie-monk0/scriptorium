@@ -1276,6 +1276,33 @@ public struct ReaderView: View {
             _ = try? await annotations.push(publicationId: pubId, ops: [m])
         }
         renderMarks()
+        // Bring the edit that was just undone/redone into view — but only when it's off-screen, so an
+        // in-view edit doesn't cause a disorienting jump. The mutation carries only ids; resolve the
+        // representative mark from the store (tombstones are kept, so a removal still has its locator).
+        if let target = ids.lazy.compactMap({ marksById[$0] }).first {
+            await reveal(target)
+        }
+    }
+
+    /// Scroll `mark`'s location into view iff it isn't already visible. PDF: compare the mark's page
+    /// against `visiblePages`. EPUB: a nil block rect means the anchor CFI isn't on the current page.
+    /// Navigation goes through `goTo` directly (not `jump`) so it doesn't push the back stack — an
+    /// undo/redo reveal is not a user jump.
+    private func reveal(_ mark: Annotation) async {
+        if let pdfView = pdfNavigator?.pdfView, let doc = pdfView.document {
+            let idx = mark.locator.locations.position
+                ?? mark.locator.locations.page.map { max(0, $0 - 1) }
+            guard let i = idx, i >= 0, i < doc.pageCount, let page = doc.page(at: i) else { return }
+            guard !pdfView.visiblePages.contains(page) else { return }   // already on-screen
+            try? await reader?.goTo(mark.locator)
+        } else if let nav = epubNavigator {
+            // The precise anchor for EPUB ink is `cfiRange`; the mark's `locator` only holds the
+            // page-start CFI captured at draw time.
+            guard let cfi = mark.cfiRange ?? mark.locator.locations.cfi, !cfi.isEmpty else { return }
+            guard await nav.rect(forCfi: cfi) == nil else { return }      // already on the current page
+            try? await reader?.goTo(Locator(publicationId: pubId, format: .epub,
+                                            locations: .init(cfi: cfi)))
+        }
     }
 
     /// Download the server-flattened annotated PDF (`GET /holding/<id>/annotated.pdf` — reuses the tested
