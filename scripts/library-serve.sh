@@ -99,6 +99,15 @@ if lsof -ti:8000 >/dev/null 2>&1; then
   fi
 fi
 
+# Primary LAN IPv4 (the interface carrying the default route), or "" when offline. macOS.
+lan_ip() {
+  local iface="" ip=""
+  iface=$(route -n get default 2>/dev/null | awk '/interface:/{print $2}' || true)
+  if [ -n "$iface" ]; then ip=$(ipconfig getifaddr "$iface" 2>/dev/null || true); fi
+  if [ -z "$ip" ]; then ip=$(ifconfig 2>/dev/null | awk '/inet /{print $2}' | grep -v '^127\.' | head -1 || true); fi
+  printf '%s' "$ip"
+}
+
 # ── run ──────────────────────────────────────────────────────────────────────
 # Flask server (no reloader). Backgrounded; killed when this script exits.
 uv run python -c "from catalogue.webui.web import create_app; create_app().run(host='$HOST', port=8000, threaded=True, use_reloader=False)" &
@@ -111,6 +120,8 @@ if [ "$LOCAL" = 1 ]; then
   wait "$SERVER_PID"
 else
   echo "▶ server pid $SERVER_PID on http://localhost:8000  →  https://your-domain.example/app"
+  _ip=$(lan_ip)
+  [ -n "$_ip" ] && echo "  on this Wi-Fi/LAN (e.g. the iPhone scanner):  http://$_ip:8000"
   echo "  Ctrl-C to stop the server + tunnel."
   # Clear a stray connector from a previous run (a duplicate is harmless, just tidy), then run
   # the tunnel in the foreground so Ctrl-C tears everything down via the trap.
