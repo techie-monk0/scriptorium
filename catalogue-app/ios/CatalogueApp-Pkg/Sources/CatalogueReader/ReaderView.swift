@@ -2,6 +2,7 @@
 import SwiftUI
 import Combine
 import PDFKit
+import PencilKit
 import WebKit
 import Octavo
 import OctavoPDFKit
@@ -12,6 +13,7 @@ import PostillaRender
 import CatalogueCore
 import CatalogueData
 import CatalogueDesign
+import CatalogueReaderWire
 
 /// The in-app reader screen — a thin SwiftUI HOST of the octavo engine + the postilla annotation seam
 /// (ios_native_plan.md §5). It resolves the holding's bytes (via `HoldingBytes`) and routes by format:
@@ -35,8 +37,10 @@ public struct ReaderView: View {
     @State private var epubNavigator: EpubWebNavigator?
     @State private var reader: Reader?
     @State private var decorationHost: (any DecorationHost)?   // retained (MarkOverlay holds it weakly)
-    @State private var overlay: MarkOverlay?
-    @State private var inkHost: PdfInkHost?                    // PDF only (EPUB ink = N4 slice 4)
+    // The per-format annotation rendering layer (marks + ink). PDF and EPUB each get a
+    // `CompositeRenderLayer` built from their own hosts + ink placement; a different engine is a
+    // different `ReaderRenderLayer` conformer.
+    @State private var renderLayer: (any ReaderRenderLayer)?
     @State private var marks: [Annotation] = []
     @State private var marksById: [UUID: Annotation] = [:]   // full mark set keyed by id (delta-merged)
     @State private var resumeLocator: Locator?               // a further position from another device
@@ -45,8 +49,19 @@ public struct ReaderView: View {
     @State private var locLabel = ""          // "Page 12" / "38%" — updated on every relocation
     @State private var rev = 0
     @State private var drawMode = false
-    @State private var penColor = "#ff3b30"
-    @State private var penWidth: Double = 4
+    // Portable tool/colour/width state, owned by the Postilla SDK (`InkToolController`) — no PencilKit
+    // here. The palette is the SDK defaults + this client's CatalogueDesign colours (additive; see
+    // `CatalogueInk`). Android reimplements the capture surface, not this logic.
+    @State private var ink = InkToolController(palette: CatalogueInk.palette)
+    // Portable palette layout/arrangement/moveability (Postilla SDK). Starts docked to the bottom; the
+    // move handle drags it to any edge or free-floating. This view only renders the spec.
+    @State private var palette = InkPaletteController()
+    @State private var showNoteEntry = false
+    @State private var noteDraft = ""
+    @State private var noteAnchor: (page: Int, point: [Double])?   // page index (0-based) + top-left point
+    @State private var epubSelection: (cfiRange: String, text: String)?   // EPUB: last text selection
+    @State private var shareItem: ShareItem?          // the annotated PDF to share (Phase 6)
+    @State private var exportMessage: String?         // brief export failure notice
     @Binding private var showChrome: Bool     // Books-style: center-tap toggles the bars; owned by ReaderShell
     @AppStorage("readerTheme") private var readerThemeRaw = "auto"   // "auto" follows the device theme
     @Environment(\.colorScheme) private var colorScheme
@@ -72,8 +87,6 @@ public struct ReaderView: View {
     @AppStorage("readerReflowFontPt") private var reflowFontPt = 18.0
     @Environment(\.dismiss) private var dismiss
 
-    private static let penColors = ["#ff3b30", "#1565c0", "#2e7d32", "#000000"]
-
     /// `annotations` defaults to **`ReaderSync`** over the endpoint (marks persist + sync via
     /// `/sync/reader`); inject an `InMemoryAnnotationStore` in tests/previews for a local-only store.
     public init(holding: Holding, title: String, endpoint: any ServerEndpoint, readingStore: CatalogueReadingStore,
@@ -83,8 +96,10 @@ public struct ReaderView: View {
         self.holding = holding; self.title = title; self.endpoint = endpoint
         self.readingStore = readingStore
         self._showChrome = showChrome
-        self.annotations = annotations ?? ReaderSync(baseURL: endpoint.baseURL,
-                                                     authorize: { endpoint.authorize(&$0) })
+        // Local-first: marks persist to a device file (survive relaunch even offline) AND mirror to the
+        // server via ReaderSync, with an outbox that flushes offline marks on reconnect.
+        self.annotations = annotations ?? LocalAnnotationStore(
+            remote: ReaderSync(baseURL: endpoint.baseURL, authorize: { endpoint.authorize(&$0) }))
         // Local-first: bookmarks persist to a device file (survive reopens even offline) AND mirror to
         // the server via BookmarkSync — position does the same, which is why it survived when bookmarks
         // (server-only, before this) did not.
@@ -115,7 +130,8 @@ public struct ReaderView: View {
                             PDFViewContainer(pdfView: pdfNavigator.pdfView).ignoresSafeArea(edges: .bottom)
                             if drawMode {
                                 // PencilKit captures; we render via FreehandRenderer/PdfInkHost (canonical ink).
-                                PencilKitInkCanvas(pdfView: pdfNavigator.pdfView, color: penColor, width: penWidth,
+                                PencilKitInkCanvas(pdfView: pdfNavigator.pdfView, color: ink.color, width: ink.width,
+                                                   mode: ink.mode ?? .draw,
                                                    onStroke: { stroke in Task { await addInk(stroke) } })
                                     .ignoresSafeArea(edges: .bottom)
                             }
@@ -132,8 +148,16 @@ public struct ReaderView: View {
                     // centre-tap to toggle the bars — lives in the content (epub-bridge). A SwiftUI
                     // gesture over the WKWebView competes for the same touches and suppresses the
                     // in-iframe ones, so we deliberately attach none here.
-                    WebViewContainer(webView: epubNavigator.webView)
-                        .ignoresSafeArea(edges: .bottom)
+                    ZStack {
+                        WebViewContainer(webView: epubNavigator.webView)
+                            .ignoresSafeArea(edges: .bottom)
+                        if drawMode {
+                            // Ink capture over the book; strokes anchor to the block under them (CFI).
+                            EpubInkCanvas(color: ink.color, width: ink.width,
+                                          onStroke: { stroke, start in Task { await addEpubInk(stroke, startAt: start) } })
+                                .ignoresSafeArea(edges: .bottom)
+                        }
+                    }
                         .simultaneousGesture(pageSwipe)     // native swipe = paging
                         // Native tap = toggle the bars — the SAME proven mechanism PDF uses (a captured
                         // JS→binding toggle didn't fire). Simultaneous, so it doesn't block the web view;
@@ -148,8 +172,18 @@ public struct ReaderView: View {
                 }
             }
             .overlay(alignment: .bottom) {
-                if reader != nil && showChrome && !locLabel.isEmpty && !reflowMode {
+                if reader != nil && showChrome && !locLabel.isEmpty && !reflowMode && !drawMode {
                     locationBadge.allowsHitTesting(false)   // read-only page/percent, never blocks scroll
+                }
+            }
+            .overlay {
+                // The pencil tool palette — only while drawing on a PDF. A thin renderer of the portable
+                // `InkToolController` + `InkPaletteController`; the move handle repositions it (any edge
+                // or floating), Done exits draw mode.
+                if drawMode && (pdfNavigator != nil || epubNavigator != nil) {
+                    GeometryReader { geo in positionedPalette(in: geo.size) }
+                        .coordinateSpace(.named(InkToolbar.coordinateSpace))
+                        .transition(.opacity)
                 }
             }
             .overlay {
@@ -200,6 +234,29 @@ public struct ReaderView: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
                 }
             }
+            .overlay(alignment: .top) {
+                // EPUB text marks are selection-driven (the model web uses): selecting text surfaces a
+                // small Highlight/Underline bar. epub.js has no native strikethrough/note, so those stay
+                // PDF-only for now.
+                if epubSelection != nil && epubNavigator != nil {
+                    HStack(spacing: 16) {
+                        Button { Task { await addEpubTextMark(.highlight) } } label: {
+                            Label("Highlight", systemImage: "highlighter")
+                        }
+                        Button { Task { await addEpubTextMark(.underline) } } label: {
+                            Label("Underline", systemImage: "underline")
+                        }
+                        Button { epubSelection = nil } label: { Image(systemName: "xmark") }
+                            .foregroundStyle(.secondary)
+                    }
+                    .font(.footnote.weight(.medium))
+                    .padding(.horizontal, 16).padding(.vertical, 10)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .shadow(radius: 4, y: 2)
+                    .padding(.top, 8)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                }
+            }
             .sheet(isPresented: $showGoto) { gotoSheet }
             .toolbar(showChrome ? .visible : .hidden, for: .navigationBar)
             .navigationTitle("")                    // no title between the bars (the tab strip names the book)
@@ -220,6 +277,13 @@ public struct ReaderView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     HStack(spacing: 8) {
                         ForEach(chromeControls.filter { $0.bar == "text" && !$0.overflow }) { barControl($0) }
+                        // EPUB has no shared "draw" control (the chrome gates it to PDF); the EPUB ink
+                        // toggle is a local iOS affordance so it needs no shared-spec/goldens change.
+                        if epubNavigator != nil, reader?.capabilities.canAnnotate == true {
+                            Button { toggleDraw() } label: {
+                                Image(systemName: drawMode ? "pencil.tip.crop.circle.fill" : "pencil.tip.crop.circle")
+                            }.accessibilityLabel("Draw")
+                        }
                         let overflow = chromeControls.filter { $0.overflow }
                         if !overflow.isEmpty { overflowMenu(overflow) }
                     }
@@ -229,6 +293,16 @@ public struct ReaderView: View {
             .sheet(isPresented: $showToc) { tocSheet }
             .sheet(isPresented: $showSearch) { searchSheet }
             .sheet(isPresented: $showBookmarks) { bookmarksSheet }
+            .alert("Add Note", isPresented: $showNoteEntry) {
+                TextField("Note", text: $noteDraft)
+                Button("Add") { Task { await commitNote() } }
+                Button("Cancel", role: .cancel) {}
+            } message: { Text("A note anchored to the selected text.") }
+            .sheet(item: $shareItem) { item in ActivityView(items: [item.url]) }
+            .alert("Couldn’t export", isPresented: Binding(get: { exportMessage != nil },
+                                                           set: { if !$0 { exportMessage = nil } })) {
+                Button("OK", role: .cancel) {}
+            } message: { Text(exportMessage ?? "") }
             .onChange(of: readerThemeRaw) { Task { await applyReadingTheme() } }
             .onChange(of: colorScheme) { if readerThemeRaw == "auto" { Task { await applyReadingTheme() } } }
             .task { await open() }
@@ -279,8 +353,10 @@ public struct ReaderView: View {
         pdfNavigator = nav
         let host = PdfDecorationHost(pdfView: nav.pdfView)
         decorationHost = host
-        overlay = MarkOverlay(host: host)
-        inkHost = PdfInkHost(pdfView: nav.pdfView)
+        // The PDF rendering layer: PDFKit decoration host + fixed-page ink host (default ink engine).
+        renderLayer = CompositeRenderLayer(decorations: host,
+                                           ink: PdfInkHost(pdfView: nav.pdfView),
+                                           inkPlacement: .fixedPage)
         reader = try await Octavo.open(
             navigator: nav, publicationId: pubId, readingStore: readingStore,
             capabilities: .init(canAnnotate: true, canExport: true, canSearch: true),
@@ -299,10 +375,14 @@ public struct ReaderView: View {
         }
         nav.onExternalLink = { linkURL in openURL(linkURL) }
         nav.onWillJump = { pushBackTarget() }   // in-content link → record a back target
+        nav.onSelection = { cfi, text in epubSelection = (cfiRange: cfi, text: text) }
         epubNavigator = nav
         let host = EpubDecorationHost(navigator: nav)
         decorationHost = host
-        overlay = MarkOverlay(host: host)
+        // The EPUB rendering layer: epub.js decoration host + CFI-anchored ink overlay host.
+        renderLayer = CompositeRenderLayer(decorations: host,
+                                           ink: EpubInkHost(navigator: nav),
+                                           inkPlacement: .inlineBox(aspect: 1))
         reader = try await Octavo.open(
             navigator: nav, publicationId: pubId, readingStore: readingStore,
             capabilities: .init(canAnnotate: true, canSearch: true),
@@ -316,6 +396,8 @@ public struct ReaderView: View {
         reader?.onLocationChanged { loc in
             self.locLabel = Self.label(for: loc)
             if self.reflowMode { self.updateReflow() }   // page turned in reflow mode → re-extract
+            // EPUB is paginated: re-place CFI-anchored marks/ink on the newly displayed page.
+            if self.epubNavigator != nil { self.renderMarks() }
         }
         if let loc = reader?.currentLocation { locLabel = Self.label(for: loc) }
     }
@@ -401,8 +483,8 @@ public struct ReaderView: View {
             search: reader?.capabilities.canSearch == true,
             star: true,
             annotate: (reader?.capabilities.canAnnotate == true) && pdf,
-            annotateText: false,   // iOS underline/strike/note/erase not yet supported by the engine
-            export: false,         // iOS annotated-PDF export not yet supported
+            annotateText: (reader?.capabilities.canAnnotate == true) && pdf,   // selection-anchored marks
+            export: (reader?.capabilities.canExport == true) && pdf,          // share annotated.pdf
             reflow: pdf
         )
         return readerChromeVM(format: pdf ? "pdf" : "epub", caps: caps, reflow: reflowMode, draw: drawMode)
@@ -458,13 +540,7 @@ public struct ReaderView: View {
     private func overflowMenu(_ controls: [ReaderControl]) -> some View {
         Menu {
             ForEach(controls) { menuControl($0) }
-            if drawMode {
-                Menu("Pen Colour") {
-                    ForEach(Self.penColors, id: \.self) { hex in
-                        Button { penColor = hex } label: { Label(hex, systemImage: "circle.fill") }
-                    }
-                }
-            }
+            // Pen colour / width / eraser now live in the on-screen `InkToolbar` while drawing.
         } label: { Image(systemName: "ellipsis.circle") }
     }
 
@@ -476,8 +552,18 @@ public struct ReaderView: View {
             Button { Task { await openBookmarkList() } } label: { Label("Bookmarks", systemImage: "bookmark.circle") }
         case "highlight":
             Button { Task { await addHighlight() } } label: { Label("Highlight", systemImage: "highlighter") }
+        case "underline":
+            Button { Task { await addTextMark(.underline) } } label: { Label("Underline", systemImage: "underline") }
+        case "strike":
+            Button { Task { await addTextMark(.strikeout) } } label: { Label("Strikethrough", systemImage: "strikethrough") }
+        case "note":
+            Button { beginNote() } label: { Label("Note", systemImage: "note.text") }
+        case "erase":
+            Button { Task { await eraseTextMarks() } } label: { Label("Erase Marks", systemImage: "eraser.line.dashed") }
+        case "export":
+            Button { Task { await exportAnnotatedPdf() } } label: { Label("Share Annotated PDF", systemImage: "square.and.arrow.up") }
         case "draw":
-            Button { drawMode.toggle() } label: {
+            Button { toggleDraw() } label: {
                 Label(c.active ? "Stop Drawing" : "Draw", systemImage: "pencil.tip.crop.circle")
             }
         default:
@@ -758,8 +844,7 @@ public struct ReaderView: View {
     /// position — a cross-device mark appearing must never reposition the reader.
     private func renderMarks() {
         marks = marksById.values.filter { !$0.isTombstone }
-        overlay?.render(marks)
-        inkHost?.render(marks.compactMap { $0.inkRegion() })
+        renderLayer?.render(marks)   // marks + ink, via the per-format rendering layer
     }
 
     // MARK: Cross-device reading position (Shape-C, advisory resume)
@@ -799,28 +884,259 @@ public struct ReaderView: View {
         withAnimation { resumePill = nil }
     }
 
-    /// Create a highlight at the current location, push it (LWW, UUID-keyed), and re-render — the
-    /// structured store, not the file, is the source of truth, so this mark also reaches web.
-    private func addHighlight() async {
-        guard let locator = currentLocation else { return }
-        let now = Date()
-        let mark = Annotation(publicationId: pubId, kind: .highlight, locator: locator,
-                              color: "#ffd54a", createdAt: now, updatedAt: now, rev: rev + 1)
-        marksById[mark.id] = mark; renderMarks()   // optimistic: show immediately, even offline
-        _ = try? await annotations.push(publicationId: pubId, ops: [mark])
-        await pullMarks(reset: false)              // reconcile with server (no-op when offline)
+    /// Per-line quads for the current PDF text selection, grouped by page (0-based index). Each line's
+    /// PDFKit page-space bounds is normalized to a top-left `[x,y,w,h]` via the shared `PageGeometry`
+    /// (the same wire shape web/server use). Empty when there's no text selection.
+    private func selectionQuads() -> [(page: Int, quads: [[Double]])] {
+        guard let pdf = pdfNavigator?.pdfView, let doc = pdf.document,
+              let sel = pdf.currentSelection else { return [] }
+        var byPage: [Int: [[Double]]] = [:]
+        for line in sel.selectionsByLine() {
+            guard let page = line.pages.first else { continue }
+            let idx = doc.index(for: page)
+            let b = page.bounds(for: .cropBox)
+            let r = line.bounds(for: page)
+            guard r.width > 0, r.height > 0 else { continue }
+            let quad = PageGeometry.topLeftQuad(x: r.minX, y: r.minY, w: r.width, h: r.height,
+                                                pageMinX: b.minX, pageMinY: b.minY,
+                                                pageWidth: b.width, pageHeight: b.height)
+            byPage[idx, default: []].append(quad)
+        }
+        return byPage.map { (page: $0.key, quads: $0.value) }.sorted { $0.page < $1.page }
     }
 
-    /// Persist a captured PencilKit stroke as a `kind:.ink` annotation at the current page, then
-    /// re-render it through `PdfInkHost` (the canonical renderer) — the same record web/export use.
+    private func addHighlight() async { await addTextMark(.highlight) }
+
+    /// EPUB text mark from the current selection — anchored by **cfiRange** (not quads), rendered via
+    /// `EpubDecorationHost` (epub.js annotations). Highlight/underline only; strike/note are PDF-only.
+    private func addEpubTextMark(_ kind: AnnotationKind) async {
+        guard let sel = epubSelection, !sel.cfiRange.isEmpty,
+              let loc = currentLocation else { return }
+        let now = Date()
+        let mark = Annotation(publicationId: pubId, kind: kind, locator: loc,
+                              cfiRange: sel.cfiRange,
+                              color: kind == .highlight ? "#ffd54a" : "#ff3b30",
+                              createdAt: now, updatedAt: now, rev: rev + 1)
+        marksById[mark.id] = mark
+        epubSelection = nil
+        renderMarks()   // optimistic
+        _ = try? await annotations.push(publicationId: pubId, ops: [mark])
+        await pullMarks(reset: false)
+    }
+
+    /// Anchor a text mark (highlight/underline/strikeout) to the current selection's per-line quads and
+    /// push it. One `Annotation` per page the selection spans. The structured store — not the file — is
+    /// the source of truth, so the mark reaches web/export in the same `rect` quad shape.
+    private func addTextMark(_ kind: AnnotationKind) async {
+        let groups = selectionQuads()
+        guard !groups.isEmpty else { return }
+        let now = Date()
+        var created: [Annotation] = []
+        for g in groups {
+            let loc = Locator(publicationId: pubId, format: .pdf, locations: .init(page: g.page + 1))
+            let mark = Annotation(publicationId: pubId, kind: kind, locator: loc,
+                                  quads: g.quads,
+                                  color: kind == .highlight ? "#ffd54a" : "#ff3b30",
+                                  createdAt: now, updatedAt: now, rev: rev + 1)
+            marksById[mark.id] = mark; created.append(mark)
+        }
+        pdfNavigator?.pdfView.clearSelection()
+        renderMarks()   // optimistic
+        for m in created { _ = try? await annotations.push(publicationId: pubId, ops: [m]) }
+        await pullMarks(reset: false)
+    }
+
+    /// Note: capture the selection's first-line top-left as the anchor point, then prompt for text.
+    private func beginNote() {
+        guard let g = selectionQuads().first, let first = g.quads.first else { return }
+        noteAnchor = (page: g.page, point: [first[0], first[1]])
+        noteDraft = ""
+        showNoteEntry = true
+    }
+
+    private func commitNote() async {
+        guard let anchor = noteAnchor, !noteDraft.isEmpty else { return }
+        let now = Date()
+        let loc = Locator(publicationId: pubId, format: .pdf, locations: .init(page: anchor.page + 1))
+        let mark = Annotation(publicationId: pubId, kind: .note, locator: loc,
+                              region: anchor.point, color: "#ffd54a", noteText: noteDraft,
+                              createdAt: now, updatedAt: now, rev: rev + 1)
+        marksById[mark.id] = mark
+        pdfNavigator?.pdfView.clearSelection()
+        renderMarks()
+        _ = try? await annotations.push(publicationId: pubId, ops: [mark])
+        await pullMarks(reset: false)
+    }
+
+    /// Erase text marks whose quads intersect the current selection (object-erase for marks).
+    private func eraseTextMarks() async {
+        guard let g = selectionQuads().first else { return }
+        let page = g.page + 1
+        let selRects = g.quads.map { NormRect(x: $0[0], y: $0[1], w: $0[2], h: $0[3]) }
+        let hits = marks.filter { m -> Bool in
+            guard [.highlight, .underline, .strikeout].contains(m.kind), !m.isTombstone,
+                  m.locator.locations.page == page, let mq = m.quads else { return false }
+            return mq.contains { q in
+                let mr = NormRect(x: q[0], y: q[1], w: q[2], h: q[3])
+                return selRects.contains { $0.intersects(mr) }
+            }
+        }
+        guard !hits.isEmpty else { return }
+        let now = Date()
+        for var m in hits {
+            m.deletedAt = now; m.updatedAt = now; m.rev = m.rev + 1
+            marksById[m.id] = m
+            _ = try? await annotations.push(publicationId: pubId, ops: [m])
+        }
+        pdfNavigator?.pdfView.clearSelection()
+        renderMarks()
+    }
+
+    /// Enter/leave draw mode. Entering defaults to the pen (so the toolbar opens on a sane tool).
+    private func toggleDraw() {
+        drawMode.toggle()
+        if drawMode { ink.select(tool: .pen) }
+    }
+
+    /// Render the palette at its current placement within the reader area. Docked = pinned to an edge
+    /// with a small inset; floating = centred at the normalized point. Drag maths (normalize by area
+    /// size, snap/float) live in the portable `InkPaletteController`; this only positions the view.
+    @ViewBuilder private func positionedPalette(in size: CGSize) -> some View {
+        let bar = InkToolbar(
+            tool: $ink, palette: palette, canUndo: ink.canUndo, canRedo: ink.canRedo,
+            onUndo: undoInk, onRedo: redoInk, onDone: { drawMode = false },
+            onMove: { pt in palette.drag(toX: pt.x / max(size.width, 1), y: pt.y / max(size.height, 1)) },
+            onMoveEnd: { pt in palette.endDrag(atX: pt.x / max(size.width, 1), y: pt.y / max(size.height, 1)) }
+        )
+        switch palette.placement {
+        case .docked(let edge):
+            bar.padding(padEdge(edge), 12)
+                .frame(width: size.width, height: size.height, alignment: alignment(for: edge))
+        case .floating(let x, let y):
+            bar.position(x: x * size.width, y: y * size.height)
+        }
+    }
+
+    private func padEdge(_ e: InkPaletteEdge) -> Edge.Set {
+        switch e {
+        case .top: return .top
+        case .bottom: return .bottom
+        case .leading: return .leading
+        case .trailing: return .trailing
+        }
+    }
+
+    private func alignment(for e: InkPaletteEdge) -> Alignment {
+        switch e {
+        case .top: return .top
+        case .bottom: return .bottom
+        case .leading: return .leading
+        case .trailing: return .trailing
+        }
+    }
+
+    /// A finished stroke from the canvas. An eraser stroke deletes the ink it crosses; a pen/highlighter
+    /// stroke is persisted as a `kind:.ink` annotation and re-rendered through `PdfInkHost` (the
+    /// canonical renderer) — the same record web/export use. Both are recorded for undo.
     private func addInk(_ stroke: InkStroke) async {
+        if stroke.mode == .erase { await eraseInk(with: stroke); return }
         guard let locator = currentLocation,
               let mark = InkCapture.annotation(ink: Ink(strokes: [stroke]), locator: locator,
                                                publicationId: pubId, rev: rev + 1, now: Date())
         else { return }
         marksById[mark.id] = mark; renderMarks()   // optimistic: show immediately, even offline
+        ink.record(.added(mark.id))
         _ = try? await annotations.push(publicationId: pubId, ops: [mark])
         await pullMarks(reset: false)              // reconcile with server (no-op when offline)
+    }
+
+    /// Object-eraser: tombstone every ink mark on the current page whose bounding box the eraser stroke
+    /// crosses. Vector delete (not a pixel clear) so it round-trips through the store like any edit and
+    /// is undoable. A slight inset makes the eraser forgiving without being grabby.
+    private func eraseInk(with eraser: InkStroke) async {
+        guard let page = currentLocation?.locations.page else { return }
+        let hitBox = PageGeometry.bounds(of: eraser.points).inset(by: 0.01)
+        let hits = marks.filter { m -> Bool in
+            guard m.kind == .ink, !m.isTombstone, m.locator.locations.page == page, let mInk = m.ink
+            else { return false }
+            return mInk.strokes.contains { hitBox.intersects(PageGeometry.bounds(of: $0.points)) }
+        }
+        guard !hits.isEmpty else { return }
+        let now = Date()
+        var removed: [UUID] = []
+        for var m in hits {
+            m.deletedAt = now; m.updatedAt = now; m.rev = m.rev + 1
+            marksById[m.id] = m; removed.append(m.id)
+            _ = try? await annotations.push(publicationId: pubId, ops: [m])
+        }
+        renderMarks()
+        ink.record(.removed(removed))
+    }
+
+    private func undoInk() { if let m = ink.undo() { Task { await apply(m) } } }
+    private func redoInk() { if let m = ink.redo() { Task { await apply(m) } } }
+
+    /// Apply an undo/redo mutation to the store: tombstone or restore the named ink marks, bump `rev` so
+    /// the change wins LWW, push, and repaint.
+    private func apply(_ mutation: InkMutation) async {
+        let now = Date()
+        let (ids, deleted): ([UUID], Date?) = {
+            switch mutation {
+            case .tombstone(let ids): return (ids, now)
+            case .restore(let ids): return (ids, nil)
+            }
+        }()
+        for id in ids {
+            guard var m = marksById[id] else { continue }
+            m.deletedAt = deleted; m.updatedAt = now; m.rev = m.rev + 1
+            marksById[id] = m
+            _ = try? await annotations.push(publicationId: pubId, ops: [m])
+        }
+        renderMarks()
+    }
+
+    /// Download the server-flattened annotated PDF (`GET /holding/<id>/annotated.pdf` — reuses the tested
+    /// PyMuPDF + perfect-freehand flatten, works over the tunnel) and present the iOS share sheet. The
+    /// route is editor-only and returns 409 when the copy has no PDF-anchored marks yet.
+    private func exportAnnotatedPdf() async {
+        let url = ReaderRoutes.annotatedPdf(baseURL: endpoint.baseURL, holding: holding.holdingId)
+        var req = URLRequest(url: url)
+        endpoint.authorize(&req)
+        do {
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+            guard code == 200 else {
+                exportMessage = code == 409
+                    ? "Add a highlight, note, or ink to this copy first, then export."
+                    : (code == 403 ? "You need edit access to export." : "The server couldn’t produce the file (\(code)).")
+                return
+            }
+            let safe = title.replacingOccurrences(of: "/", with: "-")
+            let out = FileManager.default.temporaryDirectory
+                .appendingPathComponent("\(safe.isEmpty ? "book" : safe)-annotated.pdf")
+            try data.write(to: out, options: .atomic)
+            shareItem = ShareItem(url: out)
+        } catch {
+            exportMessage = "Couldn’t reach the server to export."
+        }
+    }
+
+    /// Persist an EPUB ink stroke: resolve the block CFI + rect under the stroke's start point, normalize
+    /// the stroke to that block (so it reflows with the text), and store it as a `kind:.ink` annotation
+    /// anchored by `cfiRange`. `EpubInkHost` re-places it on each page turn.
+    private func addEpubInk(_ stroke: PKStroke, startAt point: CGPoint) async {
+        guard let nav = epubNavigator, let loc = currentLocation,
+              let hit = await nav.cfiAtPoint(point) else { return }
+        var s = InkCanvas.strokeFrom(stroke, in: hit.rect, color: ink.color, mode: ink.mode ?? .draw)
+        s.width = ink.width
+        let now = Date()
+        let mark = Annotation(publicationId: pubId, kind: .ink, locator: loc, cfiRange: hit.cfi,
+                              ink: Ink(strokes: [s]), createdAt: now, updatedAt: now, rev: rev + 1)
+        marksById[mark.id] = mark
+        ink.record(.added(mark.id))
+        renderMarks()   // optimistic
+        _ = try? await annotations.push(publicationId: pubId, ops: [mark])
+        await pullMarks(reset: false)
     }
 
     /// Drop a bookmark at the current location (synced via the `BookmarkStore`). A bookmark *panel*
@@ -855,5 +1171,20 @@ private struct WebViewContainer: UIViewRepresentable {
     let webView: WKWebView
     func makeUIView(context: Context) -> WKWebView { webView }
     func updateUIView(_ uiView: WKWebView, context: Context) {}
+}
+
+/// A file to hand to the iOS share sheet (the exported annotated PDF).
+private struct ShareItem: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
+/// Wraps `UIActivityViewController` for SwiftUI presentation (share / save / print the annotated PDF).
+private struct ActivityView: UIViewControllerRepresentable {
+    let items: [Any]
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+    func updateUIViewController(_ vc: UIActivityViewController, context: Context) {}
 }
 #endif

@@ -22,6 +22,9 @@ struct PencilKitInkCanvas: UIViewRepresentable {
     let pdfView: PDFView
     var color: String
     var width: Double
+    /// The active tool's composite mode (from `InkToolController`): `draw` pen, `highlight` marker,
+    /// `erase` (captured only to hit-test — the host deletes intersecting ink, nothing is persisted).
+    var mode: InkMode
     let onStroke: (InkStroke) -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
@@ -32,13 +35,26 @@ struct PencilKitInkCanvas: UIViewRepresentable {
         canvas.isOpaque = false
         canvas.drawingPolicy = .pencilOnly                    // palm rejection (finger scrolls)
         canvas.delegate = context.coordinator
-        canvas.tool = PKInkingTool(.pen, color: Self.uiColor(color), width: width)
+        canvas.tool = Self.tool(mode: mode, color: color, width: width)
         return canvas
     }
 
     func updateUIView(_ canvas: PKCanvasView, context: Context) {
-        canvas.tool = PKInkingTool(.pen, color: Self.uiColor(color), width: width)
+        canvas.tool = Self.tool(mode: mode, color: color, width: width)
         context.coordinator.parent = self
+    }
+
+    /// Live PencilKit feedback per mode. It's transient — cleared on stroke-finish once our renderer
+    /// takes over — so it only needs to *look* right while drawing.
+    private static func tool(mode: InkMode, color: String, width: Double) -> PKTool {
+        switch mode {
+        case .draw:
+            return PKInkingTool(.pen, color: uiColor(color), width: width)
+        case .highlight:
+            return PKInkingTool(.marker, color: uiColor(color).withAlphaComponent(0.4), width: width * 2)
+        case .erase:
+            return PKInkingTool(.pen, color: UIColor.systemGray.withAlphaComponent(0.5), width: width)
+        }
     }
 
     @MainActor
@@ -55,7 +71,9 @@ struct PencilKitInkCanvas: UIViewRepresentable {
             // page's rect there is the 0…1 normalization box (`InkCanvas.strokeFrom`).
             let pageRect = parent.pdfView.convert(page.bounds(for: .cropBox), from: page)
             for stroke in strokes[lastCount...] {
-                parent.onStroke(InkCanvas.strokeFrom(stroke, in: pageRect, color: parent.color))
+                var s = InkCanvas.strokeFrom(stroke, in: pageRect, color: parent.color, mode: parent.mode)
+                s.width = parent.width          // honor the tool's width (strokeFrom infers a default)
+                parent.onStroke(s)
             }
             canvasView.drawing = PKDrawing()                  // our renderer owns the pixels now
             lastCount = 0

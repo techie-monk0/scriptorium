@@ -1,5 +1,6 @@
 import XCTest
 @testable import CatalogueReader
+import CatalogueReaderWire
 import Postilla
 import Octavo
 
@@ -46,7 +47,7 @@ final class ReaderSyncTests: XCTestCase {
         let ink = Ink(strokes: [InkStroke(points: [InkPoint(x: 0.1, y: 0.2, pressure: 0.5, t: 0)],
                                           width: 4, color: "#ff0000", mode: .draw)])
         return Annotation(id: sampleId, publicationId: "holding:7", kind: .highlight, locator: loc,
-                          cfiRange: "epubcfi(/6/4!/4)", region: [0.1, 0.2, 0.3, 0.05],
+                          cfiRange: "epubcfi(/6/4!/4)", quads: [[0.1, 0.2, 0.3, 0.05]],
                           color: "#ffd54a", ink: ink, createdAt: t, updatedAt: t, rev: 5)
     }
 
@@ -56,7 +57,7 @@ final class ReaderSyncTests: XCTestCase {
         let body = """
         {"rev":5,"bookmarks":[],"annotations":[
           {"id":"\(sampleId.uuidString)","holding_id":7,"kind":"highlight","page":3,
-           "rect":"[0.1,0.2,0.3,0.05]","color":"#ffd54a","note_text":"key",
+           "rect":"[[0.1,0.2,0.3,0.05],[0.1,0.26,0.22,0.05]]","color":"#ffd54a","note_text":"key",
            "created_at":"2023-11-14T22:13:20Z","updated_at":"2023-11-14T22:13:20Z","rev":5}]}
         """
         MockURLProtocol.routes["/sync/reader"] = (200, Data(body.utf8))
@@ -66,7 +67,7 @@ final class ReaderSyncTests: XCTestCase {
         XCTAssertEqual(a.kind, .highlight)
         XCTAssertEqual(a.locator.locations.page, 3)
         XCTAssertEqual(a.locator.format, .pdf)            // no cfi_range → pdf inferred
-        XCTAssertEqual(a.region, [0.1, 0.2, 0.3, 0.05])   // rect JSON-string → [Double]
+        XCTAssertEqual(a.quads, [[0.1, 0.2, 0.3, 0.05], [0.1, 0.26, 0.22, 0.05]])  // rect → per-line quads
         XCTAssertEqual(a.noteText, "key")
     }
 

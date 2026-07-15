@@ -1,0 +1,82 @@
+{
+  "_doc": "Cross-binding contract for the catalogue reader wire (ReaderWireCodec). The Swift test builds the model from `input`, runs the codec, and asserts the produced wire equals `expectedOp` (push) / the model equals `expectedModel` (pull). A postilla-kotlin or JS frontend replays the same file. Dates are epoch seconds in `input`; the wire uses ISO-8601 (`...Z`).",
+  "version": 1,
+  "pushOps": [
+    {
+      "name": "highlight annotation → annotation op",
+      "input": {
+        "id": "11111111-1111-1111-1111-111111111111",
+        "holdingId": 7,
+        "kind": "highlight",
+        "page": 3,
+        "cfiRange": "epubcfi(/6/4!/4)",
+        "quads": [[0.1, 0.2, 0.3, 0.05], [0.1, 0.26, 0.22, 0.05]],
+        "color": "#ffd54a",
+        "noteText": "key",
+        "createdAt": 1700000000,
+        "updatedAt": 1700000000
+      },
+      "expectedOp": {
+        "type": "annotation",
+        "id": "11111111-1111-1111-1111-111111111111",
+        "holding_id": 7,
+        "kind": "highlight",
+        "cfi_range": "epubcfi(/6/4!/4)",
+        "page": 3,
+        "rect": "[[0.1,0.2,0.3,0.05],[0.1,0.26,0.22,0.05]]",
+        "color": "#ffd54a",
+        "note_text": "key",
+        "created_at": "2023-11-14T22:13:20Z",
+        "updated_at": "2023-11-14T22:13:20Z"
+      }
+    },
+    {
+      "name": "bookmark → bookmark op (opaque locator = page number)",
+      "input": {
+        "id": "22222222-2222-2222-2222-222222222222",
+        "holdingId": 7,
+        "kind": "bookmark",
+        "page": 42,
+        "fraction": 0.5,
+        "label": "Chapter 3",
+        "createdAt": 1700000000,
+        "updatedAt": 1700000000
+      },
+      "expectedOp": {
+        "type": "bookmark",
+        "id": "22222222-2222-2222-2222-222222222222",
+        "holding_id": 7,
+        "locator": "42",
+        "fraction": 0.5,
+        "label": "Chapter 3",
+        "created_at": "2023-11-14T22:13:20Z",
+        "updated_at": "2023-11-14T22:13:20Z"
+      }
+    }
+  ],
+  "pullAnnotations": [
+    {
+      "name": "annotation record → model (pdf inferred, rect → region)",
+      "record": {
+        "id": "11111111-1111-1111-1111-111111111111",
+        "holding_id": 7,
+        "kind": "highlight",
+        "page": 3,
+        "rect": "[[0.1,0.2,0.3,0.05],[0.1,0.26,0.22,0.05]]",
+        "color": "#ffd54a",
+        "note_text": "key",
+        "created_at": "2023-11-14T22:13:20Z",
+        "updated_at": "2023-11-14T22:13:20Z",
+        "rev": 5
+      },
+      "expectedModel": {
+        "kind": "highlight",
+        "page": 3,
+        "format": "pdf",
+        "quads": [[0.1, 0.2, 0.3, 0.05], [0.1, 0.26, 0.22, 0.05]],
+        "noteText": "key",
+        "rev": 5
+      }
+    }
+  ]
+}

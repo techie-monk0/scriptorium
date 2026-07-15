@@ -3,6 +3,13 @@
 Living tracker of what's built vs. what's left. Companion to `STATUS.md` (point-in-time green status)
 and `ios_native_plan.md` (the plan). Branch: `ios-catalogue-app`.
 
+> **On-device annotation / Apple Pencil completion + Android-retarget plan:**
+> `octavo-postilla/postilla/docs/postilla-ondevice_plan.md`. It supersedes the reader-annotation
+> items below with a phased plan (device bring-up → portable `InkToolController`/additive palette →
+> tools → selection-anchored marks → EPUB → recognition → export → offline outbox → test gates).
+> Note: the PDF ink round-trip is **code-complete** (capture→store→sync→re-render via `FreehandRenderer`),
+> pending on-device verification — not "not wired" as some bullets below imply.
+
 Legend: `[x]` done & verified · `[~]` partial / scaffolded · `[ ]` not started.
 
 ---
@@ -38,18 +45,18 @@ SwiftUI rendering + web/PWA JS still need a **simulator/browser pass** (not yet 
 
 ### Reader (highest-value gaps)
 - [ ] **EPUB**: octavo `EpubWebNavigator` is a WKWebView skeleton — implement open/goTo/next/prev/search/outline + CFI↔Locator. Decide engine (epub.js-in-WKWebView vs Readium). Unblocks `S8`.
-- [ ] **Ink on PDF**: wire PencilKit capture → store as ink `Annotation` → render via `FreehandRenderer` onto the page. (postilla *stores* canonical ink already; on-PDF render not wired into `ReaderView`.)
+- [~] **Ink on PDF**: capture → store as ink `Annotation` → render via `FreehandRenderer` onto the page is **code-complete** (`PencilKitInkCanvas`→`addInk`→`PdfInkHost`→`InkPdfAnnotation`→`InkLayerRenderer`). Remaining: **on-device Apple-Pencil verification** of the canvas⇄PDF-page coordinate mapping + stroke lifecycle (plan Phase 0), then a real tool UX (width/highlighter/eraser, Phase 2).
 - [ ] **Text-anchored highlight rects**: base `Decoration` carries no rect, so highlights draw as a page band. Extend so a mark anchors to its actual selection rect(s).
 - [ ] **In-reader search UI** (octavo `search` exists; no UI) and **outline/TOC** navigation.
 - [ ] **HTTP range streaming** for large PDFs (currently whole-file download into `FileCache` on first open).
 - [ ] **Recognition** (postilla `Recognizer` port + Apple Vision adapter) — handwriting→text; ship experimental, Devanagari xfail.
-- [ ] **Export / Share**: `annotated.pdf`. **Decided approach** (deferred, from the update-model work): flip the shared chrome-VM `export` capability on for iOS, wire an Export/Share control to `GET /holding/<id>/annotated.pdf` (reuses the tested PyMuPDF server flatten; works over the tunnel) → present in an iOS share sheet. Native `PostillaExport`/`PdfFlatten` (offline flatten) is the follow-up. No code yet.
+- [x] **Export / Share**: `annotated.pdf` — chrome `export` on for PDF; "Share Annotated PDF" downloads `GET /holding/<id>/annotated.pdf` (tested PyMuPDF + perfect-freehand flatten; works over the tunnel) → iOS share sheet; handles 409/403. Native `PostillaExport`/`PdfFlatten` (offline flatten) remains the follow-up.
 
 ### Sync / annotations
 - [x] **Reconcile `/sync/reader`** — `ReaderSync`/`BookmarkSync` map postilla ↔ the legacy `{rev, ops}` record; the reader syncs marks to the server/web (no longer in-memory-only).
 - [x] **Reader annotation freshness (cross-device)** — incremental `?since=<rev>` delta pull merged in place (never repositions), driven on foreground + a light poll while open, so a mark made on another device appears without close+reopen. Optimistic local render so a mark shows instantly (even offline).
 - [x] **Cross-device reading position** — `PositionSync` mirrors the local position to `/holding/<id>/position`; on open, an advisory "Resume · <where> (another device)" pill offers a jump (never auto-jumps).
-- [ ] **Durable offline reader outbox** — reader pushes are immediate + optimistic, but a highlight made **offline** isn't yet queued to disk for retry on reconnect (in-memory only for the session). Wire a persistent op-queue (mirror the PWA IndexedDB outbox / postilla `SyncEngine`).
+- [x] **Durable offline reader outbox** — `LocalAnnotationStore` (annotation sibling of `LocalBookmarkStore`): persists + queues every op to disk before the network, so an offline mark/ink survives relaunch and flushes on reconnect (accepted ids drained from the outbox). Headlessly tested.
 - [~] **PWA/web reader cross-device marks** — a **⟳ Refresh** button in the reader chrome (both `reader.js` + `reader.html`) + a tab-return trigger re-pull marks and repaint via `reader-core.js reloadMarks()` (`overlay.load()`+`repaint()`). Still open: *automatic* while-open refresh beyond that, and folding the button into the shared `readerChromeVM` spec (iOS auto-refreshes instead). See `private/frontend/sync_architecture.md`.
 
 ### Freshness / update model (shared `syncVM` + `SyncEngine`)

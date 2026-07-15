@@ -1,5 +1,6 @@
 import XCTest
 @testable import CatalogueReader
+import CatalogueReaderWire
 import Postilla
 import Octavo
 
@@ -36,14 +37,15 @@ final class BookmarkSyncTests: XCTestCase {
     }
     override func tearDown() { BMMockURLProtocol.routes = [:]; BMMockURLProtocol.lastBody = nil; super.tearDown() }
 
-    /// `Locator` ⇄ the legacy opaque `locator` string (page number / CFI).
+    /// `Locator` ⇄ the legacy opaque `locator` string (page number / CFI) — now owned by the neutral
+    /// wire codec.
     func testLocatorStringRoundTrips() {
         let pdf = Locator(publicationId: "holding:7", format: .pdf, locations: .init(page: 42))
-        XCTAssertEqual(BookmarkSync.locatorString(pdf), "42")
-        XCTAssertEqual(BookmarkSync.locator(from: "42", publicationId: "holding:7")?.locations.page, 42)
+        XCTAssertEqual(ReaderWireCodec.locatorString(pdf), "42")
+        XCTAssertEqual(ReaderWireCodec.locator(from: "42", publicationId: "holding:7")?.locations.page, 42)
         let epub = Locator(publicationId: "holding:7", format: .epub, locations: .init(cfi: "epubcfi(/6/4!/4)"))
-        XCTAssertEqual(BookmarkSync.locatorString(epub), "epubcfi(/6/4!/4)")
-        XCTAssertEqual(BookmarkSync.locator(from: "epubcfi(/6/4!/4)", publicationId: "holding:7")?.locations.cfi,
+        XCTAssertEqual(ReaderWireCodec.locatorString(epub), "epubcfi(/6/4!/4)")
+        XCTAssertEqual(ReaderWireCodec.locator(from: "epubcfi(/6/4!/4)", publicationId: "holding:7")?.locations.cfi,
                        "epubcfi(/6/4!/4)")
     }
 

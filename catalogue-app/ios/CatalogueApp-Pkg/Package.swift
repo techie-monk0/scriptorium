@@ -16,6 +16,7 @@ let package = Package(
         .library(name: "CatalogueDesign", targets: ["CatalogueDesign"]),
         .library(name: "CatalogueCore", targets: ["CatalogueCore"]),
         .library(name: "CatalogueData", targets: ["CatalogueData"]),
+        .library(name: "CatalogueReaderWire", targets: ["CatalogueReaderWire"]),
         .library(name: "CatalogueReader", targets: ["CatalogueReader"]),
         .library(name: "CatalogueUI", targets: ["CatalogueUI"]),
     ],
@@ -30,8 +31,17 @@ let package = Package(
         .target(name: "CatalogueDesign"),
         .target(name: "CatalogueCore"),
         .target(name: "CatalogueData", dependencies: ["CatalogueCore"]),
+
+        // Neutral server⇄model wire layer (Foundation only, no UIKit/URLSession): the `/sync/reader`
+        // + `/holding/<id>/position` record shapes, the `Annotation`/`Bookmark`/`Locator` codec, the
+        // route map, and the contract-version guard. Pure so it tests headlessly and a non-iOS
+        // frontend reimplements the same mapping against the shared goldens.
+        .target(name: "CatalogueReaderWire", dependencies: [
+            .product(name: "Postilla", package: "postilla-swift"),
+        ]),
+
         .target(name: "CatalogueReader", dependencies: [
-            "CatalogueCore", "CatalogueData", "CatalogueDesign",
+            "CatalogueCore", "CatalogueData", "CatalogueDesign", "CatalogueReaderWire",
             .product(name: "Octavo", package: "octavo-swift"),
             .product(name: "OctavoPDFKit", package: "octavo-swift"),
             .product(name: "OctavoEPUB", package: "octavo-swift"),
@@ -45,8 +55,12 @@ let package = Package(
         .testTarget(name: "CatalogueCoreTests", dependencies: ["CatalogueCore"], resources: [.copy("Goldens")]),
         .testTarget(name: "CatalogueDataTests", dependencies: ["CatalogueData", "CatalogueCore"]),
         .testTarget(name: "CatalogueReaderTests", dependencies: [
-            "CatalogueReader", .product(name: "Octavo", package: "octavo-swift"),
+            "CatalogueReader", "CatalogueReaderWire",
+            .product(name: "Octavo", package: "octavo-swift"),
             .product(name: "Postilla", package: "postilla-swift"),
         ]),
+        .testTarget(name: "CatalogueReaderWireTests", dependencies: [
+            "CatalogueReaderWire", .product(name: "Postilla", package: "postilla-swift"),
+        ], resources: [.copy("Goldens")]),
     ]
 )

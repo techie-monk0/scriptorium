@@ -13,9 +13,14 @@ import PostillaRender
 @MainActor
 public final class PdfInkHost: InkHost {
     private let pdfView: PDFView
+    private let renderer: any InkRenderer
     private var drawn: [(PDFPage, PDFAnnotation)] = []
 
-    public init(pdfView: PDFView) { self.pdfView = pdfView }
+    /// `renderer` is the swappable ink engine (default: `FreehandInkRenderer`).
+    public init(pdfView: PDFView, renderer: any InkRenderer = FreehandInkRenderer()) {
+        self.pdfView = pdfView
+        self.renderer = renderer
+    }
 
     /// (Re-)render the ink `regions` (non-`.fixedPage` placements are skipped — they belong to the
     /// EPUB overlay host). Idempotent: clears the prior set first. Map annotations via
@@ -29,7 +34,8 @@ public final class PdfInkHost: InkHost {
                 ?? region.anchor.locations.page.map { max(0, $0 - 1) }
             guard let i = index, i >= 0, i < doc.pageCount,
                   let page = doc.page(at: i) else { continue }
-            let ann = InkPdfAnnotation(strokes: region.strokes, pageBounds: page.bounds(for: .cropBox))
+            let ann = InkPdfAnnotation(strokes: region.strokes, pageBounds: page.bounds(for: .cropBox),
+                                       renderer: renderer)
             page.addAnnotation(ann)
             drawn.append((page, ann))
         }

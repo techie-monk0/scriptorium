@@ -24,11 +24,13 @@ import PostillaRender
 /// so isolating it would create an override-isolation mismatch under Swift 6.
 final class InkPdfAnnotation: PDFAnnotation {
     private let strokes: [InkStroke]
+    private let renderer: any InkRenderer
 
     /// `pageBounds` should be the page's `.cropBox` bounds — the canvas the ink's
-    /// `0…1` coordinates are normalized against.
-    init(strokes: [InkStroke], pageBounds: CGRect) {
+    /// `0…1` coordinates are normalized against. `renderer` is the swappable ink engine.
+    init(strokes: [InkStroke], pageBounds: CGRect, renderer: any InkRenderer = FreehandInkRenderer()) {
         self.strokes = strokes
+        self.renderer = renderer
         super.init(bounds: pageBounds, forType: .stamp, withProperties: nil)
         shouldDisplay = true
         shouldPrint = true
@@ -45,7 +47,7 @@ final class InkPdfAnnotation: PDFAnnotation {
         // bounds height + y-scale of -1 is exact regardless of cropBox origin.
         context.translateBy(x: 0, y: bounds.height)
         context.scaleBy(x: 1, y: -1)
-        InkLayerRenderer.draw(strokes, in: bounds.size, into: context)
+        renderer.draw(strokes, in: bounds.size, into: context)
         context.restoreGState()
     }
 }
