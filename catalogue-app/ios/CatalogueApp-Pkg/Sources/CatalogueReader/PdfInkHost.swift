@@ -42,8 +42,18 @@ public final class PdfInkHost: InkHost {
     }
 
     public func clear() {
-        for (page, ann) in drawn { page.removeAnnotation(ann) }
+        guard !drawn.isEmpty else { return }
+        for (page, ann) in drawn {
+            // `removeAnnotation` alone updates the page model but does NOT reliably repaint a custom-drawn
+            // (`.stamp`) annotation: PDFView keeps it baked in the page's cached bitmap, so erased/undone
+            // ink lingers on screen until the page is re-tiled (e.g. scrolled away and back). Flipping
+            // `shouldDisplay` posts an annotation-changed notification that forces PDFView to re-composite
+            // the page WITHOUT this ink. (Native marks — `.highlight`/`.underline` — don't need this.)
+            ann.shouldDisplay = false
+            page.removeAnnotation(ann)
+        }
         drawn.removeAll()
+        pdfView.setNeedsDisplay()
     }
 }
 #endif
