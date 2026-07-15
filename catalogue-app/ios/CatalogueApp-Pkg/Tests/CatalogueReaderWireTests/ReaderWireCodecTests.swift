@@ -62,6 +62,44 @@ final class ReaderWireCodecTests: XCTestCase {
         }
     }
 
+    // MARK: ink survives the full server round-trip (regression: ink vanished on lift once the
+    // post-push pull reconcile overwrote the optimistic mark with the server's echo).
+
+    /// Annotation → push op → JSON (the server stores/echoes this) → pull record → Annotation.
+    private func serverRoundTrip(_ a: Annotation) throws -> Annotation? {
+        let op = ReaderWireCodec.op(from: a, holdingId: 7)
+        let data = try JSONEncoder().encode(op)
+        let rec = try JSONDecoder().decode(AnnotationRecord.self, from: data)
+        return ReaderWireCodec.annotation(from: rec, publicationId: "holding:7")
+    }
+
+    func testInkAnnotationSurvivesServerRoundTrip() throws {
+        let stroke = InkStroke(points: [InkPoint(x: 0.1, y: 0.2, pressure: 0.5, t: 0),
+                                        InkPoint(x: 0.3, y: 0.4, pressure: 0.6, t: 12)],
+                               width: 4, color: "#ff0000", mode: .draw)
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+
+        // PDF ink: anchored by page (position is local-only; page must survive so the host resolves it).
+        let pdf = Annotation(publicationId: "holding:7", kind: .ink,
+                             locator: Locator(publicationId: "holding:7", format: .pdf,
+                                              locations: .init(page: 6, position: 5)),
+                             ink: Ink(strokes: [stroke]), createdAt: now, updatedAt: now, rev: 1)
+        let pdfBack = try XCTUnwrap(serverRoundTrip(pdf), "pdf ink should decode")
+        XCTAssertEqual(pdfBack.ink?.strokes.first?.points.count, 2, "pdf ink strokes survive")
+        XCTAssertNotNil(pdfBack.inkRegion(), "pdf ink still renders after round-trip")
+        XCTAssertEqual(pdfBack.locator.locations.page, 6, "pdf page anchor survives")
+
+        // EPUB ink: anchored by cfiRange.
+        let epub = Annotation(publicationId: "holding:7", kind: .ink,
+                              locator: Locator(publicationId: "holding:7", format: .epub, locations: .init()),
+                              cfiRange: "epubcfi(/6/4!/4/2)",
+                              ink: Ink(strokes: [stroke]), createdAt: now, updatedAt: now, rev: 1)
+        let epubBack = try XCTUnwrap(serverRoundTrip(epub), "epub ink should decode")
+        XCTAssertEqual(epubBack.ink?.strokes.first?.points.count, 2, "epub ink strokes survive")
+        XCTAssertEqual(epubBack.cfiRange, "epubcfi(/6/4!/4/2)", "epub cfi anchor survives")
+        XCTAssertNotNil(epubBack.inkRegion(placement: .inlineBox(aspect: 1)), "epub ink still renders")
+    }
+
     // MARK: position round-trip + contract (pure)
 
     func testPositionRoundTrips() {

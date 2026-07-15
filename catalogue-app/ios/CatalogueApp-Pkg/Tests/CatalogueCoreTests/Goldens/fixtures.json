@@ -1,5 +1,5 @@
 {
-  "_about": "Shared adapter fixtures for the Tier-2 parity test (U2). The SAME file feeds the Node generator (which runs the real library-core.js view-models → goldens.json) AND the Swift StubPlatform, so Swift output is asserted equal to JS output for identical input. Keep web the source of truth: regenerate goldens with `node Tools/gen_goldens.mjs`.",
+  "_about": "Shared adapter fixtures for the Tier-2 parity test (U2). The SAME file feeds the Node generator (which runs the real library-core.js view-models \u2192 goldens.json) AND the Swift StubPlatform, so Swift output is asserted equal to JS output for identical input. Keep web the source of truth: regenerate goldens with `node Tools/gen_goldens.mjs`.",
   "prefs": {
     "theme": "dark",
     "shelfArt": "spine"
@@ -8,9 +8,9 @@
     "bodhi": [
       {
         "eid": 42,
-        "title": "Bodhicaryāvatāra",
-        "display_title": "Bodhicaryāvatāra",
-        "by": "Śāntideva · 1w · reviewed",
+        "title": "Bodhicary\u0101vat\u0101ra",
+        "display_title": "Bodhicary\u0101vat\u0101ra",
+        "by": "\u015a\u0101ntideva \u00b7 1w \u00b7 reviewed",
         "cover_url": "/edition/42/cover.jpg",
         "spine_url": "/edition/42/spine.svg"
       }
@@ -28,7 +28,7 @@
           "hits": [
             {
               "type": "Person",
-              "label": "Śāntideva",
+              "label": "\u015a\u0101ntideva",
               "sublabel": "author",
               "url": "/person/9"
             }
@@ -38,7 +38,7 @@
           "label": "Book",
           "hits": [
             {
-              "label": "Bodhicaryāvatāra",
+              "label": "Bodhicary\u0101vat\u0101ra",
               "url": "/library?eid=42"
             },
             {
@@ -56,12 +56,12 @@
       "books": [
         {
           "eid": 42,
-          "title": "Bodhicaryāvatāra",
+          "title": "Bodhicary\u0101vat\u0101ra",
           "authors": [
-            "Śāntideva"
+            "\u015a\u0101ntideva"
           ],
           "snippets": [
-            "…the [match]emptiness[/match] of all dharmas…"
+            "\u2026the [match]emptiness[/match] of all dharmas\u2026"
           ]
         }
       ],
@@ -71,10 +71,10 @@
   "detail": {
     "42": {
       "edition_id": 42,
-      "title": "Bodhicaryāvatāra",
-      "display_title": "Bodhicaryāvatāra",
+      "title": "Bodhicary\u0101vat\u0101ra",
+      "display_title": "Bodhicary\u0101vat\u0101ra",
       "authors": [
-        "Śāntideva"
+        "\u015a\u0101ntideva"
       ],
       "translators": [
         "Crosby",
@@ -90,7 +90,7 @@
       "year": 1998,
       "tradition": "Gelug",
       "work_titles": [
-        "Bodhicaryāvatāra"
+        "Bodhicary\u0101vat\u0101ra"
       ],
       "connections": [
         {
@@ -129,7 +129,7 @@
         {
           "edition_id": 101,
           "title": "Vol One",
-          "display_title": "A Series · vol. 1",
+          "display_title": "A Series \u00b7 vol. 1",
           "authors": [
             "Auth A"
           ],
@@ -158,7 +158,7 @@
         {
           "edition_id": 102,
           "title": "Vol Ten",
-          "display_title": "A Series · vol. 10",
+          "display_title": "A Series \u00b7 vol. 10",
           "authors": [
             "Auth A"
           ],
@@ -181,7 +181,7 @@
         {
           "edition_id": 103,
           "title": "Vol Two",
-          "display_title": "A Series · vol. 2",
+          "display_title": "A Series \u00b7 vol. 2",
           "authors": [
             "Auth A"
           ],
@@ -294,12 +294,12 @@
     }
   },
   "fold_inputs": [
-    "Bodhicaryāvatāra",
-    "Śāntideva",
-    "ŚŪNYATĀ",
-    "café",
+    "Bodhicary\u0101vat\u0101ra",
+    "\u015a\u0101ntideva",
+    "\u015a\u016aNYAT\u0100",
+    "caf\u00e9",
     "  Spaced  ",
-    "Mañjuśrī"
+    "Ma\u00f1ju\u015br\u012b"
   ],
   "wishlist": {
     "items": [
@@ -495,12 +495,20 @@
   "chrome_inputs": [
     {
       "format": "pdf",
+      "compact": false,
       "caps": {
         "ready": true,
         "search": true,
         "star": true,
-        "annotate": true,
-        "reflow": true
+        "markText": true,
+        "strike": true,
+        "note": true,
+        "draw": true,
+        "erase": true,
+        "annList": true,
+        "export": true,
+        "reflow": true,
+        "zoom": true
       },
       "state": {
         "reflow": false,
@@ -509,12 +517,20 @@
     },
     {
       "format": "pdf",
+      "compact": true,
       "caps": {
         "ready": true,
         "search": true,
         "star": true,
-        "annotate": true,
-        "reflow": true
+        "markText": true,
+        "strike": true,
+        "note": true,
+        "draw": true,
+        "erase": true,
+        "annList": true,
+        "export": true,
+        "reflow": true,
+        "zoom": true
       },
       "state": {
         "reflow": true,
@@ -523,12 +539,31 @@
     },
     {
       "format": "epub",
+      "compact": false,
       "caps": {
         "ready": true,
         "search": true,
-        "star": true
+        "star": true,
+        "resizeText": true,
+        "markText": true,
+        "draw": true
       },
       "state": {}
+    },
+    {
+      "format": "epub",
+      "compact": true,
+      "caps": {
+        "ready": true,
+        "search": true,
+        "star": true,
+        "resizeText": true,
+        "markText": true,
+        "draw": true
+      },
+      "state": {
+        "draw": true
+      }
     },
     {
       "format": "pdf",
@@ -539,18 +574,22 @@
     },
     {
       "format": "pdf",
+      "compact": false,
       "caps": {
         "ready": true,
         "search": true,
         "star": true,
-        "annotate": true,
-        "annotateText": true,
+        "markText": true,
+        "strike": true,
+        "note": true,
+        "erase": true,
+        "annList": true,
         "export": true,
-        "reflow": true
+        "reflow": true,
+        "zoom": true
       },
       "state": {
-        "reflow": false,
-        "draw": false
+        "reflow": false
       }
     }
   ],

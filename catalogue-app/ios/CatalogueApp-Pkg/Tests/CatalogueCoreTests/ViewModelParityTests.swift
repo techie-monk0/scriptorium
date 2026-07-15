@@ -6,10 +6,12 @@ private struct NavFixture: Codable { var items: [NavMenuItem]; var activeKey: St
 private struct HomeFixture: Codable { var recentIds: [Int]; var replica: Replica; var starredIds: [Int] }
 private struct StarActionFixture: Codable { var action: String; var eid: Int? }
 private struct ChromeCapsFixture: Codable {
-    var ready, search, star, annotate, annotateText, export, reflow: Bool?
+    var ready, search, star, resizeText, zoom, reflow, markText, strike, note, draw, erase, annList, export: Bool?
 }
 private struct ChromeStateFixture: Codable { var reflow, draw: Bool? }
-private struct ChromeInputFixture: Codable { var format: String; var caps: ChromeCapsFixture; var state: ChromeStateFixture? }
+private struct ChromeInputFixture: Codable {
+    var format: String; var caps: ChromeCapsFixture; var state: ChromeStateFixture?; var compact: Bool?
+}
 private struct SyncInputFixture: Codable {
     var online, syncing: Bool?; var pendingWrites: Int?; var exportedAt, lastError, lastCheckedAt: String?
 }
@@ -117,10 +119,13 @@ final class ViewModelParityTests: XCTestCase {
         for (i, input) in fx.chromeInputs.enumerated() {
             let cp = input.caps
             let caps = ReaderCaps(ready: cp.ready ?? false, search: cp.search ?? false, star: cp.star ?? false,
-                                  annotate: cp.annotate ?? false, annotateText: cp.annotateText ?? false,
-                                  export: cp.export ?? false, reflow: cp.reflow ?? false)
+                                  resizeText: cp.resizeText ?? false, zoom: cp.zoom ?? false, reflow: cp.reflow ?? false,
+                                  markText: cp.markText ?? false, strike: cp.strike ?? false,
+                                  note: cp.note ?? false, draw: cp.draw ?? false, erase: cp.erase ?? false,
+                                  annList: cp.annList ?? false, export: cp.export ?? false)
             let controls = readerChromeVM(format: input.format, caps: caps,
-                                          reflow: input.state?.reflow ?? false, draw: input.state?.draw ?? false)
+                                          reflow: input.state?.reflow ?? false, draw: input.state?.draw ?? false,
+                                          compact: input.compact ?? false)
             let expected = g[i].arrayValue ?? []
             XCTAssertEqual(controls.count, expected.count, "chrome[\(i)] count")
             for (j, ctl) in controls.enumerated() where j < expected.count {

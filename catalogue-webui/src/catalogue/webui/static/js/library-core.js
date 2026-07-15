@@ -699,17 +699,25 @@
 
   // ── Reader chrome spec: the SHARED "bars" abstraction. Enumerates the reader's control set ONCE —
   // which bar each control lives in (general = leading, text = trailing), whether it collapses into the
-  // ⋯ overflow, and its active state — gated by document format + capabilities. Every surface RENDERS
-  // this spec in its own toolkit (SwiftUI toolbar / DOM topbar), so a capability added here appears on
-  // ALL surfaces (no more per-surface drift). Ported 1:1 to CatalogueCore and golden-tested. ──
+  // ⋯ overflow, and its active state. It is CAPABILITY-DRIVEN: the caller passes the caps its surface +
+  // document format actually support, and this enumerates the matching controls with NO hardcoded
+  // format/surface checks. So "all surfaces share one capability set; each excludes what its mode can't
+  // do" — e.g. EPUB omits strike/note (epub.js can't), web omits draw (no ink), PDF omits text-resize.
+  // Every surface RENDERS this spec in its own toolkit. Ported 1:1 to CatalogueCore and golden-tested.
+  //
+  // `input.compact` (phone / narrow) collapses the annotation + mode-specific controls into the ⋯
+  // overflow; on a regular width (iPad / desktop) they sit inline in the trailing bar. The primary
+  // controls (done/toc/search/star/goto/theme) and the secondary ones (bookmarks / annotation list) keep
+  // a fixed placement regardless of width. ──
   function readerChromeVM(input) {
     input = input || {};
-    var fmt = input.format || 'pdf';
     var caps = input.caps || {};
     var st = input.state || {};
-    var pdf = fmt === 'pdf', epub = fmt === 'epub';
+    var compact = !!input.compact;   // narrow width → annotation + mode controls go to the ⋯ overflow
     var out = [];
     function c(id, bar, overflow, active) { out.push({ id: id, bar: bar, overflow: !!overflow, active: !!active }); }
+    // Annotation + mode-specific controls: inline on a regular width, collapsed into ⋯ on a phone.
+    function tool(id, active) { c(id, 'text', compact, active); }
 
     // General options bar (leading): exit + navigate + find + identity.
     c('done', 'general', false, false);
@@ -718,20 +726,25 @@
       if (caps.search) c('search', 'general', false, false);
       if (caps.star) c('star', 'general', false, false);
 
-      // Text options bar (trailing): size (doc-type sensitive), reflow (PDF), then the ⋯ overflow.
-      if (epub || (pdf && st.reflow)) { c('textSmaller', 'text', false, false); c('textLarger', 'text', false, false); }
-      if (pdf && caps.reflow) c('reflow', 'text', false, !!st.reflow);
+      // Text options bar (trailing). Mode-specific first (size / reflow), then the shared jump/theme,
+      // then the annotation vocabulary, then secondary management (annotations list / bookmarks).
+      if (caps.resizeText) { tool('textSmaller', false); tool('textLarger', false); }   // EPUB: font A±
+      if (caps.zoom) { tool('zoomOut', false); tool('zoomIn', false); tool('fitWidth', false); }  // PDF: magnifier ± + fit width
+      if (caps.reflow) tool('reflow', !!st.reflow);
       c('goto', 'text', false, false);    // jump to a page (PDF) / position (EPUB)
-      c('theme', 'text', false, false);   // a direct cycle button (not in the ⋯), same as web
+      c('theme', 'text', false, false);   // a direct cycle button (never in the ⋯)
+      // The shared annotation vocabulary — each gated by its own capability so a mode/surface excludes
+      // only what it can't do.
+      if (caps.markText) { tool('highlight', false); tool('underline', false); }
+      if (caps.strike) tool('strike', false);
+      if (caps.note) tool('note', false);
+      if (caps.draw) tool('draw', !!st.draw);
+      if (caps.erase) tool('erase', false);
+      if (caps.export) tool('export', false);
+      // Secondary — always in the ⋯ overflow, both widths.
+      if (caps.annList) c('annList', 'text', true, false);
       c('bookmarkAdd', 'text', true, false);
       c('bookmarkList', 'text', true, false);
-      if (caps.annotate && pdf) { c('highlight', 'text', true, false); c('draw', 'text', true, !!st.draw); }
-      if (caps.annotateText && pdf) {
-        c('underline', 'text', true, false); c('strike', 'text', true, false);
-        c('note', 'text', true, false); c('erase', 'text', true, false);
-      }
-      if (caps.annotate && pdf) c('annList', 'text', true, false);
-      if (caps.export && pdf) c('export', 'text', true, false);
     }
     return out;
   }

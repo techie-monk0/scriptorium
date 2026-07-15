@@ -114,8 +114,9 @@
     // ── Global controls: side chevrons, A± font/zoom, keyboard ────────────────
     els.pgPrev.addEventListener('click', () => ctrl.prev());
     els.pgNext.addEventListener('click', () => ctrl.next());
-    els.fdec.addEventListener('click', () => ctrl.smaller());
-    els.finc.addEventListener('click', () => ctrl.bigger());
+    if (els.fdec) els.fdec.addEventListener('click', () => ctrl.smaller());
+    if (els.finc) els.finc.addEventListener('click', () => ctrl.bigger());
+    if (els.fitWidth) els.fitWidth.addEventListener('click', () => ctrl.fitWidth && ctrl.fitWidth());   // PDF: fit page width
 
     // ── Navigation history: "Back to where I was" (Apple Books style) ──────────
     // Record the current spot ONLY on a JUMP (bookmark / TOC / search / go-to / in-content link) —
@@ -473,11 +474,11 @@
       // Reflect the active tool on the toolbar + take over touch-action while a tool is live so
       // the browser doesn't scroll/select under a draw/mark gesture.
       [['select', els.selectBtn], ['underline', els.ulBtn], ['strikeout', els.strikeBtn],
-       ['ink', els.inkBtn], ['note', els.noteBtn], ['erase', els.eraseBtn],
-       ['highlight', els.hlBtn]].forEach(([name, btn]) => {
+       ['note', els.noteBtn], ['erase', els.eraseBtn],
+       ['highlight', els.hlBtn]].forEach(([name, btn]) => {          // no 'ink' — web has no ink tool
         if (btn) btn.classList.toggle('tool-active', tool === name);
       });
-      if (els.penOpts) els.penOpts.classList.toggle('hidden', tool !== 'ink');
+      if (els.penOpts) els.penOpts.classList.add('hidden');          // ink pen options never shown on web
     }
     // The overlay seam the engines hand to ReaderOverlay.create — pure host capabilities.
     const overlaySeam = popup ? {
@@ -516,7 +517,7 @@
         btn.addEventListener('click', () => { closeAllPanels(); setTool(tool === name ? 'select' : name); });
       };
       wire(els.hlBtn, 'highlight'); wire(els.ulBtn, 'underline'); wire(els.strikeBtn, 'strikeout');
-      wire(els.inkBtn, 'ink'); wire(els.noteBtn, 'note'); wire(els.eraseBtn, 'erase');
+      wire(els.noteBtn, 'note'); wire(els.eraseBtn, 'erase');   // no ink tool on web
       if (els.selectBtn) els.selectBtn.addEventListener('click', () => { closeAllPanels(); setTool('select'); });
 
       // Manual "refresh marks": re-pull the holding's annotations from the server and repaint, so a
@@ -877,6 +878,7 @@
         else zoomTo(Math.min(3, userZoom + 0.15)); };
       ctrl.smaller = () => { if (reflowIsOn()) { reflowFontPx = Math.max(12, reflowFontPx - 2); reflowDiv.style.fontSize = reflowFontPx + 'px'; }
         else zoomTo(Math.max(1, userZoom - 0.15)); };   // zoom-out stops at fit-width
+      ctrl.fitWidth = () => { if (!reflowIsOn()) zoomTo(1); };   // fit-to-width is userZoom 1
       // Bookmark a PDF spot by page number (the same opaque locator the position save uses).
       ctrl.current = () => ({ locator: String(cur), fraction: cur / numPages, label: 'Page ' + cur });
       ctrl.goto = (loc) => { const n = parseInt(loc, 10);

@@ -66,6 +66,7 @@ public struct ReaderView: View {
     @AppStorage("readerTheme") private var readerThemeRaw = "auto"   // "auto" follows the device theme
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.horizontalSizeClass) private var hSizeClass   // compact (phone) → tools collapse into ⋯
     @Environment(\.openURL) private var openURL
     @State private var showToc = false
     @State private var tocItems: [TocItem] = []
@@ -277,13 +278,6 @@ public struct ReaderView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     HStack(spacing: 8) {
                         ForEach(chromeControls.filter { $0.bar == "text" && !$0.overflow }) { barControl($0) }
-                        // EPUB has no shared "draw" control (the chrome gates it to PDF); the EPUB ink
-                        // toggle is a local iOS affordance so it needs no shared-spec/goldens change.
-                        if epubNavigator != nil, reader?.capabilities.canAnnotate == true {
-                            Button { toggleDraw() } label: {
-                                Image(systemName: drawMode ? "pencil.tip.crop.circle.fill" : "pencil.tip.crop.circle")
-                            }.accessibilityLabel("Draw")
-                        }
                         let overflow = chromeControls.filter { $0.overflow }
                         if !overflow.isEmpty { overflowMenu(overflow) }
                     }
@@ -428,6 +422,27 @@ public struct ReaderView: View {
         if reflowMode { reflowFontPt = max(reflowFontPt - 2, 12) } else { Task { await reader?.smaller() } }
     }
 
+    // MARK: PDF magnifier zoom (PDF-only; EPUB uses font A± above). Setting `scaleFactor` opts out of
+    // PDFView `autoScales`, so a chosen zoom sticks instead of snapping back on relayout.
+
+    private func zoomPdf(by factor: Double) {
+        guard let v = pdfNavigator?.pdfView else { return }
+        v.autoScales = false
+        let target = v.scaleFactor * CGFloat(factor)
+        v.scaleFactor = min(max(target, v.minScaleFactor), v.maxScaleFactor)
+    }
+
+    /// Fit the current page's *width* to the viewport (Preview "fit width"): `scaleFactor` maps page points
+    /// to view points, so the fill factor is viewWidth / pageWidth.
+    private func fitPdfWidth() {
+        guard let v = pdfNavigator?.pdfView, let page = v.currentPage else { return }
+        let pageWidth = page.bounds(for: v.displayBox).width
+        guard pageWidth > 0, v.bounds.width > 0 else { return }
+        v.autoScales = false
+        let target = (v.bounds.width - 8) / pageWidth   // small inset so the page isn't flush to the edges
+        v.scaleFactor = min(max(target, v.minScaleFactor), v.maxScaleFactor)
+    }
+
     /// Resolve the persisted reading theme to concrete colours (composition root: `ReadingPalette` is
     /// named only here, never in octavo) and hand them to the engine.
     private func applyReadingTheme() async {
@@ -474,20 +489,28 @@ public struct ReaderView: View {
     // MARK: Reader chrome — rendered from the SHARED spec (LibraryCore.readerChromeVM)
 
     /// This surface's declared capabilities → the shared spec → the ordered control list for both bars.
-    /// A capability iOS can't back yet (text-annotation, export) is passed `false`; the control stays in
-    /// the spec and lights up here the moment iOS declares support.
+    /// The annotation vocabulary (highlight/underline/strike/note/draw/erase) is uniform across formats;
+    /// each format *excludes* what it can't back yet — EPUB omits strike/note/erase (no CFI impl yet) and
+    /// export; PDF omits text-resize. On iPad these sit inline; on a phone (`compact`) they collapse to ⋯.
     private var chromeControls: [ReaderControl] {
         let pdf = pdfNavigator != nil
+        let canAnnotate = reader?.capabilities.canAnnotate == true
         let caps = ReaderCaps(
             ready: reader != nil,
             search: reader?.capabilities.canSearch == true,
             star: true,
-            annotate: (reader?.capabilities.canAnnotate == true) && pdf,
-            annotateText: (reader?.capabilities.canAnnotate == true) && pdf,   // selection-anchored marks
-            export: (reader?.capabilities.canExport == true) && pdf,          // share annotated.pdf
-            reflow: pdf
-        )
-        return readerChromeVM(format: pdf ? "pdf" : "epub", caps: caps, reflow: reflowMode, draw: drawMode)
+            resizeText: !pdf,                       // EPUB: font A± (text reflows)
+            zoom: pdf,                              // PDF: magnifier zoom ± + fit-width (no font resize)
+            reflow: pdf,                            // reflow-to-text is PDF-only
+            markText: canAnnotate,                  // highlight + underline: both formats (PDF quads / EPUB CFI)
+            strike: canAnnotate && pdf,             // strike/note/erase: PDF-only until EPUB CFI support lands
+            note: canAnnotate && pdf,
+            draw: canAnnotate,                      // ink: both formats on iOS
+            erase: canAnnotate && pdf,
+            annList: false,                         // iOS has no annotations-list surface yet
+            export: (reader?.capabilities.canExport == true) && pdf)
+        return readerChromeVM(format: pdf ? "pdf" : "epub", caps: caps,
+                              reflow: reflowMode, draw: drawMode, compact: hSizeClass == .compact)
     }
 
     /// A bar (leading/trailing) control, dispatched by its shared `id` to a native SwiftUI subcomponent.
@@ -507,6 +530,15 @@ public struct ReaderView: View {
             Button { smallerText() } label: { Text("A").font(.footnote) }.accessibilityLabel("Smaller text")
         case "textLarger":
             Button { biggerText() } label: { Text("A").font(.title3) }.accessibilityLabel("Larger text")
+        case "zoomOut":
+            Button { zoomPdf(by: 1 / 1.25) } label: { Image(systemName: "minus.magnifyingglass") }
+                .accessibilityLabel("Zoom out")
+        case "zoomIn":
+            Button { zoomPdf(by: 1.25) } label: { Image(systemName: "plus.magnifyingglass") }
+                .accessibilityLabel("Zoom in")
+        case "fitWidth":
+            Button { fitPdfWidth() } label: { Image(systemName: "arrow.left.and.right") }
+                .accessibilityLabel("Fit width")
         case "reflow":
             Button { toggleReflow() } label: {
                 Image(systemName: c.active ? "doc.richtext.fill" : "doc.plaintext")
@@ -517,6 +549,29 @@ public struct ReaderView: View {
         case "theme":
             Button { cycleTheme() } label: { Image(systemName: "circle.lefthalf.filled") }
                 .accessibilityLabel("Reading theme")
+        // Annotation vocabulary — rendered inline on a regular width (iPad); on a phone the spec marks
+        // these `overflow` and they render as menu rows in `menuControl` instead.
+        case "highlight":
+            Button { Task { await doHighlight() } } label: { Image(systemName: "highlighter") }
+                .accessibilityLabel("Highlight")
+        case "underline":
+            Button { Task { await doUnderline() } } label: { Image(systemName: "underline") }
+                .accessibilityLabel("Underline")
+        case "strike":
+            Button { Task { await addTextMark(.strikeout) } } label: { Image(systemName: "strikethrough") }
+                .accessibilityLabel("Strikethrough")
+        case "note":
+            Button { beginNote() } label: { Image(systemName: "note.text") }.accessibilityLabel("Note")
+        case "draw":
+            Button { toggleDraw() } label: {
+                Image(systemName: c.active ? "pencil.tip.crop.circle.fill" : "pencil.tip.crop.circle")
+            }.accessibilityLabel("Draw")
+        case "erase":
+            Button { Task { await eraseTextMarks() } } label: { Image(systemName: "eraser.line.dashed") }
+                .accessibilityLabel("Erase marks")
+        case "export":
+            Button { Task { await exportAnnotatedPdf() } } label: { Image(systemName: "square.and.arrow.up") }
+                .accessibilityLabel("Share annotated PDF")
         default:
             EmptyView()
         }
@@ -551,9 +606,9 @@ public struct ReaderView: View {
         case "bookmarkList":
             Button { Task { await openBookmarkList() } } label: { Label("Bookmarks", systemImage: "bookmark.circle") }
         case "highlight":
-            Button { Task { await addHighlight() } } label: { Label("Highlight", systemImage: "highlighter") }
+            Button { Task { await doHighlight() } } label: { Label("Highlight", systemImage: "highlighter") }
         case "underline":
-            Button { Task { await addTextMark(.underline) } } label: { Label("Underline", systemImage: "underline") }
+            Button { Task { await doUnderline() } } label: { Label("Underline", systemImage: "underline") }
         case "strike":
             Button { Task { await addTextMark(.strikeout) } } label: { Label("Strikethrough", systemImage: "strikethrough") }
         case "note":
@@ -565,6 +620,21 @@ public struct ReaderView: View {
         case "draw":
             Button { toggleDraw() } label: {
                 Label(c.active ? "Stop Drawing" : "Draw", systemImage: "pencil.tip.crop.circle")
+            }
+        // Mode-specific rows that collapse here on a phone (inline on iPad via `barControl`).
+        case "textSmaller":
+            Button { smallerText() } label: { Label("Smaller Text", systemImage: "textformat.size.smaller") }
+        case "textLarger":
+            Button { biggerText() } label: { Label("Larger Text", systemImage: "textformat.size.larger") }
+        case "zoomOut":
+            Button { zoomPdf(by: 1 / 1.25) } label: { Label("Zoom Out", systemImage: "minus.magnifyingglass") }
+        case "zoomIn":
+            Button { zoomPdf(by: 1.25) } label: { Label("Zoom In", systemImage: "plus.magnifyingglass") }
+        case "fitWidth":
+            Button { fitPdfWidth() } label: { Label("Fit Width", systemImage: "arrow.left.and.right") }
+        case "reflow":
+            Button { toggleReflow() } label: {
+                Label(c.active ? "Stop Reflow" : "Reflow to Text", systemImage: "doc.plaintext")
             }
         default:
             EmptyView()
@@ -906,6 +976,16 @@ public struct ReaderView: View {
     }
 
     private func addHighlight() async { await addTextMark(.highlight) }
+
+    /// Format-polymorphic highlight/underline: EPUB anchors to the selection's `cfiRange` (reflows with the
+    /// text), PDF to per-line quads. The shared `highlight`/`underline` controls route here so one menu row
+    /// works on both formats.
+    private func doHighlight() async {
+        if epubNavigator != nil { await addEpubTextMark(.highlight) } else { await addTextMark(.highlight) }
+    }
+    private func doUnderline() async {
+        if epubNavigator != nil { await addEpubTextMark(.underline) } else { await addTextMark(.underline) }
+    }
 
     /// EPUB text mark from the current selection — anchored by **cfiRange** (not quads), rendered via
     /// `EpubDecorationHost` (epub.js annotations). Highlight/underline only; strike/note are PDF-only.

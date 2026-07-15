@@ -25,6 +25,7 @@
     <div class="bar bar-text">
       <button type="button" class="fbtn small" id="fdec" title="Smaller text" aria-label="Smaller text">A</button>
       <button type="button" class="fbtn big" id="finc" title="Larger text" aria-label="Larger text">A</button>
+      {% if ext == 'pdf' %}<button type="button" class="fbtn" id="fitWidth" title="Fit page width" aria-label="Fit page width">↔</button>{% endif %}
       {% if ext == 'pdf' %}<button type="button" class="fbtn" id="reflowBtn" title="Reflow to text" aria-label="Reflow page to text" aria-pressed="false">¶</button>{% endif %}
       <button type="button" class="fbtn" id="gotoBtn" title="Go to page" aria-label="Go to page">⇥</button>
       <button type="button" class="fbtn" id="themeBtn" title="Reading theme" aria-label="Cycle reading theme">◐</button>
@@ -36,7 +37,7 @@
         <button type="button" class="fbtn tool" id="hlBtn" title="Highlight" aria-label="Highlight tool">🖍</button>
         <button type="button" class="fbtn tool" id="ulBtn" title="Underline" aria-label="Underline tool">U̲</button>
         <button type="button" class="fbtn tool" id="strikeBtn" title="Strikethrough" aria-label="Strikethrough tool">S̶</button>
-        <button type="button" class="fbtn tool" id="inkBtn" title="Draw / handwrite" aria-label="Draw tool">✎</button>
+        {# No ink/handwriting on web — ink annotation is an iOS-only capability. #}
         <button type="button" class="fbtn tool" id="noteBtn" title="Add a note" aria-label="Note tool">🅝</button>
         <button type="button" class="fbtn tool" id="eraseBtn" title="Erase" aria-label="Erase tool">⌫</button>
         <button type="button" class="fbtn" id="annBtn" title="Annotations" aria-label="Show annotations">▦</button>
@@ -167,8 +168,9 @@
         topbar:  document.querySelector('.topbar'),
         pgPrev:  document.getElementById('pgPrev'),
         pgNext:  document.getElementById('pgNext'),
-        fdec:    document.getElementById('fdec'),
-        finc:    document.getElementById('finc'),
+        fdec:    document.getElementById('fdec'),        // EPUB font A− / PDF zoom-out (engine relabels)
+        finc:    document.getElementById('finc'),        // EPUB font A+ / PDF zoom-in
+        fitWidth: document.getElementById('fitWidth'),   // PDF-only: reset zoom to fit page width
         bmAdd:   document.getElementById('bmAdd'),    // null for a read-only viewer (not rendered)
         bmList:  document.getElementById('bmList'),
         bmPanel: document.getElementById('bmPanel'),
@@ -186,7 +188,6 @@
         hlBtn:    document.getElementById('hlBtn'),
         ulBtn:    document.getElementById('ulBtn'),
         strikeBtn: document.getElementById('strikeBtn'),
-        inkBtn:   document.getElementById('inkBtn'),
         noteBtn:  document.getElementById('noteBtn'),
         eraseBtn: document.getElementById('eraseBtn'),
         annBtn:   document.getElementById('annBtn'),

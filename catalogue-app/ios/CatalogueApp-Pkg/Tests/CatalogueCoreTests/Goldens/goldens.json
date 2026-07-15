@@ -56,6 +56,24 @@
         "active": false
       },
       {
+        "id": "zoomOut",
+        "bar": "text",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "zoomIn",
+        "bar": "text",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "fitWidth",
+        "bar": "text",
+        "overflow": false,
+        "active": false
+      },
+      {
         "id": "reflow",
         "bar": "text",
         "overflow": false,
@@ -74,6 +92,54 @@
         "active": false
       },
       {
+        "id": "highlight",
+        "bar": "text",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "underline",
+        "bar": "text",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "strike",
+        "bar": "text",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "note",
+        "bar": "text",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "draw",
+        "bar": "text",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "erase",
+        "bar": "text",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "export",
+        "bar": "text",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "annList",
+        "bar": "text",
+        "overflow": true,
+        "active": false
+      },
+      {
         "id": "bookmarkAdd",
         "bar": "text",
         "overflow": true,
@@ -81,24 +147,6 @@
       },
       {
         "id": "bookmarkList",
-        "bar": "text",
-        "overflow": true,
-        "active": false
-      },
-      {
-        "id": "highlight",
-        "bar": "text",
-        "overflow": true,
-        "active": false
-      },
-      {
-        "id": "draw",
-        "bar": "text",
-        "overflow": true,
-        "active": false
-      },
-      {
-        "id": "annList",
         "bar": "text",
         "overflow": true,
         "active": false
@@ -130,21 +178,27 @@
         "active": false
       },
       {
-        "id": "textSmaller",
+        "id": "zoomOut",
         "bar": "text",
-        "overflow": false,
+        "overflow": true,
         "active": false
       },
       {
-        "id": "textLarger",
+        "id": "zoomIn",
         "bar": "text",
-        "overflow": false,
+        "overflow": true,
+        "active": false
+      },
+      {
+        "id": "fitWidth",
+        "bar": "text",
+        "overflow": true,
         "active": false
       },
       {
         "id": "reflow",
         "bar": "text",
-        "overflow": false,
+        "overflow": true,
         "active": true
       },
       {
@@ -160,169 +214,7 @@
         "active": false
       },
       {
-        "id": "bookmarkAdd",
-        "bar": "text",
-        "overflow": true,
-        "active": false
-      },
-      {
-        "id": "bookmarkList",
-        "bar": "text",
-        "overflow": true,
-        "active": false
-      },
-      {
         "id": "highlight",
-        "bar": "text",
-        "overflow": true,
-        "active": false
-      },
-      {
-        "id": "draw",
-        "bar": "text",
-        "overflow": true,
-        "active": true
-      },
-      {
-        "id": "annList",
-        "bar": "text",
-        "overflow": true,
-        "active": false
-      }
-    ],
-    [
-      {
-        "id": "done",
-        "bar": "general",
-        "overflow": false,
-        "active": false
-      },
-      {
-        "id": "toc",
-        "bar": "general",
-        "overflow": false,
-        "active": false
-      },
-      {
-        "id": "search",
-        "bar": "general",
-        "overflow": false,
-        "active": false
-      },
-      {
-        "id": "star",
-        "bar": "general",
-        "overflow": false,
-        "active": false
-      },
-      {
-        "id": "textSmaller",
-        "bar": "text",
-        "overflow": false,
-        "active": false
-      },
-      {
-        "id": "textLarger",
-        "bar": "text",
-        "overflow": false,
-        "active": false
-      },
-      {
-        "id": "goto",
-        "bar": "text",
-        "overflow": false,
-        "active": false
-      },
-      {
-        "id": "theme",
-        "bar": "text",
-        "overflow": false,
-        "active": false
-      },
-      {
-        "id": "bookmarkAdd",
-        "bar": "text",
-        "overflow": true,
-        "active": false
-      },
-      {
-        "id": "bookmarkList",
-        "bar": "text",
-        "overflow": true,
-        "active": false
-      }
-    ],
-    [
-      {
-        "id": "done",
-        "bar": "general",
-        "overflow": false,
-        "active": false
-      }
-    ],
-    [
-      {
-        "id": "done",
-        "bar": "general",
-        "overflow": false,
-        "active": false
-      },
-      {
-        "id": "toc",
-        "bar": "general",
-        "overflow": false,
-        "active": false
-      },
-      {
-        "id": "search",
-        "bar": "general",
-        "overflow": false,
-        "active": false
-      },
-      {
-        "id": "star",
-        "bar": "general",
-        "overflow": false,
-        "active": false
-      },
-      {
-        "id": "reflow",
-        "bar": "text",
-        "overflow": false,
-        "active": false
-      },
-      {
-        "id": "goto",
-        "bar": "text",
-        "overflow": false,
-        "active": false
-      },
-      {
-        "id": "theme",
-        "bar": "text",
-        "overflow": false,
-        "active": false
-      },
-      {
-        "id": "bookmarkAdd",
-        "bar": "text",
-        "overflow": true,
-        "active": false
-      },
-      {
-        "id": "bookmarkList",
-        "bar": "text",
-        "overflow": true,
-        "active": false
-      },
-      {
-        "id": "highlight",
-        "bar": "text",
-        "overflow": true,
-        "active": false
-      },
-      {
-        "id": "draw",
         "bar": "text",
         "overflow": true,
         "active": false
@@ -346,7 +238,19 @@
         "active": false
       },
       {
+        "id": "draw",
+        "bar": "text",
+        "overflow": true,
+        "active": true
+      },
+      {
         "id": "erase",
+        "bar": "text",
+        "overflow": true,
+        "active": false
+      },
+      {
+        "id": "export",
         "bar": "text",
         "overflow": true,
         "active": false
@@ -358,7 +262,297 @@
         "active": false
       },
       {
+        "id": "bookmarkAdd",
+        "bar": "text",
+        "overflow": true,
+        "active": false
+      },
+      {
+        "id": "bookmarkList",
+        "bar": "text",
+        "overflow": true,
+        "active": false
+      }
+    ],
+    [
+      {
+        "id": "done",
+        "bar": "general",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "toc",
+        "bar": "general",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "search",
+        "bar": "general",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "star",
+        "bar": "general",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "textSmaller",
+        "bar": "text",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "textLarger",
+        "bar": "text",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "goto",
+        "bar": "text",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "theme",
+        "bar": "text",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "highlight",
+        "bar": "text",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "underline",
+        "bar": "text",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "draw",
+        "bar": "text",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "bookmarkAdd",
+        "bar": "text",
+        "overflow": true,
+        "active": false
+      },
+      {
+        "id": "bookmarkList",
+        "bar": "text",
+        "overflow": true,
+        "active": false
+      }
+    ],
+    [
+      {
+        "id": "done",
+        "bar": "general",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "toc",
+        "bar": "general",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "search",
+        "bar": "general",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "star",
+        "bar": "general",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "textSmaller",
+        "bar": "text",
+        "overflow": true,
+        "active": false
+      },
+      {
+        "id": "textLarger",
+        "bar": "text",
+        "overflow": true,
+        "active": false
+      },
+      {
+        "id": "goto",
+        "bar": "text",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "theme",
+        "bar": "text",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "highlight",
+        "bar": "text",
+        "overflow": true,
+        "active": false
+      },
+      {
+        "id": "underline",
+        "bar": "text",
+        "overflow": true,
+        "active": false
+      },
+      {
+        "id": "draw",
+        "bar": "text",
+        "overflow": true,
+        "active": true
+      },
+      {
+        "id": "bookmarkAdd",
+        "bar": "text",
+        "overflow": true,
+        "active": false
+      },
+      {
+        "id": "bookmarkList",
+        "bar": "text",
+        "overflow": true,
+        "active": false
+      }
+    ],
+    [
+      {
+        "id": "done",
+        "bar": "general",
+        "overflow": false,
+        "active": false
+      }
+    ],
+    [
+      {
+        "id": "done",
+        "bar": "general",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "toc",
+        "bar": "general",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "search",
+        "bar": "general",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "star",
+        "bar": "general",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "zoomOut",
+        "bar": "text",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "zoomIn",
+        "bar": "text",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "fitWidth",
+        "bar": "text",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "reflow",
+        "bar": "text",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "goto",
+        "bar": "text",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "theme",
+        "bar": "text",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "highlight",
+        "bar": "text",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "underline",
+        "bar": "text",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "strike",
+        "bar": "text",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "note",
+        "bar": "text",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "erase",
+        "bar": "text",
+        "overflow": false,
+        "active": false
+      },
+      {
         "id": "export",
+        "bar": "text",
+        "overflow": false,
+        "active": false
+      },
+      {
+        "id": "annList",
+        "bar": "text",
+        "overflow": true,
+        "active": false
+      },
+      {
+        "id": "bookmarkAdd",
+        "bar": "text",
+        "overflow": true,
+        "active": false
+      },
+      {
+        "id": "bookmarkList",
         "bar": "text",
         "overflow": true,
         "active": false

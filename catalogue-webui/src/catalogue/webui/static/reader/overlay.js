@@ -263,11 +263,10 @@
 
     // ── ink + note + erase via pointer events ─────────────────────────────────
     let drawing = null;   // {pageDiv, pts, W, H, previewSvg, previewPath}
-    function isDrawPointer(ev) {
-      if (ev.pointerType === 'pen') return true;          // pencil always draws (pencil-smart)
-      if (ev.pointerType === 'touch') return false;       // finger never draws (it scrolls)
-      return tool === 'ink';                              // mouse follows the toolbar
-    }
+    // Web has no ink capability — the 'ink' tool is never wired and a pen no longer auto-draws (it scrolls
+    // / selects like any pointer). Ink annotations from another device still RENDER; they just can't be
+    // created here. `tool === 'ink'` is unreachable, so these keep drawing fully disabled.
+    function isDrawPointer(ev) { return tool === 'ink'; }
     function rejectTouch(ev) { return ev.pointerType === 'touch' && ctx.penActive && ctx.penActive(); }
 
     ctx.viewer.addEventListener('pointerdown', (ev) => {
@@ -275,8 +274,7 @@
       if (tool === 'erase') { eraseAt(ev); return; }
       if (tool === 'note') { placeNote(ev); return; }
       if (tool === 'underline' || tool === 'strikeout') { if (bandStart(ev)) ev.preventDefault(); return; }
-      const inkMode = (tool === 'ink') || (ev.pointerType === 'pen' && tool !== 'underline' &&
-                       tool !== 'strikeout' && tool !== 'highlight' && tool !== 'select');
+      const inkMode = (tool === 'ink');                       // no pen auto-ink on web
       if (!inkMode || !isDrawPointer(ev)) return;
       const pageDiv = pageDivFromEl(ev.target); if (!pageDiv) return;
       const W = pageW(pageDiv), H = pageH(pageDiv);
