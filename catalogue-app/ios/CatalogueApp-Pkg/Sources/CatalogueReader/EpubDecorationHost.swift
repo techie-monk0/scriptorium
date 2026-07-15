@@ -11,18 +11,28 @@ import OctavoEPUB
 @MainActor
 public final class EpubDecorationHost: DecorationHost {
     private let navigator: EpubWebNavigator
-    private var applied: [(type: String, cfiRange: String)] = []
+    private var applied: [Mark] = []
 
     public init(navigator: EpubWebNavigator) { self.navigator = navigator }
 
+    /// One epub.js text mark: its type + CFI anchor (its identity) plus colour. `Equatable` on all
+    /// three, but identity for the diff is `(type, cfiRange)` — see `diff`.
+    struct Mark: Equatable { let type: String; let cfiRange: String; let color: String? }
+
     public func apply(_ decorations: [Decoration]) {
-        clear()
-        for d in decorations {
-            guard let type = Self.epubType(d.style),
-                  let cfi = d.cfiRange, !cfi.isEmpty else { continue }
-            applied.append((type, cfi))
-            Task { await navigator.addTextMark(type: type, cfiRange: cfi, color: d.color) }
+        let next: [Mark] = decorations.compactMap { d in
+            guard let type = Self.epubType(d.style), let cfi = d.cfiRange, !cfi.isEmpty else { return nil }
+            return Mark(type: type, cfiRange: cfi, color: d.color)
         }
+        // DIFF instead of clear-all-then-re-add. `apply` runs on EVERY page turn (the host re-renders
+        // on each relocation), but epub.js already re-injects its own annotations when a section
+        // renders — so removing and re-adding every mark each time only churns epub.js and can race a
+        // just-rendered mark back off the page (which is why marks "didn't show"). Only touch epub.js
+        // for marks that actually appeared or disappeared.
+        let (toAdd, toRemove) = Self.diff(from: applied, to: next)
+        applied = next
+        for m in toRemove { Task { await navigator.removeTextMark(type: m.type, cfiRange: m.cfiRange) } }
+        for m in toAdd { Task { await navigator.addTextMark(type: m.type, cfiRange: m.cfiRange, color: m.color) } }
     }
 
     public func clear() {
@@ -31,6 +41,17 @@ public final class EpubDecorationHost: DecorationHost {
         for m in toRemove {
             Task { await navigator.removeTextMark(type: m.type, cfiRange: m.cfiRange) }
         }
+    }
+
+    /// Pure set-diff keyed by `(type, cfiRange)` (a mark's identity): what's in `to` but not `from` is
+    /// added; what's in `from` but not `to` is removed. `nonisolated` so it's unit-testable off-actor.
+    nonisolated static func diff(from: [Mark], to: [Mark]) -> (add: [Mark], remove: [Mark]) {
+        func key(_ m: Mark) -> String { m.type + "\u{1}" + m.cfiRange }
+        let fromKeys = Set(from.map(key))
+        let toKeys = Set(to.map(key))
+        let add = to.filter { !fromKeys.contains(key($0)) }
+        let remove = from.filter { !toKeys.contains(key($0)) }
+        return (add, remove)
     }
 
     /// The epub.js annotation type for a style, or nil to skip (strikethrough/note unsupported here).

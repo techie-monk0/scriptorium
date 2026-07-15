@@ -57,8 +57,9 @@ let package = Package(
         .testTarget(name: "CatalogueReaderTests", dependencies: [
             "CatalogueReader", "CatalogueReaderWire",
             .product(name: "Octavo", package: "octavo-swift"),
+            .product(name: "OctavoAdapters", package: "octavo-swift"),
             .product(name: "Postilla", package: "postilla-swift"),
-        ]),
+        ], resources: [.copy("Fixtures")]),
         .testTarget(name: "CatalogueReaderWireTests", dependencies: [
             "CatalogueReaderWire", .product(name: "Postilla", package: "postilla-swift"),
         ], resources: [.copy("Goldens")]),

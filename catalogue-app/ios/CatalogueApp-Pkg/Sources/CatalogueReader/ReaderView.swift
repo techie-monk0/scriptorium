@@ -30,6 +30,7 @@ public struct ReaderView: View {
     private let readingStore: CatalogueReadingStore
     private let annotations: any AnnotationStore
     private let bookmarks: any BookmarkStore
+    private let settingsStore: ReaderSettingsStore
     // A host-injected top-bar accessory (ports-and-adapters: the reader core stays ignorant of what it
     // is — the catalogue layer drops in the star toggle here, a test/preview injects nothing).
     private let topBarAccessory: AnyView
@@ -76,6 +77,7 @@ public struct ReaderView: View {
     @State private var noteMarks: [Annotation] = []                // notes render as an `MarkerOverlay` layer, not marks
     @State private var epubRelocateToken = 0                       // bumped on EPUB relocation to re-place note markers
     @State private var epubSelection: (cfiRange: String, text: String)?   // EPUB: last text selection
+    @State private var pdfSelectionActive = false                         // PDF: a non-empty text selection exists
     @State private var shareItem: ShareItem?          // the annotated PDF to share (Phase 6)
     @State private var exportMessage: String?         // brief export failure notice
     @Binding private var showChrome: Bool     // Books-style: center-tap toggles the bars; owned by ReaderShell
@@ -101,7 +103,10 @@ public struct ReaderView: View {
     @State private var showGoto = false
     @State private var gotoPage = 1                 // PDF: target page
     @State private var gotoFraction = 0.0           // EPUB: target position (0…1)
-    @AppStorage("readerReflowFontPt") private var reflowFontPt = 18.0
+    // Per-document reading settings (font size / zoom / reflow size) — remembered per book via
+    // `settingsStore`, restored on open. (Reading THEME stays global — see `readerThemeRaw`.)
+    @State private var reflowFontPt = 18.0     // PDF reflow-to-text font pt (per-document)
+    @State private var epubFontPct = 100       // EPUB font percent (per-document)
     @Environment(\.dismiss) private var dismiss
 
     /// `annotations` defaults to **`ReaderSync`** over the endpoint (marks persist + sync via
@@ -109,9 +114,11 @@ public struct ReaderView: View {
     public init(holding: Holding, title: String, endpoint: any ServerEndpoint, readingStore: CatalogueReadingStore,
                 showChrome: Binding<Bool> = .constant(true),
                 annotations: (any AnnotationStore)? = nil, bookmarks: (any BookmarkStore)? = nil,
+                settingsStore: ReaderSettingsStore = ReaderSettingsStore(),
                 topBarAccessory: AnyView = AnyView(EmptyView())) {
         self.holding = holding; self.title = title; self.endpoint = endpoint
         self.readingStore = readingStore
+        self.settingsStore = settingsStore
         self._showChrome = showChrome
         // Local-first: marks persist to a device file (survive relaunch even offline) AND mirror to the
         // server via ReaderSync, with an outbox that flushes offline marks on reconnect.
@@ -202,6 +209,9 @@ public struct ReaderView: View {
                         // JS→binding toggle didn't fire). Simultaneous, so it doesn't block the web view;
                         // in-content JS still handles links.
                         .simultaneousGesture(TapGesture().onEnded {
+                            // A blank tap dismisses any active selection (so the mark bar closes and
+                            // paging is unblocked) and toggles the bars.
+                            if epubSelection != nil { epubSelection = nil }
                             withAnimation(.easeInOut(duration: 0.2)) { showChrome.toggle() }
                         })
                 } else if let errorText {
@@ -267,31 +277,22 @@ public struct ReaderView: View {
                 }
             }
             .overlay(alignment: .top) {
-                // EPUB text marks are selection-driven (the model web uses): selecting text surfaces a
-                // small Highlight/Underline bar. epub.js has no native strikethrough/note, so those stay
-                // PDF-only for now.
-                if epubSelection != nil && epubNavigator != nil {
-                    HStack(spacing: 16) {
-                        Button { Task { await addEpubTextMark(.highlight) } } label: {
-                            Label("Highlight", systemImage: ReaderIcons.sf("highlight"))
-                        }
-                        Button { Task { await addEpubTextMark(.underline) } } label: {
-                            Label("Underline", systemImage: ReaderIcons.sf("underline"))
-                        }
-                        // Note anchors to the selection's CFI (the standard EPUB pointer) and renders as an
-                        // `MarkerOverlay` marker — the EPUB entry point, since epub.js has no in-book note.
-                        Button { beginNote() } label: {
-                            Label("Note", systemImage: ReaderIcons.sf("note"))
-                        }
-                        Button { epubSelection = nil } label: { Image(systemName: "xmark") }
-                            .foregroundStyle(.secondary)
-                    }
-                    .font(.footnote.weight(.medium))
-                    .padding(.horizontal, 16).padding(.vertical, 10)
-                    .background(.ultraThinMaterial, in: Capsule())
-                    .shadow(radius: 4, y: 2)
-                    .padding(.top, 8)
-                    .transition(.move(edge: .top).combined(with: .opacity))
+                // Selection-driven mark bar: selecting text surfaces the SAME annotation controls the
+                // toolbar shows for this format — rendered from the shared chrome spec's `selectionAction`
+                // subset (highlight/underline/strike/note), so the bar and the toolbar can't drift when a
+                // mark is added/removed. PDF and EPUB both get it; each shows only the marks its
+                // capabilities back (EPUB has no strikethrough), and the icons come from the same
+                // `ReaderIcons` source the toolbar uses.
+                if reader != nil, !drawMode, !reflowMode, hasTextSelection, !selectionMarkControls.isEmpty {
+                    selectionMarkBar
+                }
+            }
+            // A PDF text selection drives the same bar (EPUB's arrives via `onSelection`). PDFKit posts
+            // this whenever the selection changes; treat a non-empty selection as active.
+            .onReceive(NotificationCenter.default.publisher(for: .PDFViewSelectionChanged)) { _ in
+                let active = (pdfNavigator?.pdfView.currentSelection?.string?.isEmpty == false)
+                if active != pdfSelectionActive {
+                    withAnimation(.easeInOut(duration: 0.15)) { pdfSelectionActive = active }
                 }
             }
             .sheet(isPresented: $showGoto) { gotoSheet }
@@ -386,6 +387,7 @@ public struct ReaderView: View {
             await pullMarks(reset: true)
             await checkResume()          // offer to jump to a further position from another device
             await applyReadingTheme()
+            await restoreSettings()      // per-document font size / zoom / reflow size
         } catch {
             errorText = (error as? LocalizedError)?.errorDescription ?? String(describing: error)
         }
@@ -439,7 +441,10 @@ public struct ReaderView: View {
             self.locLabel = Self.label(for: loc)
             if self.reflowMode { self.updateReflow() }   // page turned in reflow mode → re-extract
             // EPUB is paginated: re-place CFI-anchored marks/ink on the newly displayed page.
-            if self.epubNavigator != nil { self.renderMarks(); self.epubRelocateToken &+= 1 }
+            if self.epubNavigator != nil {
+                self.epubSelection = nil   // a page change makes any pending selection stale
+                self.renderMarks(); self.epubRelocateToken &+= 1
+            }
         }
         if let loc = reader?.currentLocation { locLabel = Self.label(for: loc) }
     }
@@ -464,10 +469,39 @@ public struct ReaderView: View {
     }
 
     private func biggerText() {
-        if reflowMode { reflowFontPt = min(reflowFontPt + 2, 32) } else { Task { await reader?.bigger() } }
+        if reflowMode {
+            reflowFontPt = min(reflowFontPt + 2, 32); saveSettings(.init(reflowFontPt: reflowFontPt))
+        } else if epubNavigator != nil {
+            epubFontPct = min(epubFontPct + 10, 250)
+            Task { await epubNavigator?.setFontPercent(epubFontPct) }
+            saveSettings(.init(epubFontPct: epubFontPct))
+        } else { Task { await reader?.bigger() } }
     }
     private func smallerText() {
-        if reflowMode { reflowFontPt = max(reflowFontPt - 2, 12) } else { Task { await reader?.smaller() } }
+        if reflowMode {
+            reflowFontPt = max(reflowFontPt - 2, 12); saveSettings(.init(reflowFontPt: reflowFontPt))
+        } else if epubNavigator != nil {
+            epubFontPct = max(epubFontPct - 10, 60)
+            Task { await epubNavigator?.setFontPercent(epubFontPct) }
+            saveSettings(.init(epubFontPct: epubFontPct))
+        } else { Task { await reader?.smaller() } }
+    }
+
+    /// Restore this document's saved reading settings on open (font size / reflow size). Reading THEME
+    /// stays global (see `applyReadingTheme`); position is restored separately by octavo.
+    private func restoreSettings() async {
+        let s = await settingsStore.get(pubId)
+        if let rp = s.reflowFontPt { reflowFontPt = rp }
+        if epubNavigator != nil, let p = s.epubFontPct {
+            epubFontPct = p
+            if p != 100 { await epubNavigator?.setFontPercent(p) }
+        }
+    }
+
+    /// Persist a per-document settings change (merge — only the set fields overwrite).
+    private func saveSettings(_ change: ReaderSettings) {
+        let id = pubId
+        Task { await settingsStore.update(id, change) }
     }
 
     // MARK: PDF magnifier zoom (PDF-only; EPUB uses font A± above). Setting `scaleFactor` opts out of
@@ -518,7 +552,10 @@ public struct ReaderView: View {
     private var pageSwipe: some Gesture {
         DragGesture(minimumDistance: 40)
             .onEnded { value in
-                guard reader != nil,
+                // Don't page while text is selected: dragging a selection HANDLE is a horizontal drag
+                // too, and would otherwise turn the page mid-selection (the "tap-to-select flips the
+                // page" bug). A tap or a page turn clears `epubSelection`, so paging resumes after.
+                guard reader != nil, epubSelection == nil,
                       abs(value.translation.width) > abs(value.translation.height),
                       abs(value.translation.width) > 60 else { return }
                 if value.translation.width < 0 { goNext() } else { goPrev() }
@@ -559,6 +596,79 @@ public struct ReaderView: View {
             export: (reader?.capabilities.canExport == true) && pdf)
         return readerChromeVM(format: pdf ? "pdf" : "epub", caps: caps,
                               reflow: reflowMode, draw: drawMode, compact: hSizeClass == .compact)
+    }
+
+    // MARK: Selection-driven mark bar — the SAME shared spec as the toolbar (its `selectionAction` subset)
+
+    /// The text-selection marks for this format, from the shared chrome spec (highlight/underline/strike/
+    /// note, gated by capability). The bar and the toolbar both derive from `chromeControls`, so a mark
+    /// added to the spec appears in both with the same icon and never drifts.
+    private var selectionMarkControls: [ReaderControl] { chromeControls.filter { $0.selectionAction } }
+
+    /// Is there a live text selection to mark? EPUB reports it via `onSelection`; PDF via PDFKit's
+    /// selection-changed notification.
+    private var hasTextSelection: Bool { epubSelection != nil || pdfSelectionActive }
+
+    /// The floating mark bar shown while text is selected. Renders the spec subset by `id` — the icon from
+    /// the same `ReaderIcons` source the toolbar uses — plus a dismiss button.
+    private var selectionMarkBar: some View {
+        // Capture the EPUB selection once so a stray webview tap that clears `epubSelection` can't null it
+        // out before an async mark action reads it (PDF reads its live selection at tap time instead).
+        let epubSel = epubSelection
+        return HStack(spacing: 16) {
+            ForEach(selectionMarkControls) { c in
+                Button { performSelectionMark(c.id, epubSel: epubSel) } label: {
+                    Image(systemName: ReaderIcons.sf(c.id, active: c.active))
+                }
+                .accessibilityLabel(Self.selectionMarkTitle(c.id))
+            }
+            Button { dismissTextSelection() } label: { Image(systemName: "xmark") }
+                .foregroundStyle(.secondary)
+                .accessibilityLabel("Dismiss")
+        }
+        .font(.footnote.weight(.medium))
+        .padding(.horizontal, 16).padding(.vertical, 10)
+        .background(.ultraThinMaterial, in: Capsule())
+        .shadow(radius: 4, y: 2)
+        .padding(.top, 8)
+        .transition(.move(edge: .top).combined(with: .opacity))
+    }
+
+    /// Dispatch a selection mark by shared `id`, routing to the format-appropriate action. Highlight/
+    /// underline use the captured EPUB selection when present (else the PDF quad path); strike is PDF-only
+    /// (never surfaces for EPUB); note anchors to whichever selection is live.
+    private func performSelectionMark(_ id: String, epubSel: (cfiRange: String, text: String)?) {
+        switch id {
+        case "highlight":
+            if let s = epubSel { Task { await addEpubTextMark(.highlight, s) } } else { Task { await addTextMark(.highlight) } }
+        case "underline":
+            if let s = epubSel { Task { await addEpubTextMark(.underline, s) } } else { Task { await addTextMark(.underline) } }
+        case "strike":
+            Task { await addTextMark(.strikeout) }
+        case "note":
+            beginNote(epubSel)
+        default:
+            break
+        }
+    }
+
+    /// Dismiss the current text selection (the bar's ✕) — clears whichever format's selection is live so
+    /// the bar hides and paging resumes.
+    private func dismissTextSelection() {
+        if epubSelection != nil { epubSelection = nil; Task { await epubNavigator?.clearSelection() } }
+        if pdfSelectionActive { pdfNavigator?.pdfView.clearSelection(); pdfSelectionActive = false }
+    }
+
+    /// A short human title for a selection-mark control. Falls back to the capitalized id so a mark newly
+    /// added to the spec still shows a label (its icon already comes from the shared config).
+    private static func selectionMarkTitle(_ id: String) -> String {
+        switch id {
+        case "highlight": return "Highlight"
+        case "underline": return "Underline"
+        case "strike": return "Strikethrough"
+        case "note": return "Note"
+        default: return id.prefix(1).uppercased() + id.dropFirst()
+        }
     }
 
     /// A bar (leading/trailing) control, dispatched by its shared `id` to a native SwiftUI subcomponent.
@@ -1103,22 +1213,30 @@ public struct ReaderView: View {
     /// text), PDF to per-line quads. The shared `highlight`/`underline` controls route here so one menu row
     /// works on both formats.
     private func doHighlight() async {
-        if epubNavigator != nil { await addEpubTextMark(.highlight) } else { await addTextMark(.highlight) }
+        if epubNavigator != nil { if let sel = epubSelection { await addEpubTextMark(.highlight, sel) } }
+        else { await addTextMark(.highlight) }
     }
     private func doUnderline() async {
-        if epubNavigator != nil { await addEpubTextMark(.underline) } else { await addTextMark(.underline) }
+        if epubNavigator != nil { if let sel = epubSelection { await addEpubTextMark(.underline, sel) } }
+        else { await addTextMark(.underline) }
     }
 
     /// EPUB text mark from the current selection — anchored by **cfiRange** (not quads), rendered via
     /// `EpubDecorationHost` (epub.js annotations). Highlight/underline only; strike/note are PDF-only.
     /// **Toggles**: re-applying the same kind to the same selection removes it instead of stacking.
-    private func addEpubTextMark(_ kind: AnnotationKind) async {
-        guard let sel = epubSelection, !sel.cfiRange.isEmpty,
-              let loc = currentLocation else { return }
+    /// Create an EPUB highlight/underline over `sel` (the selection is passed IN from the bar button,
+    /// captured when the bar was shown — so a stray webview tap that clears `epubSelection` can't null
+    /// it out before this runs). Then clear the webview selection (PDF does the analogous clearSelection)
+    /// so the blue selection doesn't linger. The locator falls back to the selection CFI if the current
+    /// reading position isn't known yet — the `cfiRange` is what anchors an EPUB mark, not the locator.
+    private func addEpubTextMark(_ kind: AnnotationKind, _ sel: (cfiRange: String, text: String)) async {
+        guard !sel.cfiRange.isEmpty else { return }
         epubSelection = nil
+        await epubNavigator?.clearSelection()
         let existing = marks.filter { $0.kind == kind && !$0.isTombstone && $0.cfiRange == sel.cfiRange }
         if !existing.isEmpty { await toggleOff(existing); return }
         let now = Date()
+        let loc = currentLocation ?? Locator(publicationId: pubId, format: .epub, locations: .init(cfi: sel.cfiRange))
         let mark = Annotation(publicationId: pubId, kind: kind, locator: loc,
                               cfiRange: sel.cfiRange,
                               color: kind == .highlight ? "#ffd54a" : "#ff3b30",
@@ -1190,11 +1308,13 @@ public struct ReaderView: View {
 
     /// Begin adding a note anchored to the current selection — PDF by page + the first line's top-left
     /// point, EPUB by the selection's CFI — then prompt for text.
-    private func beginNote() {
+    private func beginNote(_ captured: (cfiRange: String, text: String)? = nil) {
         noteEditing = nil
         noteDraft = ""
         if epubNavigator != nil {
-            guard let sel = epubSelection, !sel.cfiRange.isEmpty else { return }
+            guard let sel = captured ?? epubSelection, !sel.cfiRange.isEmpty else { return }
+            epubSelection = nil
+            Task { await epubNavigator?.clearSelection() }
             noteAnchor = nil; noteAnchorCfi = sel.cfiRange
             noteAnchorText = sel.text.isEmpty ? nil : sel.text   // the quote → Web Annotation TextQuote selector
             showNoteEntry = true
