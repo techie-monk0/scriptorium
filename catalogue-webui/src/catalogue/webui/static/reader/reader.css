@@ -225,7 +225,7 @@
       pointer-events: none; }
     .epub-ink { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 5;
       pointer-events: none; }
-    /* PDF note pin — a small marker at the note's anchor; click to edit/remove. */
+    /* PDF note marker — a small badge at the note's anchor; click to edit/remove. */
     .pdf-note { position: absolute; z-index: 4; transform: translate(-50%, -50%);
       background: #ffd54a; color: #222; border: none; border-radius: 50%;
       width: 1.4rem; height: 1.4rem; font-size: .8rem; line-height: 1; cursor: pointer;

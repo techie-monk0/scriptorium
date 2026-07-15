@@ -118,18 +118,18 @@
       }
       for (const a of (noteByPage.get(n) || [])) {
         let pt; try { pt = JSON.parse(a.rect); } catch (e) { pt = [0.5, 0.5]; }
-        const pin = document.createElement('button');
-        pin.className = 'pdf-note'; pin.textContent = '🅝';
-        pin.title = a.note_text || 'Note';
-        pin.style.left = ((pt[0] || 0.5) * W) + 'px'; pin.style.top = ((pt[1] || 0.5) * H) + 'px';
-        pin.addEventListener('click', (e) => {
+        const marker = document.createElement('button');
+        marker.className = 'pdf-note'; marker.textContent = '🅝';
+        marker.title = a.note_text || 'Note';
+        marker.style.left = ((pt[0] || 0.5) * W) + 'px'; marker.style.top = ((pt[1] || 0.5) * H) + 'px';
+        marker.addEventListener('click', (e) => {
           e.stopPropagation();
           ctx.editExisting(a, {
             onRemove: async () => { deindex(a); paintPage(d); try { await ctx.annotations.remove(a); } catch (x) {} },
             onSave: async (text) => { try { await ctx.annotations.update(a, { note_text: text }); a.note_text = text; } catch (x) {} paintPage(d); },
           });
         });
-        d.appendChild(pin);
+        d.appendChild(marker);
       }
     }
     function inkSvg(d) {
