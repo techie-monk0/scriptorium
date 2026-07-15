@@ -784,6 +784,9 @@
   // overflow; on a regular width (iPad / desktop) they sit inline in the trailing bar. The primary
   // controls (done/toc/search/star/goto/theme) and the secondary ones (bookmarks / annotation list) keep
   // a fixed placement regardless of width. ──
+  // The annotation controls that operate on a text selection (highlight/underline/strike/note). A
+  // selection-time popup renders this subset; the toolbar renders the full set. Both read it from here.
+  var SELECTION_MARKS = ['highlight', 'underline', 'strike', 'note'];
   function readerChromeVM(input) {
     input = input || {};
     var caps = input.caps || {};
@@ -791,7 +794,13 @@
     var compact = !!input.compact;   // narrow width → annotation + mode controls go to the ⋯ overflow
     var canEdit = !!(caps.markText || caps.strike || caps.note || caps.draw || caps.erase);  // any annotation ability
     var out = [];
-    function c(id, bar, overflow, active) { out.push({ id: id, bar: bar, overflow: !!overflow, active: !!active }); }
+    // The text-selection marks — the controls that act on a text selection, so a selection-time popup
+    // (iOS) can render EXACTLY this subset of the same spec the toolbar renders. Marking it here (once)
+    // is what keeps that popup from drifting out of sync with the toolbar when a mark is added/removed.
+    function c(id, bar, overflow, active) {
+      out.push({ id: id, bar: bar, overflow: !!overflow, active: !!active,
+                 selectionAction: SELECTION_MARKS.indexOf(id) >= 0 });
+    }
     // Annotation + mode-specific controls: inline on a regular width, collapsed into ⋯ on a phone.
     function tool(id, active) { c(id, 'text', compact, active); }
 

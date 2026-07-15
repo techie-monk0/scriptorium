@@ -2,14 +2,18 @@ import Foundation
 
 /// One control in the reader chrome spec (see `readerChromeVM`). `id` names the capability; `bar` is
 /// "general" (leading) or "text" (trailing); `overflow` means it collapses into the ⋯ menu; `active`
-/// means it is toggled on. A surface renders each control by `id` in its own toolkit.
+/// means it is toggled on. `selectionAction` marks a control that acts on a text selection
+/// (highlight/underline/strike/note) — the subset a selection-time popup renders, kept in the spec so
+/// that popup can't drift from the toolbar. A surface renders each control by `id` in its own toolkit.
 public struct ReaderControl: Equatable, Sendable, Identifiable {
     public let id: String
     public let bar: String
     public let overflow: Bool
     public let active: Bool
-    public init(id: String, bar: String, overflow: Bool, active: Bool) {
+    public let selectionAction: Bool
+    public init(id: String, bar: String, overflow: Bool, active: Bool, selectionAction: Bool = false) {
         self.id = id; self.bar = bar; self.overflow = overflow; self.active = active
+        self.selectionAction = selectionAction
     }
 }
 
@@ -47,13 +51,18 @@ public struct ReaderCaps: Equatable, Sendable {
 /// Capability-driven — no hardcoded format/surface checks. `compact` (phone / narrow width) collapses the
 /// annotation + mode-specific controls into the ⋯ overflow; on a regular width they sit inline. See the JS
 /// original for the full rationale.
+/// The annotation controls that operate on a text selection (highlight/underline/strike/note) — the
+/// subset a selection-time popup renders. 1:1 with `library-core.js` `SELECTION_MARKS`.
+public let selectionMarkIDs: Set<String> = ["highlight", "underline", "strike", "note"]
+
 public func readerChromeVM(format: String, caps: ReaderCaps,
                            reflow: Bool = false, draw: Bool = false,
                            compact: Bool = false) -> [ReaderControl] {
     let canEdit = caps.markText || caps.strike || caps.note || caps.draw || caps.erase   // any annotation ability
     var out: [ReaderControl] = []
     func c(_ id: String, _ bar: String, _ overflow: Bool = false, _ active: Bool = false) {
-        out.append(ReaderControl(id: id, bar: bar, overflow: overflow, active: active))
+        out.append(ReaderControl(id: id, bar: bar, overflow: overflow, active: active,
+                                 selectionAction: selectionMarkIDs.contains(id)))
     }
     // Annotation + mode-specific controls: inline on a regular width, collapsed into ⋯ on a phone.
     func tool(_ id: String, _ active: Bool = false) { c(id, "text", compact, active) }

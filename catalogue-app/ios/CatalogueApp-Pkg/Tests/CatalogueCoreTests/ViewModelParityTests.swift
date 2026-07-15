@@ -133,6 +133,8 @@ final class ViewModelParityTests: XCTestCase {
                 XCTAssertEqual(ctl.bar, expected[j]["bar"]?.stringValue, "chrome[\(i)][\(j)].bar")
                 XCTAssertEqual(ctl.overflow, expected[j]["overflow"]?.boolValue, "chrome[\(i)][\(j)].overflow")
                 XCTAssertEqual(ctl.active, expected[j]["active"]?.boolValue, "chrome[\(i)][\(j)].active")
+                XCTAssertEqual(ctl.selectionAction, expected[j]["selectionAction"]?.boolValue,
+                               "chrome[\(i)][\(j)].selectionAction")
             }
         }
     }

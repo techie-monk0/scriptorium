@@ -35,133 +35,155 @@
         "id": "done",
         "bar": "general",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "toc",
         "bar": "general",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "search",
         "bar": "general",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "star",
         "bar": "general",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "zoomOut",
         "bar": "text",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "zoomIn",
         "bar": "text",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "fitWidth",
         "bar": "text",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "reflow",
         "bar": "text",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "goto",
         "bar": "text",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "theme",
         "bar": "text",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "undo",
         "bar": "text",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "redo",
         "bar": "text",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "highlight",
         "bar": "text",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": true
       },
       {
         "id": "underline",
         "bar": "text",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": true
       },
       {
         "id": "strike",
         "bar": "text",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": true
       },
       {
         "id": "note",
         "bar": "text",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": true
       },
       {
         "id": "draw",
         "bar": "text",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "erase",
         "bar": "text",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "export",
         "bar": "text",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "annList",
         "bar": "text",
         "overflow": true,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "bookmarkAdd",
         "bar": "text",
         "overflow": true,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "bookmarkList",
         "bar": "text",
         "overflow": true,
-        "active": false
+        "active": false,
+        "selectionAction": false
       }
     ],
     [
@@ -169,133 +191,155 @@
         "id": "done",
         "bar": "general",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "toc",
         "bar": "general",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "search",
         "bar": "general",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "star",
         "bar": "general",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "zoomOut",
         "bar": "text",
         "overflow": true,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "zoomIn",
         "bar": "text",
         "overflow": true,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "fitWidth",
         "bar": "text",
         "overflow": true,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "reflow",
         "bar": "text",
         "overflow": true,
-        "active": true
+        "active": true,
+        "selectionAction": false
       },
       {
         "id": "goto",
         "bar": "text",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "theme",
         "bar": "text",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "undo",
         "bar": "text",
         "overflow": true,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "redo",
         "bar": "text",
         "overflow": true,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "highlight",
         "bar": "text",
         "overflow": true,
-        "active": false
+        "active": false,
+        "selectionAction": true
       },
       {
         "id": "underline",
         "bar": "text",
         "overflow": true,
-        "active": false
+        "active": false,
+        "selectionAction": true
       },
       {
         "id": "strike",
         "bar": "text",
         "overflow": true,
-        "active": false
+        "active": false,
+        "selectionAction": true
       },
       {
         "id": "note",
         "bar": "text",
         "overflow": true,
-        "active": false
+        "active": false,
+        "selectionAction": true
       },
       {
         "id": "draw",
         "bar": "text",
         "overflow": true,
-        "active": true
+        "active": true,
+        "selectionAction": false
       },
       {
         "id": "erase",
         "bar": "text",
         "overflow": true,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "export",
         "bar": "text",
         "overflow": true,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "annList",
         "bar": "text",
         "overflow": true,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "bookmarkAdd",
         "bar": "text",
         "overflow": true,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "bookmarkList",
         "bar": "text",
         "overflow": true,
-        "active": false
+        "active": false,
+        "selectionAction": false
       }
     ],
     [
@@ -303,91 +347,106 @@
         "id": "done",
         "bar": "general",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "toc",
         "bar": "general",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "search",
         "bar": "general",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "star",
         "bar": "general",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "textSmaller",
         "bar": "text",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "textLarger",
         "bar": "text",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "goto",
         "bar": "text",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "theme",
         "bar": "text",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "undo",
         "bar": "text",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "redo",
         "bar": "text",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "highlight",
         "bar": "text",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": true
       },
       {
         "id": "underline",
         "bar": "text",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": true
       },
       {
         "id": "draw",
         "bar": "text",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "bookmarkAdd",
         "bar": "text",
         "overflow": true,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "bookmarkList",
         "bar": "text",
         "overflow": true,
-        "active": false
+        "active": false,
+        "selectionAction": false
       }
     ],
     [
@@ -395,91 +454,106 @@
         "id": "done",
         "bar": "general",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "toc",
         "bar": "general",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "search",
         "bar": "general",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "star",
         "bar": "general",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "textSmaller",
         "bar": "text",
         "overflow": true,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "textLarger",
         "bar": "text",
         "overflow": true,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "goto",
         "bar": "text",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "theme",
         "bar": "text",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "undo",
         "bar": "text",
         "overflow": true,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "redo",
         "bar": "text",
         "overflow": true,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "highlight",
         "bar": "text",
         "overflow": true,
-        "active": false
+        "active": false,
+        "selectionAction": true
       },
       {
         "id": "underline",
         "bar": "text",
         "overflow": true,
-        "active": false
+        "active": false,
+        "selectionAction": true
       },
       {
         "id": "draw",
         "bar": "text",
         "overflow": true,
-        "active": true
+        "active": true,
+        "selectionAction": false
       },
       {
         "id": "bookmarkAdd",
         "bar": "text",
         "overflow": true,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "bookmarkList",
         "bar": "text",
         "overflow": true,
-        "active": false
+        "active": false,
+        "selectionAction": false
       }
     ],
     [
@@ -487,7 +561,8 @@
         "id": "done",
         "bar": "general",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": false
       }
     ],
     [
@@ -495,127 +570,148 @@
         "id": "done",
         "bar": "general",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "toc",
         "bar": "general",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "search",
         "bar": "general",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "star",
         "bar": "general",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "zoomOut",
         "bar": "text",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "zoomIn",
         "bar": "text",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "fitWidth",
         "bar": "text",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "reflow",
         "bar": "text",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "goto",
         "bar": "text",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "theme",
         "bar": "text",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "undo",
         "bar": "text",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "redo",
         "bar": "text",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "highlight",
         "bar": "text",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": true
       },
       {
         "id": "underline",
         "bar": "text",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": true
       },
       {
         "id": "strike",
         "bar": "text",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": true
       },
       {
         "id": "note",
         "bar": "text",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": true
       },
       {
         "id": "erase",
         "bar": "text",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "export",
         "bar": "text",
         "overflow": false,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "annList",
         "bar": "text",
         "overflow": true,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "bookmarkAdd",
         "bar": "text",
         "overflow": true,
-        "active": false
+        "active": false,
+        "selectionAction": false
       },
       {
         "id": "bookmarkList",
         "bar": "text",
         "overflow": true,
-        "active": false
+        "active": false,
+        "selectionAction": false
       }
     ]
   ],
