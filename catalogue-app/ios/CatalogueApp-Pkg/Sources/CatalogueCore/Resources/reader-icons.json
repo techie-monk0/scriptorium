@@ -89,6 +89,10 @@
     "sf": "square.and.arrow.up",
     "web": "⬇"
   },
+  "editOutline": {
+    "sf": "list.bullet.indent",
+    "web": "≣"
+  },
   "bookmarkAdd": {
     "sf": "bookmark",
     "web": "★"

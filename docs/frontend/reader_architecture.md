@@ -167,6 +167,64 @@ from the existing `ReadingStore`, not duplicated. Tabs come from `readerTabsVM`.
 
 ---
 
+## Persistent PDF writes — annotation flatten, outline authoring (shared mechanism)
+
+Most reader edits are *overlays*: highlights, bookmarks, and the reading position ride alongside the
+file and never change its bytes — which is what makes them cheap to sync and safe offline. A few
+features instead write a change **into** the PDF so any viewer (Preview, Acrobat, Apple Books) sees
+it, not just our reader: flattening annotations into the file, and **authoring a table-of-contents
+outline** the user edits. These all go through one shared mechanism, so the delicate "open the file,
+apply the change, save either a new copy or in place" envelope is written once and the features
+compose (write an outline *and* flatten annotations in a single save).
+
+Authoring stays overlay-first: the outline the user edits is kept as synced overlay data (like
+bookmarks — offline and multi-device for free) and only baked into the file bytes on an explicit
+"save into PDF" action. Swapping where the outline is stored, or adding another PDF-writing feature,
+touches only that feature's own adapter — never the shared writer or the other features.
+
+Reading the PDF's *embedded* outline is unrelated and needs none of this: it comes free with the
+cached file via octavo's `outline()` (`PdfKitNavigator` → `PDFDocument.outlineRoot`), works offline,
+and is identical on every device because it is part of the document.
+
+### Technical details
+
+Server side (`catalogue.webui`): `pdf_mutation.write_pdf(src, [mutations…], mode="copy"|"inplace")`
+is the shared executor — it owns opening the file, applying mutations in order, and saving
+(copy = new file with `garbage/deflate`; inplace = `incremental=True` so the original bytes/signature
+survive). Each feature is a `PdfMutation` (a `.apply(doc)` on an open PyMuPDF document):
+`annotate_export.AnnotationFlatten` (annotations → standard PDF constructs; `export_annotated` now
+delegates to the shared writer) and `outline_export.OutlineWrite` (entries → `doc.set_toc`). Where
+authored entries live is a separate seam — `outline_store.OutlineStore`: the real adapter is
+`ReaderStateOutlineStore` (over `reader_state`, so the outline is a `/sync/reader`-synced overlay like
+bookmarks — one wholesale `Outline` row per copy, LWW by a stable per-copy id), with an in-memory
+reference adapter for tests; the read side of the file's own embedded outline is
+`services.toc.extract_pdf_outline`. The bake routes are `GET /holding/<id>/outlined.pdf` (copy) and
+`POST …/outlined` (in-place, localhost-only), mirroring the annotated routes.
+
+**Done (server):** the shared write mechanism, the outline mutation, the synced `Outline` sync-of-record
+(wire contract **v2** — `outline` record + op), the DB-backed `OutlineStore`, and the bake routes.
+
+**Done (iOS client):** a shared `editOutline` control in `readerChromeVM` (JS source of truth + Swift
+port + goldens, so every surface gets the entry point); the client outline sync stack mirroring
+bookmarks — `OutlineSync` (transport over `/sync/reader`), `LocalOutlineStore` (durable offline outbox +
+`OutboxProbe`, folded into the "N unsynced" chip), the `OutlineEntry` wire codec, and `OutlineModel`
+(pure flatten of the embedded TOC to seed the editor). The reader presents a **unified "Contents" panel**
+(PDF-Expert style): one popup with a segmented **Bookmarks | Outline** picker, reached from a single ⋯
+"Contents" entry. Both tabs default to **tap-to-jump** (view mode); an **Edit/Done** toggle reveals the
+editing affordances — Bookmarks: Add / rename (tap a row) / delete / Clear All; Outline: add (focuses the
+new title) / rename / reorder / delete, with **Done** (or Close, or a tab switch) syncing the outline and
+**Save into PDF** baking it via `/holding/<id>/outlined.pdf`. Names are user-editable (a dialog for
+bookmarks, inline for outline); rows show the page number in small font. This consolidation is an
+**iOS rendering composition**: the shared `readerChromeVM` spec still lists `bookmarkAdd`/`bookmarkList`/
+`editOutline` as capabilities (iOS folds them into the one panel), so the web reader is unaffected;
+lifting the combined panel into the shared spec is a follow-up. The pure/
+sync/store logic is unit- + system-tested headlessly (`OutlineWireTests`, `OutlineModelTests`,
+`LocalOutlineStoreTests`, `OutlineSyncTests`, `ViewModelParityTests`); the SwiftUI editor sheet's
+rendering/interaction is only observable in the simulator (not asserted headlessly).
+
+**Not yet built:** the web/PWA renderer of the `editOutline` control (the shared spec now carries it, so
+it lights up when each web surface renders the sheet); Android.
+
 ## Composition-root decisions
 
 - **Native reader everywhere on iOS.** Tapping a book and the **Read** tab both open the *same*

@@ -28,7 +28,6 @@ the original incrementally (explicit opt-in).
 from __future__ import annotations
 
 import json
-import os
 
 
 def _color_rgb(hexstr, default=(1.0, 0.83, 0.29)):
@@ -83,25 +82,19 @@ def _draw_ink(page, ann, W, H):
         shape.commit()
 
 
-def export_annotated(src_path, annotations, *, out_path=None, mode="copy"):
-    """Write `src_path` (a PDF) with `annotations` (reader_state.Annotation DTOs) baked in.
+class AnnotationFlatten:
+    """A `PdfMutation` (`pdf_mutation.PdfMutation`) that bakes reader annotations into the PDF as
+    standard constructs. Only PDF-anchored kinds are applied (page is not None); EPUB/cfi-only marks
+    are skipped. This is the annotation feature's slice of the shared PDF-writing mechanism — the
+    open/save/copy-vs-in-place envelope lives in `write_pdf`, so this owns only the drawing."""
 
-    mode='copy'    → write to `out_path` (required), leaving the original untouched. Returns out_path.
-    mode='inplace' → save the marks back into `src_path` itself (incremental). Returns src_path.
+    def __init__(self, annotations):
+        self.annotations = annotations
 
-    Only PDF-anchored kinds are applied (page is not None); EPUB/cfi-only marks are skipped. The
-    caller owns choosing/serving the result.
-    """
-    import fitz
-    if mode not in ("copy", "inplace"):
-        raise ValueError("mode must be 'copy' or 'inplace'")
-    if mode == "copy" and not out_path:
-        raise ValueError("copy mode needs an out_path")
-
-    doc = fitz.open(src_path)
-    try:
+    def apply(self, doc):
+        import fitz
         npages = doc.page_count
-        for ann in annotations:
+        for ann in self.annotations:
             if ann.page is None:
                 continue                          # EPUB/cfi-only — not exportable to PDF
             idx = int(ann.page) - 1               # stored page is 1-based
@@ -134,14 +127,20 @@ def export_annotated(src_path, annotations, *, out_path=None, mode="copy"):
                 except Exception:
                     pass
 
-        if mode == "inplace":
-            doc.save(src_path, incremental=True, encryption=fitz.PDF_ENCRYPT_KEEP)
-            return src_path
-        os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
-        doc.save(out_path, garbage=3, deflate=True)
-        return out_path
-    finally:
-        doc.close()
+
+def export_annotated(src_path, annotations, *, out_path=None, mode="copy"):
+    """Write `src_path` (a PDF) with `annotations` (reader_state.Annotation DTOs) baked in.
+
+    mode='copy'    → write to `out_path` (required), leaving the original untouched. Returns out_path.
+    mode='inplace' → save the marks back into `src_path` itself (incremental). Returns src_path.
+
+    Only PDF-anchored kinds are applied (page is not None); EPUB/cfi-only marks are skipped. Delegates
+    the open/apply/save to the shared `pdf_mutation.write_pdf`, passing annotation-flattening as one
+    mutation — so this shares the exact copy/in-place envelope with outline authoring (and can be
+    composed with it in a single save).
+    """
+    from catalogue.webui.pdf_mutation import write_pdf
+    return write_pdf(src_path, [AnnotationFlatten(annotations)], out_path=out_path, mode=mode)
 
 
 def has_pdf_annotations(annotations) -> bool:

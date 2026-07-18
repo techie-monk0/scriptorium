@@ -11,7 +11,19 @@ public struct ReaderPullResponse: Decodable, Sendable {
     public var rev: Int
     public var annotations: [AnnotationRecord]?
     public var bookmarks: [BookmarkRecord]?
+    public var outlines: [OutlineRecord]?      // authored PDF outlines (wire contract v2)
     public var contract_version: Int?
+}
+
+/// One authored table-of-contents entry: a heading at `level` (>=1) pointing at 1-based `page`. The
+/// neutral shape shared by the wire, the local store, and the editor UI.
+public struct OutlineEntry: Codable, Equatable, Sendable {
+    public var level: Int
+    public var title: String
+    public var page: Int
+    public init(level: Int = 1, title: String, page: Int) {
+        self.level = level; self.title = title; self.page = page
+    }
 }
 
 /// POST `/sync/reader` body — a batch of upsert ops (annotations and/or bookmarks), discriminated by
@@ -47,6 +59,8 @@ public struct ReaderWireOp: Encodable, Equatable, Sendable {
     public var locator: String?
     public var fraction: Double?
     public var label: String?
+    // outline (entries is a JSON string of [OutlineEntry], mirroring how rect/ink ride as JSON strings)
+    public var entries: String?
     // common
     public var created_at: String?
     public var updated_at: String?
@@ -56,11 +70,13 @@ public struct ReaderWireOp: Encodable, Equatable, Sendable {
                 kind: String? = nil, cfi_range: String? = nil, page: Int? = nil, rect: String? = nil,
                 color: String? = nil, note_text: String? = nil, ink: String? = nil,
                 locator: String? = nil, fraction: Double? = nil, label: String? = nil,
+                entries: String? = nil,
                 created_at: String? = nil, updated_at: String? = nil, deleted_at: String? = nil) {
         self.type = type; self.id = id; self.holding_id = holding_id
         self.kind = kind; self.cfi_range = cfi_range; self.page = page; self.rect = rect
         self.color = color; self.note_text = note_text; self.ink = ink
         self.locator = locator; self.fraction = fraction; self.label = label
+        self.entries = entries
         self.created_at = created_at; self.updated_at = updated_at; self.deleted_at = deleted_at
     }
 }
@@ -89,6 +105,17 @@ public struct BookmarkRecord: Decodable, Sendable {
     public var locator: String?
     public var fraction: Double?
     public var label: String?
+    public var created_at: String?
+    public var updated_at: String?
+    public var deleted_at: String?
+    public var rev: Int?
+}
+
+/// One authored-outline row as the store serialises it (`entries` is a JSON string of `[OutlineEntry]`).
+public struct OutlineRecord: Decodable, Sendable {
+    public var id: String
+    public var holding_id: Int?
+    public var entries: String?
     public var created_at: String?
     public var updated_at: String?
     public var deleted_at: String?

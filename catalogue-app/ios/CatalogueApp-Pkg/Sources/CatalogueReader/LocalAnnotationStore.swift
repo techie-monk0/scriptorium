@@ -1,6 +1,7 @@
 import Foundation
 import Postilla
 import Octavo
+import CatalogueCore
 
 /// Local-first annotation store — the durable **offline outbox** for marks/ink. Every op is persisted to
 /// a JSON file *before* the network, and its id is queued in an outbox; a mark made **offline** therefore
@@ -11,7 +12,7 @@ import Octavo
 /// The annotation sibling of `LocalBookmarkStore`, plus a real outbox: previously the reader pushed
 /// straight to the server and kept nothing locally, so an offline mark was lost on relaunch and never
 /// retried. Now it's durable and self-heals on reconnect. Pure Foundation → unit-testable headlessly.
-public actor LocalAnnotationStore: AnnotationStore {
+public actor LocalAnnotationStore: AnnotationStore, OutboxProbe {
     private let fileURL: URL
     private let remote: (any AnnotationStore)?
     private var state: State?
@@ -58,18 +59,30 @@ public actor LocalAnnotationStore: AnnotationStore {
     }
 
     public func pull(publicationId: String, since rev: Int) async throws -> PullResult {
+        let s = loaded()
+        // Offline-first: return LOCAL marks IMMEDIATELY so a slow/unreachable server can never delay the
+        // reader's render (a hanging `remote.pull` was why marks only appeared minutes later, when a poll's
+        // network call finally completed). The server reconcile — fold in other devices' marks + flush the
+        // outbox — runs in the BACKGROUND; its result lands in the file and shows up on the next pull.
+        if remote != nil {
+            Task { await self.reconcileWithRemote(publicationId: publicationId) }
+        }
+        let ops = Array((s.marks[publicationId] ?? [:]).values)
+        return PullResult(rev: ops.map(\.rev).max() ?? 0, ops: ops)
+    }
+
+    /// Background reconcile: merge the server's marks into the local store and flush the outbox. Never
+    /// blocks a `pull`; failures are swallowed and retried on the next call. Internal (not private) so a
+    /// test can drive it deterministically — mirrors `LocalOutlineStore`.
+    func reconcileWithRemote(publicationId: String) async {
         var s = loaded()
         var pub = s.marks[publicationId] ?? [:]
-        // Fold in whatever the server has (a mark from another device)…
         if let remote, let r = try? await remote.pull(publicationId: publicationId, since: 0) {
             merge(r.ops, into: &pub)
             s.marks[publicationId] = pub
             persist(s)
         }
-        // …then flush the outbox — this is the reconnect sync of anything made offline.
-        s = await flush(publicationId: publicationId, s)
-        let ops = Array((s.marks[publicationId] ?? [:]).values)
-        return PullResult(rev: ops.map(\.rev).max() ?? 0, ops: ops)
+        _ = await flush(publicationId: publicationId, s)
     }
 
     public func push(publicationId: String, ops: [Annotation]) async throws -> PushResult {
@@ -79,9 +92,26 @@ public actor LocalAnnotationStore: AnnotationStore {
         s.marks[publicationId] = pub
         s.pending[publicationId, default: []].formUnion(ops.map { $0.id.uuidString })
         persist(s)                                        // durable + queued BEFORE the network
-        s = await flush(publicationId: publicationId, s) // attempt immediately (no-op when offline)
+        // Flush to the server in the BACKGROUND. `flush` awaits `remote.push`, which on a slow/timing-out
+        // server takes tens of seconds — and EVERY caller awaits `push` (add, erase, undo, redo, note…),
+        // so a synchronous flush blocked each of those (and the optimistic repaint behind it) until the
+        // timeout. The op is already durable + queued locally, so the reader never needs to wait; the
+        // outbox flushes best-effort in the background (mirrors `pull`'s background reconcile).
+        if remote != nil {
+            Task { await self.reconcileWithRemote(publicationId: publicationId) }
+        }
         let live = s.marks[publicationId] ?? [:]
         return PushResult(rev: live.values.map(\.rev).max() ?? 0, applied: ops.map { $0.id })
+    }
+
+    /// Total un-acked ops across every publication — the outbox depth the freshness chip shows as
+    /// "N unsynced". Read **fresh from disk** (not the memo) so a read-only probe instance — the one the
+    /// composition root owns, separate from the reader's writing instance — sees ops the reader just
+    /// queued (each `push` persists before returning, so the file is always current).
+    public func pendingWriteCount() -> Int {
+        let s = (try? Data(contentsOf: fileURL))
+            .flatMap { try? JSONDecoder().decode(State.self, from: $0) } ?? state ?? State()
+        return s.pending.values.reduce(0) { $0 + $1.count }
     }
 
     /// Push the publication's outbox to the server (idempotent LWW) and drop the ids it accepts. A

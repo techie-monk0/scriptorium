@@ -272,22 +272,36 @@ final class PdfScrollObserver: ObservableObject {
     @Published private(set) var tick = 0
     private var observations: [NSKeyValueObservation] = []
     private var attached = false
+    private var tickScheduled = false
 
     func attach(to pdfView: PDFView) {
         guard !attached, let sv = Self.scrollView(in: pdfView) else { return }
         attached = true
         observations = [
             sv.observe(\.contentOffset, options: [.new]) { [weak self] _, _ in
-                MainActor.assumeIsolated { self?.tick &+= 1 }        // contentOffset changes on the main thread
+                MainActor.assumeIsolated { self?.scheduleTick() }    // contentOffset changes on the main thread
             },
             sv.observe(\.zoomScale, options: [.new]) { [weak self] _, _ in
-                MainActor.assumeIsolated { self?.tick &+= 1 }
+                MainActor.assumeIsolated { self?.scheduleTick() }
             },
         ]
     }
 
     /// Coarse nudge from a notification (page flip / zoom) — a backstop when KVO couldn't attach.
-    func bump() { tick &+= 1 }
+    func bump() { scheduleTick() }
+
+    /// Publish the "re-track" tick on the NEXT main-actor tick, coalesced. The scroll view's
+    /// `contentOffset`/`zoomScale` change *during* the SwiftUI layout pass (mount, autoScales, settle),
+    /// and mutating `@Published tick` inline there triggers "Publishing changes from within view updates".
+    /// Deferring one tick moves it safely after the update; coalescing keeps a fast scroll to one bump/frame.
+    private func scheduleTick() {
+        guard !tickScheduled else { return }
+        tickScheduled = true
+        Task { @MainActor in
+            tickScheduled = false
+            tick &+= 1
+        }
+    }
 
     func detach() {
         observations.forEach { $0.invalidate() }

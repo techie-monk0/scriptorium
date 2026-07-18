@@ -540,6 +540,7 @@ struct ReadButton: View {
             // a book and tapping Read are identical. Opening this copy focuses/adds its tab.
             ReaderShell(open: OpenBook(holding: holding, title: title, eid: eid),
                         store: app.openSessions, endpoint: app.endpoint, readingStore: app.readingStore,
+                        settingsStore: app.settingsStore, historyStore: app.historyStore,
                         starAccessory: { e in e.map { AnyView(StarButton(eid: $0).environment(app)) } ?? AnyView(EmptyView()) })
         }
         #endif

@@ -14,12 +14,20 @@ private let panelEdgeMargin: Double = 6
     @Published private var regs: [String: Reg] = [:]
 
     /// Report a panel's dock state; pass `edge: nil` when it's floating or gone (drops it from every lane).
+    ///
+    /// The mutation is DEFERRED to the next main-actor tick: callers report from `onPreferenceChange` /
+    /// `onChange`, which SwiftUI runs *inside* the view-update cycle, and mutating the `@Published regs`
+    /// there triggers "Publishing changes from within view updates is not allowed" (and undefined
+    /// behaviour — e.g. dropped repaints). Deferring publishes the change cleanly after the update; the
+    /// guard keeps it idempotent so a settle can't loop.
     func report(id: String, edge: PanelEdge?, size: CGSize, anchor: DockAnchor, order: Int) {
-        if let edge {
-            let r = Reg(edge: edge, size: size, anchor: anchor, order: order)
-            if regs[id] != r { regs[id] = r }
-        } else if regs[id] != nil {
-            regs[id] = nil
+        let next: Reg? = edge.map { Reg(edge: $0, size: size, anchor: anchor, order: order) }
+        Task { @MainActor in
+            if let next {
+                if regs[id] != next { regs[id] = next }
+            } else if regs[id] != nil {
+                regs[id] = nil
+            }
         }
     }
 

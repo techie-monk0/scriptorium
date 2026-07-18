@@ -65,21 +65,25 @@ def register(app, ctx):
                     since = 0
                 bookmarks = [asdict(bm) for bm in store.bookmarks_since_for_holding(holding, since)]
                 annotations = [asdict(a) for a in store.annotations_since_for_holding(holding, since)]
+                outlines = [asdict(o) for o in store.outlines_since_for_holding(holding, since)]
             else:
                 bookmarks = [asdict(bm) for bm in store.bookmarks_for_holding(holding)]
                 annotations = [asdict(a) for a in store.annotations_for_holding(holding)]
+                one = store.outline_for_holding(holding)
+                outlines = [asdict(one)] if one else []
             return jsonify({"rev": store.cursor(),
                             "bookmarks": bookmarks, "annotations": annotations,
-                            **_contract_version()})
+                            "outlines": outlines, **_contract_version()})
         try:
             since = int(request.args.get("since", "0"))
         except (TypeError, ValueError):
             since = 0
         bookmarks = [asdict(bm) for bm in store.bookmarks_since(since)]
         annotations = [asdict(a) for a in store.annotations_since(since)]
+        outlines = [asdict(o) for o in store.outlines_since(since)]
         return jsonify({"rev": store.cursor(),
                         "bookmarks": bookmarks, "annotations": annotations,
-                        **_contract_version()})
+                        "outlines": outlines, **_contract_version()})
 
     @app.post("/sync/reader")
     def reader_sync_push():
@@ -105,6 +109,11 @@ def register(app, ctx):
                         kind=op.get("kind"), cfi_range=op.get("cfi_range"),
                         page=op.get("page"), rect=op.get("rect"), color=op.get("color"),
                         note_text=op.get("note_text"), ink=op.get("ink"),
+                        created_at=op.get("created_at"), updated_at=op.get("updated_at"),
+                        deleted_at=op.get("deleted_at"))
+                elif kind == "outline":
+                    row = store.apply_outline(
+                        id=oid, holding_id=op.get("holding_id"), entries=op.get("entries"),
                         created_at=op.get("created_at"), updated_at=op.get("updated_at"),
                         deleted_at=op.get("deleted_at"))
                 else:

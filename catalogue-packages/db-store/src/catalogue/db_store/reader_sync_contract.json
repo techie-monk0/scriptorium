@@ -1,7 +1,7 @@
 {
   "contract": "catalogue.reader_sync",
-  "version": 1,
-  "description": "The stable wire surface for offline-first reader-state sync (bookmarks + annotations) over GET/POST /sync/reader. Normative prose: docs/frontend/sync_architecture.md (Shape B). This descriptor is language-neutral on purpose: every client (web reader, PWA, the native app's postilla AnnotationStore adapter) targets THIS, not the reader_sync.py implementation, and verifies its version without importing catalogue code. Reading position is a separate surface (Shape C: /holding/<id>/position) and is NOT covered here.",
+  "version": 2,
+  "description": "The stable wire surface for offline-first reader-state sync (bookmarks + annotations + authored PDF outlines) over GET/POST /sync/reader. Normative prose: docs/frontend/sync_architecture.md (Shape B). This descriptor is language-neutral on purpose: every client (web reader, PWA, the native app's postilla AnnotationStore adapter) targets THIS, not the reader_sync.py implementation, and verifies its version without importing catalogue code. Reading position is a separate surface (Shape C: /holding/<id>/position) and is NOT covered here.",
   "identity_key": "id",
   "cursor": "rev",
   "cursor_semantics": "Monotonic integer. A pull returns the server cursor; a delta pull with ?since=<rev> returns only rows with rev > since, INCLUDING tombstones, so a deletion on one device propagates instead of reappearing.",
@@ -19,14 +19,15 @@
       "response": {
         "rev": "server cursor (int)",
         "bookmarks": "array of bookmark records (see records.bookmark)",
-        "annotations": "array of annotation records (see records.annotation)"
+        "annotations": "array of annotation records (see records.annotation)",
+        "outlines": "array of outline records (see records.outline); added in version 2 — older clients ignore it"
       }
     },
     "push": {
       "method": "POST",
       "path": "/sync/reader",
       "request": {
-        "ops": "array of {type: 'bookmark'|'annotation', ...op fields}; each is an idempotent LWW upsert keyed by id"
+        "ops": "array of {type: 'bookmark'|'annotation'|'outline', ...op fields}; each is an idempotent LWW upsert keyed by id"
       },
       "response": {
         "rev": "server cursor (int)",
@@ -75,6 +76,21 @@
         "content_hash": "holding version token for orphan relink; never a join key"
       },
       "required": ["id", "rev"]
+    },
+    "outline": {
+      "source": "catalogue.db_store.reader_state.Outline",
+      "purpose": "A pull row for one copy's authored PDF outline (whole TOC as a unit, LWW).",
+      "fields": {
+        "id": "client-minted, stable per copy (e.g. 'outline:holding:<n>') so devices converge",
+        "holding_id": "the copy this outline belongs to (int) — may be null on a tombstone",
+        "entries": "JSON array of {level:int>=1, title:str, page:int (1-based)} — the whole outline",
+        "created_at": "ISO-8601 client timestamp",
+        "updated_at": "ISO-8601 client timestamp (LWW basis)",
+        "deleted_at": "ISO-8601 tombstone timestamp; null when live",
+        "rev": "server-assigned monotonic revision (int)",
+        "content_hash": "holding version token for orphan relink; never a join key"
+      },
+      "required": ["id", "rev"]
     }
   },
   "ops": {
@@ -88,6 +104,12 @@
       "applies_via": "catalogue.db_store.reader_state.ReaderStateStore.apply_annotation",
       "purpose": "A push op that upserts an annotation (LWW by id).",
       "fields": ["id", "holding_id", "kind", "cfi_range", "page", "rect", "color", "note_text", "ink", "created_at", "updated_at", "deleted_at", "content_hash"],
+      "required": ["type", "id"]
+    },
+    "outline": {
+      "applies_via": "catalogue.db_store.reader_state.ReaderStateStore.apply_outline",
+      "purpose": "A push op that upserts one copy's whole outline (LWW by id).",
+      "fields": ["id", "holding_id", "entries", "created_at", "updated_at", "deleted_at", "content_hash"],
       "required": ["type", "id"]
     }
   }

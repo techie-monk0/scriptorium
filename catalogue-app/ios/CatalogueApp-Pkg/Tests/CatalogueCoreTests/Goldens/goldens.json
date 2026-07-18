@@ -172,6 +172,13 @@
         "selectionAction": false
       },
       {
+        "id": "editOutline",
+        "bar": "text",
+        "overflow": true,
+        "active": false,
+        "selectionAction": false
+      },
+      {
         "id": "bookmarkAdd",
         "bar": "text",
         "overflow": true,

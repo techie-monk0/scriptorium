@@ -1,6 +1,7 @@
 #if canImport(UIKit)
 import UIKit
 import PDFKit
+import os
 import Octavo
 import Postilla
 
@@ -17,6 +18,10 @@ public final class PdfDecorationHost: DecorationHost {
 
     public func apply(_ decorations: [Decoration]) {
         clear()
+        defer {
+            nudgeRedraw()
+            ReaderLog.annotations.info("PdfDecorationHost.apply: decorations=\(decorations.count) drawn=\(self.drawn.count) doc=\(self.pdfView.document != nil)")
+        }
         guard let doc = pdfView.document else { return }
         for d in decorations {
             let index = d.locator.locations.position ?? d.locator.locations.page.map { max(0, $0 - 1) }
@@ -56,8 +61,22 @@ public final class PdfDecorationHost: DecorationHost {
     }
 
     public func clear() {
-        for (page, ann) in drawn { page.removeAnnotation(ann) }
+        if !drawn.isEmpty { ReaderLog.annotations.info("PdfDecorationHost.clear removing=\(self.drawn.count)") }
+        // `removeAnnotation` alone updates the page model but PDFView keeps the mark baked in the page's
+        // cached tile, so an undone/erased highlight lingers until a re-tile. Flipping `shouldDisplay`
+        // posts an annotation-changed notification that forces a re-composite without it (the same proven
+        // trick `PdfInkHost` uses for ink).
+        for (page, ann) in drawn { ann.shouldDisplay = false; page.removeAnnotation(ann) }
         drawn.removeAll()
+    }
+
+    /// PDFKit does not reliably repaint after a `PDFPage` annotation add/remove that isn't tied to a user
+    /// gesture — `setNeedsDisplay` leaves the cached page tile stale, so an undone highlight lingers and
+    /// marks re-added on a fresh (tab-switched) view don't show until a scroll. `layoutDocumentView`
+    /// re-tiles the document and reliably repaints the annotation change. Position-preserving, and this
+    /// only runs on mark add/remove/pull (never during live ink drawing), so there's no jank.
+    private func nudgeRedraw() {
+        pdfView.layoutDocumentView()
     }
 
     private func subtype(_ style: Decoration.Style) -> PDFAnnotationSubtype {

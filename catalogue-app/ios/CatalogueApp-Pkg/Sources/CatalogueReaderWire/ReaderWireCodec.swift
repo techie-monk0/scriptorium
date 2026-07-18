@@ -89,6 +89,33 @@ public enum ReaderWireCodec {
             rev: r.rev ?? 0)
     }
 
+    // MARK: outlines (wholesale per copy, JSON-string `entries`)
+
+    /// `[OutlineEntry]` → push op (`type:"outline"`). The whole outline is one op keyed by a stable
+    /// per-copy `id`; `entries` rides as a JSON string (like `rect`/`ink`).
+    public static func outlineOp(entries: [OutlineEntry], id: String, holdingId: Int?,
+                                 createdAt: Date? = nil, updatedAt: Date, deletedAt: Date? = nil) -> ReaderWireOp {
+        ReaderWireOp(type: "outline", id: id, holding_id: holdingId,
+                     entries: entriesJSON(entries),
+                     created_at: createdAt.map(iso), updated_at: iso(updatedAt),
+                     deleted_at: deletedAt.map(iso))
+    }
+
+    /// An outline pull row → its entries (empty on a tombstone / bad payload).
+    public static func entries(from r: OutlineRecord) -> [OutlineEntry] {
+        guard r.deleted_at == nil, let s = r.entries, let data = s.data(using: .utf8),
+              let arr = try? JSONDecoder().decode([OutlineEntry].self, from: data) else { return [] }
+        return arr
+    }
+
+    /// `[OutlineEntry]` → the JSON string the wire carries in `entries`.
+    public static func entriesJSON(_ entries: [OutlineEntry]) -> String {
+        let enc = JSONEncoder()
+        enc.outputFormatting = [.withoutEscapingSlashes]
+        guard let data = try? enc.encode(entries), let s = String(data: data, encoding: .utf8) else { return "[]" }
+        return s
+    }
+
     // MARK: reading position (Shape C)
 
     public static func positionRecord(locator: Locator, fraction: Double?) -> PositionRecord {

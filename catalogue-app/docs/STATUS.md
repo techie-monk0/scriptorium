@@ -43,8 +43,13 @@ Layout: **`catalogue-app/`** holds `docs/` + `ios/` (and a future `android/` sib
   there's a launchable app.
 - **`/sync/reader` shape.** `ReaderSync` speaks postilla's native `{rev, ops}`; the catalogue's
   existing endpoint uses the legacy `{id, holding_id, cfi_range, page, rect, …}` record. Mapping the
-  two (or adding a postilla-shaped route) is a server/client reconciliation — `ReaderView` defaults to
-  the in-memory store so marks work locally meanwhile.
+  two (or adding a postilla-shaped route) is a server/client reconciliation.
+- **Offline reader writes are durable (updated).** `ReaderView` no longer defaults to an in-memory
+  store: marks go through `LocalAnnotationStore` (a persist-before-network outbox that survives relaunch
+  and flushes on reconnect) and bookmarks through `LocalBookmarkStore`. The outbox depth is surfaced to
+  the freshness chip via the `OutboxProbe` port, and the data layer's `isOffline` predicate is wired to
+  the `SyncEngine`'s reachability (`OnlineState`) so offline full-text search fails fast instead of
+  hanging. The one real offline gap left is search-*inside*-books (`ContentIndex` = `NoContentIndex`).
 - **EPUB** — `octavo-swift`'s `EpubWebNavigator` is an M3 skeleton (WKWebView host; open/search TODO);
   the reader currently opens PDF holdings. (`S8` blocked on it.)
 - **Ink-on-PDF render** — postilla *stores* canonical ink (raw `[x,y,pressure]`, tested) and ships

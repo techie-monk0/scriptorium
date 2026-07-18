@@ -83,7 +83,27 @@ class Annotation:
     content_hash: "str | None" = None
 
 
-__all__ = ["Bookmark", "Annotation", "ReaderStateStore", "SqliteReaderStateStore",
+@dataclass(frozen=True)
+class Outline:
+    """An authored table-of-contents outline for one copy, as stored + synced. Unlike a
+    bookmark/annotation (one row per user mark), an outline is a WHOLE document edited as a set,
+    so `entries` carries the full ordered list (JSON: [{"level","title","page"}, …]) and the row
+    is replaced wholesale — last-write-wins on `updated_at`, exactly like a bookmark. The client
+    uses a stable, per-copy `id` (e.g. `outline:holding:<n>`) so two devices editing the same
+    copy's outline converge on one row. `rev` is the shared server sync sequence."""
+    id: str
+    holding_id: "int | None"
+    entries: "str | None"          # JSON list[{level:int, title:str, page:int}] — the whole outline
+    created_at: "str | None"
+    updated_at: "str | None"
+    deleted_at: "str | None"
+    rev: int
+    # Durable content identity — see Bookmark.content_hash. Survives a holding delete and re-links
+    # on re-import of the same file.
+    content_hash: "str | None" = None
+
+
+__all__ = ["Bookmark", "Annotation", "Outline", "ReaderStateStore", "SqliteReaderStateStore",
            "InMemoryReaderStateStore", "ensure_schema"]
 
 
@@ -133,6 +153,24 @@ CREATE INDEX IF NOT EXISTS annotation_holding_idx ON annotation(holding_id);
 CREATE INDEX IF NOT EXISTS annotation_rev_idx     ON annotation(rev);
 CREATE INDEX IF NOT EXISTS annotation_chash_idx   ON annotation(content_hash);
 
+-- Authored PDF outline (persistent TOC/bookmarks the user edits), one row per copy. Same
+-- offline-first shape as bookmark (client id, client timestamps, deleted_at tombstone, server
+-- rev, content_hash orphan-relink), but `entries` holds the WHOLE outline (JSON) — the record is
+-- replaced wholesale (LWW), mirroring how PyMuPDF `set_toc` sets the outline as a unit.
+CREATE TABLE IF NOT EXISTS outline (
+  id           TEXT PRIMARY KEY,
+  holding_id   INTEGER REFERENCES holding(id) ON DELETE SET NULL,
+  content_hash TEXT,
+  entries      TEXT,
+  created_at   TEXT,
+  updated_at   TEXT,
+  deleted_at   TEXT,
+  rev          INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS outline_holding_idx ON outline(holding_id);
+CREATE INDEX IF NOT EXISTS outline_rev_idx     ON outline(rev);
+CREATE INDEX IF NOT EXISTS outline_chash_idx   ON outline(content_hash);
+
 -- Monotonic per-DB change counter that orders reader-sync writes. Single row, id = 1.
 CREATE TABLE IF NOT EXISTS sync_state (
   id  INTEGER PRIMARY KEY CHECK (id = 1),
@@ -150,6 +188,9 @@ _BOOKMARK_COLS = (
 _ANNOTATION_COLS = (
     "id, holding_id, kind, cfi_range, page, rect, color, note_text, ink, "
     "created_at, updated_at, deleted_at, rev, content_hash"
+)
+_OUTLINE_COLS = (
+    "id, holding_id, entries, created_at, updated_at, deleted_at, rev, content_hash"
 )
 
 
@@ -223,6 +264,27 @@ class ReaderStateStore(abc.ABC):
                          content_hash: "str | None" = None) -> "Annotation | None":
         """Idempotent last-write-wins upsert of one annotation, keyed by the client `id`. Same
         rules as apply_bookmark. Does NOT commit."""
+
+    @abc.abstractmethod
+    def outlines_since(self, since: int) -> "list[Outline]":
+        """Every outline changed after rev `since` — INCLUDING tombstoned rows (delta pull)."""
+
+    @abc.abstractmethod
+    def outline_for_holding(self, holding_id: int) -> "Outline | None":
+        """The one LIVE outline for a copy (newest by rev), or None — what the reader/bake reads."""
+
+    @abc.abstractmethod
+    def outlines_since_for_holding(self, holding_id: int, since: int) -> "list[Outline]":
+        """One copy's outline changes after rev `since`, INCLUDING tombstones (per-copy delta)."""
+
+    @abc.abstractmethod
+    def apply_outline(self, *, id: str, holding_id: int, entries: "str | None" = None,
+                      created_at: "str | None" = None, updated_at: "str | None" = None,
+                      deleted_at: "str | None" = None,
+                      content_hash: "str | None" = None) -> "Outline | None":
+        """Idempotent last-write-wins upsert of one copy's whole outline, keyed by the client `id`.
+        Returns the stored row (with its rev), or None when the incoming edit is older. Same rules
+        as apply_bookmark. Does NOT commit."""
 
     @abc.abstractmethod
     def relink_orphans(self, *, holding_id: int, content_hash: str) -> int:
@@ -394,11 +456,57 @@ class SqliteReaderStateStore(ReaderStateStore):
             f"SELECT {_ANNOTATION_COLS} FROM annotation WHERE id = ?", (id,)).fetchone()
         return Annotation(*row)
 
+    def outlines_since(self, since):
+        rows = self._c.execute(
+            f"SELECT {_OUTLINE_COLS} FROM outline WHERE rev > ? ORDER BY rev", (since,)
+        ).fetchall()
+        return [Outline(*r) for r in rows]
+
+    def outline_for_holding(self, holding_id):
+        row = self._c.execute(
+            f"SELECT {_OUTLINE_COLS} FROM outline "
+            "WHERE holding_id = ? AND deleted_at IS NULL ORDER BY rev DESC LIMIT 1", (holding_id,)
+        ).fetchone()
+        return Outline(*row) if row else None
+
+    def outlines_since_for_holding(self, holding_id, since):
+        rows = self._c.execute(
+            f"SELECT {_OUTLINE_COLS} FROM outline "
+            "WHERE holding_id = ? AND rev > ? ORDER BY rev", (holding_id, since)
+        ).fetchall()
+        return [Outline(*r) for r in rows]
+
+    def apply_outline(self, *, id, holding_id, entries=None, created_at=None,
+                      updated_at=None, deleted_at=None, content_hash=None):
+        if not id or holding_id is None:
+            raise ValueError("outline op needs id + holding_id")
+        incoming = updated_at or ""
+        existing = self._c.execute(
+            "SELECT updated_at FROM outline WHERE id = ?", (id,)).fetchone()
+        if existing is not None and (existing[0] or "") > incoming:
+            return None  # stored copy is newer (last-write-wins)
+        if content_hash is None:
+            content_hash = self._holding_content_hash(holding_id)
+        rev = self.next_rev()
+        self._c.execute(
+            "INSERT INTO outline "
+            "  (id, holding_id, content_hash, entries, created_at, updated_at, deleted_at, rev) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT(id) DO UPDATE SET "
+            "  holding_id = excluded.holding_id, content_hash = excluded.content_hash, "
+            "  entries = excluded.entries, created_at = excluded.created_at, "
+            "  updated_at = excluded.updated_at, deleted_at = excluded.deleted_at, "
+            "  rev = excluded.rev",
+            (id, holding_id, content_hash, entries, created_at, incoming, deleted_at, rev))
+        row = self._c.execute(
+            f"SELECT {_OUTLINE_COLS} FROM outline WHERE id = ?", (id,)).fetchone()
+        return Outline(*row)
+
     def relink_orphans(self, *, holding_id, content_hash):
         if holding_id is None or not content_hash:
             return 0
         n = 0
-        for table in ("annotation", "bookmark"):
+        for table in ("annotation", "bookmark", "outline"):
             cur = self._c.execute(
                 f"UPDATE {table} SET holding_id = ? "
                 "WHERE holding_id IS NULL AND content_hash = ?", (holding_id, content_hash))
@@ -416,6 +524,7 @@ class InMemoryReaderStateStore(ReaderStateStore):
         self._rev = 0
         self._bm: dict[str, Bookmark] = {}
         self._ann: dict[str, Annotation] = {}
+        self._out: dict[str, Outline] = {}
 
     def ensure_schema(self) -> None:
         pass  # no tables to create
@@ -481,12 +590,37 @@ class InMemoryReaderStateStore(ReaderStateStore):
         self._ann[id] = a
         return a
 
+    def outlines_since(self, since):
+        return sorted((o for o in self._out.values() if o.rev > since), key=lambda o: o.rev)
+
+    def outline_for_holding(self, holding_id):
+        live = [o for o in self._out.values() if o.holding_id == holding_id and not o.deleted_at]
+        return max(live, key=lambda o: o.rev) if live else None
+
+    def outlines_since_for_holding(self, holding_id, since):
+        return sorted((o for o in self._out.values()
+                       if o.holding_id == holding_id and o.rev > since), key=lambda o: o.rev)
+
+    def apply_outline(self, *, id, holding_id, entries=None, created_at=None,
+                      updated_at=None, deleted_at=None, content_hash=None):
+        if not id or holding_id is None:
+            raise ValueError("outline op needs id + holding_id")
+        incoming = updated_at or ""
+        cur = self._out.get(id)
+        if cur is not None and (cur.updated_at or "") > incoming:
+            return None
+        rev = self.next_rev()
+        o = Outline(id=id, holding_id=holding_id, entries=entries, created_at=created_at,
+                    updated_at=incoming, deleted_at=deleted_at, rev=rev, content_hash=content_hash)
+        self._out[id] = o
+        return o
+
     def relink_orphans(self, *, holding_id, content_hash):
         if holding_id is None or not content_hash:
             return 0
         import dataclasses
         n = 0
-        for store in (self._ann, self._bm):
+        for store in (self._ann, self._bm, self._out):
             for key, row in list(store.items()):
                 if row.holding_id is None and row.content_hash == content_hash:
                     store[key] = dataclasses.replace(row, holding_id=holding_id)

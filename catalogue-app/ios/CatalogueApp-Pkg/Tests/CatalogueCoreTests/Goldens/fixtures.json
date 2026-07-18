@@ -507,6 +507,7 @@
         "erase": true,
         "annList": true,
         "export": true,
+        "editOutline": true,
         "reflow": true,
         "zoom": true
       },

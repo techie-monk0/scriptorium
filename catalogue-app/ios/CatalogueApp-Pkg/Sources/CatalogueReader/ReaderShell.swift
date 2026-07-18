@@ -12,6 +12,8 @@ public struct ReaderShell: View {
     private let store: OpenSessionsStore
     private let endpoint: any ServerEndpoint
     private let readingStore: CatalogueReadingStore
+    private let settingsStore: CatalogueReaderSettingsStore
+    private let historyStore: ReaderHistoryStore
     private let starAccessory: (Int?) -> AnyView
 
     @State private var opening: OpenBook?          // the book this presentation was opened for
@@ -26,10 +28,14 @@ public struct ReaderShell: View {
                 store: OpenSessionsStore,
                 endpoint: any ServerEndpoint,
                 readingStore: CatalogueReadingStore,
+                settingsStore: CatalogueReaderSettingsStore,
+                historyStore: ReaderHistoryStore,
                 starAccessory: @escaping (Int?) -> AnyView = { _ in AnyView(EmptyView()) }) {
         self.store = store
         self.endpoint = endpoint
         self.readingStore = readingStore
+        self.settingsStore = settingsStore
+        self.historyStore = historyStore
         self.starAccessory = starAccessory
         self._opening = State(initialValue: book)
     }
@@ -44,6 +50,7 @@ public struct ReaderShell: View {
                 // previous engine (WKWebView/PDFView) and mounts the next — one live engine at a time.
                 ReaderView(holding: book.holding, title: book.title, endpoint: endpoint,
                            readingStore: readingStore, showChrome: $showChrome,
+                           settingsStore: settingsStore, historyStore: historyStore,
                            topBarAccessory: starAccessory(book.eid))
                     .id(book.pubId)
             } else {

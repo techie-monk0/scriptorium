@@ -7,6 +7,7 @@ annotations ride on, so its merge semantics are pinned here.
 """
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -276,6 +277,78 @@ def test_e2e_ios_tombstone_propagates_to_other_device(app_env, seed):
          deleted_at="2026-06-29T10:05:00Z", updated_at="2026-06-29T10:05:00Z")
     delta = c.get(f"/sync/reader?holding={hid}&since=0").get_json()["annotations"]
     assert delta[0]["deleted_at"] == "2026-06-29T10:05:00Z"   # device B learns of the deletion
+
+
+# ── authored PDF outlines ride the same endpoint (Shape B, wholesale LWW) ─────
+def _outline(c, **fields):
+    op = {"type": "outline"}
+    op.update(fields)
+    return c.post("/sync/reader", json={"ops": [op]}).get_json()
+
+
+def _entries(*rows):
+    return json.dumps([{"level": lvl, "title": t, "page": p} for lvl, t, p in rows])
+
+
+def test_outline_push_then_pull(app_env, seed):
+    c, _, _ = app_env
+    hid = _holding(seed)
+    body = _entries((1, "Chapter One", 1), (2, "Section 1.1", 2))
+    res = _outline(c, id=f"outline:holding:{hid}", holding_id=hid, entries=body,
+                   updated_at="2026-06-29T10:00:00Z")
+    assert res["applied"][0]["id"] == f"outline:holding:{hid}" and "rev" in res["applied"][0]
+
+    pull = c.get("/sync/reader?since=0").get_json()
+    assert len(pull["outlines"]) == 1
+    o = pull["outlines"][0]
+    assert o["holding_id"] == hid
+    assert json.loads(o["entries"]) == [{"level": 1, "title": "Chapter One", "page": 1},
+                                        {"level": 2, "title": "Section 1.1", "page": 2}]
+
+
+def test_outline_is_wholesale_lww_by_stable_id(app_env, seed):
+    """Two devices editing the same copy's outline use the SAME stable id → the newer edit replaces
+    the whole outline (one row), not a merge of entries."""
+    c, _, _ = app_env
+    hid = _holding(seed)
+    oid = f"outline:holding:{hid}"
+    _outline(c, id=oid, holding_id=hid, entries=_entries((1, "Old", 1)),
+             updated_at="2026-06-29T10:00:00Z")
+    _outline(c, id=oid, holding_id=hid, entries=_entries((1, "New A", 1), (1, "New B", 5)),
+             updated_at="2026-06-29T11:00:00Z")
+    outs = c.get("/sync/reader?since=0").get_json()["outlines"]
+    assert len(outs) == 1                                   # one outline per copy
+    assert [e["title"] for e in json.loads(outs[0]["entries"])] == ["New A", "New B"]
+
+
+def test_outline_older_edit_skipped(app_env, seed):
+    c, _, _ = app_env
+    hid = _holding(seed)
+    oid = f"outline:holding:{hid}"
+    _outline(c, id=oid, holding_id=hid, entries=_entries((1, "Newer", 1)),
+             updated_at="2026-06-29T12:00:00Z")
+    res = _outline(c, id=oid, holding_id=hid, entries=_entries((1, "Stale", 1)),
+                   updated_at="2026-06-29T09:00:00Z")
+    assert res["applied"] == [{"id": oid, "skipped": True}]
+    outs = c.get("/sync/reader?since=0").get_json()["outlines"]
+    assert json.loads(outs[0]["entries"])[0]["title"] == "Newer"
+
+
+def test_outline_holding_scoped_live_and_tombstone(app_env, seed):
+    c, _, _ = app_env
+    hid = _holding(seed)
+    oid = f"outline:holding:{hid}"
+    _outline(c, id=oid, holding_id=hid, entries=_entries((1, "Live", 1)),
+             updated_at="2026-06-29T10:00:00Z")
+    # bare ?holding = live paint: one outline
+    live = c.get(f"/sync/reader?holding={hid}").get_json()["outlines"]
+    assert len(live) == 1 and json.loads(live[0]["entries"])[0]["title"] == "Live"
+    # tombstone → live paint drops it, delta pull still carries it
+    _outline(c, id=oid, holding_id=hid, deleted_at="2026-06-29T10:05:00Z",
+             updated_at="2026-06-29T10:05:00Z")
+    assert c.get(f"/sync/reader?holding={hid}").get_json()["outlines"] == []
+    delta = c.get(f"/sync/reader?holding={hid}&since=0").get_json()["outlines"]
+    assert delta[-1]["deleted_at"] == "2026-06-29T10:05:00Z"
 
 
 def test_e2e_ios_bookmark_wire_roundtrips(app_env, seed):

@@ -48,6 +48,7 @@ public struct RootShell: View {
         #if canImport(UIKit)
         .fullScreenCover(isPresented: $showReader) {
             ReaderShell(store: app.openSessions, endpoint: app.endpoint, readingStore: app.readingStore,
+                        settingsStore: app.settingsStore, historyStore: app.historyStore,
                         starAccessory: { e in e.map { AnyView(StarButton(eid: $0).environment(app)) } ?? AnyView(EmptyView()) })
         }
         #endif

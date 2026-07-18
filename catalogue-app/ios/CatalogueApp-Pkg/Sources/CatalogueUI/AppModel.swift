@@ -27,6 +27,12 @@ public final class AppModel {
     public let prefs: PrefsPort
     /// The reader position-of-record (octavo ReadingStore) the in-app reader persists Locators into.
     public let readingStore: CatalogueReadingStore
+    /// Per-document reading settings (octavo ReaderSettingsStore — font size / zoom), shared like
+    /// `readingStore` so one file-backed instance serves every reader tab (restored on open, auto-saved
+    /// on change through `Octavo.open(settingsStore:)`).
+    public let settingsStore = CatalogueReaderSettingsStore()
+    /// Per-document back/jump history (persisted so the "Back to …" pill survives reopen).
+    public let historyStore = ReaderHistoryStore()
     /// The open reading sessions ("tabs") — which books are open + the active one, shared by every
     /// `ReaderShell` presentation so opening a second book adds a tab rather than a disjoint reader.
     public let openSessions = OpenSessionsStore()
@@ -41,6 +47,11 @@ public final class AppModel {
     public let syncEngine = SyncEngine()
     /// Unsynced local writes (the reader outbox depth), surfaced in the freshness chip.
     public private(set) var pendingWrites = 0
+    /// Read-only probes over the shared reader outbox files (the same `annotations.json` /
+    /// `bookmarks.json` the reader's `LocalAnnotationStore` / `LocalBookmarkStore` write). Queried on each
+    /// sync trigger to surface the total unsynced-write count; depends only on the `OutboxProbe`
+    /// abstraction, never on the reader's concrete stores. Add a probe here to fold a new outbox in.
+    private let outboxes: [any OutboxProbe] = [LocalAnnotationStore(), LocalBookmarkStore(), LocalOutlineStore()]
     public var themePref: ThemePreference
     public var shelfArt: String
     public var seriesCoverStyle: String      // active SeriesCover style (SERIES_COVER_STYLES key)
@@ -103,7 +114,14 @@ public final class AppModel {
             // endpoint, so without this it would throw AdapterUnsupported — the replica path is the
             // real implementation. Mirrors the PWA's "load the replica, then serve from it".
             let box = replicaBox
-            self.platform = LivePlatform(data: OfflineFirstData(live: a, replica: { box.value }), prefs: p)
+            // Reachability predicate: read the engine's thread-safe online flag so full-text Content
+            // search short-circuits to "unavailable" offline instead of hanging on the dead server, and
+            // the Tier-2 VMs paint the offline state. (Search/Browse/Detail already prefer the replica.)
+            let online = syncEngine.onlineState
+            let isOffline: @Sendable () -> Bool = { !online.isOnline }
+            self.platform = LivePlatform(
+                data: OfflineFirstData(live: a, replica: { box.value }, isOffline: isOffline),
+                prefs: p, isOffline: isOffline)
         }
         self.themePref = ThemePreference(pref: p.get("theme"))
         self.shelfArt = p.get("shelfArt") == "spine" ? "spine" : "cover"
@@ -156,7 +174,11 @@ public final class AppModel {
             replicaStore = ReplicaStore(api: a)
             replicaBox.set(nil)                       // a different server → drop the old replica
             let box = replicaBox
-            platform = LivePlatform(data: OfflineFirstData(live: a, replica: { box.value }), prefs: prefs)
+            let online = syncEngine.onlineState
+            let isOffline: @Sendable () -> Bool = { !online.isOnline }
+            platform = LivePlatform(
+                data: OfflineFirstData(live: a, replica: { box.value }, isOffline: isOffline),
+                prefs: prefs, isOffline: isOffline)
         }
     }
 
@@ -195,7 +217,7 @@ public final class AppModel {
     /// `OfflineFirstData`; Home reads this directly for `homeVM`.
     public func loadedReplica() async -> Replica? {
         if replicaBox.value == nil { replicaBox.set(await replicaStore.cached()) }
-        if api != nil { Task { await syncEngine.refresh(.appear) } }
+        if api != nil { Task { await syncEngine.refresh(.appear); await refreshPendingWrites() } }
         return replicaBox.value
     }
     /// Force a replica revalidation (used by the manual pull / Settings). Routes through the engine so a
@@ -217,11 +239,24 @@ public final class AppModel {
     }
     /// Bumped whenever new data lands; screens key their recompute on it to live-update.
     public var dataRevision: Int { syncEngine.dataRevision }
-    /// Trigger a catalogue refresh (replica + starred) for a reason (appear/foreground/online/manual).
+    /// Trigger a catalogue refresh (replica + starred) for a reason (appear/foreground/online/manual),
+    /// and re-read the outbox depth (marks may have flushed on reconnect, or been queued while offline).
     @discardableResult
-    public func refresh(_ reason: SyncReason) async -> Bool { await syncEngine.refresh(reason) }
+    public func refresh(_ reason: SyncReason) async -> Bool {
+        let changed = await syncEngine.refresh(reason)
+        await refreshPendingWrites()
+        return changed
+    }
     /// Update the surfaced unsynced-writes count (called by the reader outbox).
     public func setPendingWrites(_ n: Int) { pendingWrites = n }
+    /// Re-read the reader outbox depth through the `OutboxProbe` abstraction and publish it to the
+    /// freshness chip. Cheap (a small JSON read); called on every sync trigger + on catalogue-screen
+    /// appear, so returning from an offline reading session shows the pending count without a manual poll.
+    public func refreshPendingWrites() async {
+        var total = 0
+        for probe in outboxes { total += await probe.pendingWriteCount() }
+        pendingWrites = total
+    }
 
     /// Revalidate the replica; publish the snapshot and report whether it changed.
     private func revalidateReplicaOutcome() async -> SyncOutcome {

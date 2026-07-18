@@ -34,14 +34,15 @@ public struct ReaderCaps: Equatable, Sendable {
     public var erase: Bool        // erase marks
     public var annList: Bool      // annotations list
     public var export: Bool       // export annotated copy
+    public var editOutline: Bool  // author the persistent PDF outline (TOC)
     public init(ready: Bool = false, search: Bool = false, star: Bool = false,
                 resizeText: Bool = false, zoom: Bool = false, reflow: Bool = false, markText: Bool = false,
                 strike: Bool = false, note: Bool = false, draw: Bool = false, erase: Bool = false,
-                annList: Bool = false, export: Bool = false) {
+                annList: Bool = false, export: Bool = false, editOutline: Bool = false) {
         self.ready = ready; self.search = search; self.star = star
         self.resizeText = resizeText; self.zoom = zoom; self.reflow = reflow; self.markText = markText
         self.strike = strike; self.note = note; self.draw = draw; self.erase = erase
-        self.annList = annList; self.export = export
+        self.annList = annList; self.export = export; self.editOutline = editOutline
     }
 }
 
@@ -86,6 +87,7 @@ public func readerChromeVM(format: String, caps: ReaderCaps,
         if caps.erase { tool("erase") }
         if caps.export { tool("export") }
         if caps.annList { c("annList", "text", true) }   // secondary — always in ⋯
+        if caps.editOutline { c("editOutline", "text", true) }   // author the persistent PDF outline (⋯)
         c("bookmarkAdd", "text", true)
         c("bookmarkList", "text", true)
     }

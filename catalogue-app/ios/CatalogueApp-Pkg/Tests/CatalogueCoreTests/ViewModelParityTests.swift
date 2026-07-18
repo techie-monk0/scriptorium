@@ -7,6 +7,7 @@ private struct HomeFixture: Codable { var recentIds: [Int]; var replica: Replica
 private struct StarActionFixture: Codable { var action: String; var eid: Int? }
 private struct ChromeCapsFixture: Codable {
     var ready, search, star, resizeText, zoom, reflow, markText, strike, note, draw, erase, annList, export: Bool?
+    var editOutline: Bool?
 }
 private struct ChromeStateFixture: Codable { var reflow, draw: Bool? }
 private struct ChromeInputFixture: Codable {
@@ -122,7 +123,8 @@ final class ViewModelParityTests: XCTestCase {
                                   resizeText: cp.resizeText ?? false, zoom: cp.zoom ?? false, reflow: cp.reflow ?? false,
                                   markText: cp.markText ?? false, strike: cp.strike ?? false,
                                   note: cp.note ?? false, draw: cp.draw ?? false, erase: cp.erase ?? false,
-                                  annList: cp.annList ?? false, export: cp.export ?? false)
+                                  annList: cp.annList ?? false, export: cp.export ?? false,
+                                  editOutline: cp.editOutline ?? false)
             let controls = readerChromeVM(format: input.format, caps: caps,
                                           reflow: input.state?.reflow ?? false, draw: input.state?.draw ?? false,
                                           compact: input.compact ?? false)

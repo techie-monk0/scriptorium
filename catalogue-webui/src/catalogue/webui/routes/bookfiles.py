@@ -25,6 +25,8 @@ from catalogue.services import library as library_mod
 from catalogue.services import perf
 from catalogue.webui import annotate_export
 from catalogue.webui import auth as auth_mod
+from catalogue.webui import outline_export
+from catalogue.webui.outline_store import ReaderStateOutlineStore
 from catalogue.webui.routes import _shared
 from catalogue.webui.routes._shared import _acc
 
@@ -227,6 +229,66 @@ def register(app, ctx):
         if not annotate_export.has_pdf_annotations(anns):
             return jsonify({"written": False, "reason": "no annotations"}), 409
         annotate_export.export_annotated(stored, anns, mode="inplace")
+        return jsonify({"written": True})
+
+    # ── Bake the authored outline INTO a PDF (persistent TOC; reader_module_plan §7) ──
+    # The outline is authored + synced as an overlay-of-record (reader_state.Outline, like bookmarks)
+    # and only written into the file bytes here, on demand, through the SAME shared PDF-write mechanism
+    # as the annotation flatten (pdf_mutation.write_pdf via outline_export). Two modes mirror annotated:
+    #   GET  /holding/<id>/outlined.pdf → a NEW copy with the TOC baked in, streamed (original untouched)
+    #   POST /holding/<id>/outlined     → write the outline back INTO the original (localhost-only)
+    def _pdf_outline(hid):
+        """(readable-local-pdf-path, [outline entries]) for a holding, or (None, []) if it isn't a
+        ready local PDF. Entries come from the synced outline store (reader_state)."""
+        res = _book_files().resolve(g.db, hid)
+        if res.is_missing or res.is_not_downloaded:
+            return None, []
+        if (library_mod._file_ext(res.path) or "").lower() != "pdf":
+            return None, []
+        entries = ReaderStateOutlineStore(SqliteReaderStateStore(g.db)).get_outline(hid)
+        return res.path, entries
+
+    @app.get("/holding/<int:hid>/outlined.pdf")
+    def holding_outlined_pdf(hid):
+        if not auth_mod.can_edit():
+            abort(403)
+        src, entries = _pdf_outline(hid)
+        if not src:
+            abort(404)
+        if not entries:
+            abort(409)                              # no authored outline — let the UI say so
+        fd, tmp = tempfile.mkstemp(suffix=".pdf", prefix="outlined-")
+        os.close(fd)
+
+        @after_this_request
+        def _cleanup(resp):
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+            return resp
+
+        outline_export.export_with_outline(src, entries, out_path=tmp, mode="copy")
+        base = os.path.splitext(os.path.basename(src))[0]
+        return send_file(tmp, mimetype="application/pdf", as_attachment=True,
+                         download_name=f"{base}-outlined.pdf")
+
+    @app.post("/holding/<int:hid>/outlined")
+    def holding_outlined_inplace(hid):
+        # Mutates the user's original file → editor AND localhost only (same guard as annotated inplace).
+        if not auth_mod.can_edit():
+            abort(403)
+        if (request.remote_addr or "") not in ("127.0.0.1", "::1", "localhost"):
+            abort(403)
+        stored = _holding_file_path(hid)
+        if not stored or (library_mod._file_ext(stored) or "").lower() != "pdf":
+            abort(404)
+        if not _readable_local(stored):
+            abort(409)
+        entries = ReaderStateOutlineStore(SqliteReaderStateStore(g.db)).get_outline(hid)
+        if not entries:
+            return jsonify({"written": False, "reason": "no outline"}), 409
+        outline_export.export_with_outline(stored, entries, mode="inplace")
         return jsonify({"written": True})
 
     @app.get("/reconcile/file")

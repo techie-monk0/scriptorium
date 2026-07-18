@@ -280,8 +280,13 @@ flush) per the project's "end-to-end system tests for major changes" rule.
 - **Native iOS app** — best offline open (Files provider/QuickLook), embedded reader; the
   R1 fallback and the home for reading-state.
 - **True airplane-mode open** — pin the kDrive Books folder offline on the device.
-- **Reading state** (position/bookmarks) + **PDF outline authoring** — separate per-device
-  sync over kDrive; see the design notes. Out of scope here.
+- **Reading state** (position/bookmarks) — now shipped via the reader sync-of-record + local-first
+  stores (see `sync_architecture.md`), not per-device kDrive files.
+- **PDF outline authoring** (persistent PDF TOC/bookmarks) — server foundation now exists: a shared
+  "write into the PDF" mechanism (`pdf_mutation`) with an `outline_export.OutlineWrite` mutation and an
+  `outline_store.OutlineStore` storage seam (overlay-first, baked into the file on demand). Authoring UI
+  + the synced store adapter are the remaining work. See `reader_architecture.md` → "Persistent PDF
+  writes" and `reader_module_plan.md` §7.
 
 ---
 

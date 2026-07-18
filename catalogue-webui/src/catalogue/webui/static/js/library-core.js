@@ -767,6 +767,7 @@
     erase:        { sf: 'eraser.line.dashed',        web: '⌫' },
     annList:      { sf: 'list.bullet.rectangle',     web: '▦' },
     export:       { sf: 'square.and.arrow.up',       web: '⬇' },
+    editOutline:  { sf: 'list.bullet.indent',        web: '≣' },
     bookmarkAdd:  { sf: 'bookmark',                  web: '★' },
     bookmarkList: { sf: 'bookmark.circle',           web: '▤' },
     pin:          { sf: 'pin', sfActive: 'pin.fill', web: '📌' }   // iOS: pin a reader bar to float it
@@ -831,6 +832,7 @@
       if (caps.export) tool('export', false);
       // Secondary — always in the ⋯ overflow, both widths.
       if (caps.annList) c('annList', 'text', true, false);
+      if (caps.editOutline) c('editOutline', 'text', true, false);   // author the persistent PDF outline
       c('bookmarkAdd', 'text', true, false);
       c('bookmarkList', 'text', true, false);
     }

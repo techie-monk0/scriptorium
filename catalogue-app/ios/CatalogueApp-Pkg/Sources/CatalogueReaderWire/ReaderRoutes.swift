@@ -44,6 +44,13 @@ public enum ReaderRoutes {
             ?? baseURL.appendingPathComponent("holding/\(holding)/annotated.pdf")
     }
 
+    /// GET `/holding/<id>/outlined.pdf` — a copy with the authored outline baked into the file (the
+    /// "save outline into PDF" export; server bakes via the shared PDF-write mechanism).
+    public static func outlinedPdf(baseURL: URL, holding: Int) -> URL {
+        components(baseURL, "/holding/\(holding)/outlined.pdf").url
+            ?? baseURL.appendingPathComponent("holding/\(holding)/outlined.pdf")
+    }
+
     /// POST `/login` — establish the signed-cookie session.
     public static func login(baseURL: URL) -> URL {
         components(baseURL, "/login").url ?? baseURL.appendingPathComponent("login")

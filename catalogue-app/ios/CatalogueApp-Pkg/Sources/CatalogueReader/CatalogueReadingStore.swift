@@ -7,7 +7,13 @@ import Octavo
 /// `recent(n)` feeds the Home "Recently opened" shelf. This is the port octavo's engine reads/writes;
 /// the engine never learns it's a file.
 public actor CatalogueReadingStore: ReadingStore {
-    private struct Entry: Codable { var locator: Locator; var openedAt: Date }
+    private struct Entry: Codable {
+        var locator: Locator
+        var openedAt: Date
+        /// The furthest position ever reached (by `progression`), distinct from the current one —
+        /// Kindle-style "furthest read" so a scroll-back doesn't lose how far you'd got.
+        var furthest: Locator? = nil
+    }
     private let fileURL: URL
     private var entries: [String: Entry]?
 
@@ -36,8 +42,20 @@ public actor CatalogueReadingStore: ReadingStore {
 
     public func setPosition(_ publicationId: String, _ locator: Locator) async throws {
         var e = loaded()
-        e[publicationId] = Entry(locator: locator, openedAt: Date())
+        let prev = e[publicationId]
+        // Advance "furthest read" only forward (by progression); never let a scroll-back retract it.
+        let furthest: Locator? = {
+            guard let existing = prev?.furthest else { return locator }
+            let a = existing.locations.progression ?? 0, b = locator.locations.progression ?? 0
+            return b > a ? locator : existing
+        }()
+        e[publicationId] = Entry(locator: locator, openedAt: Date(), furthest: furthest)
         persist(e)
+    }
+
+    /// The furthest position ever reached for a publication (for a "jump ahead" affordance on reopen).
+    public func furthest(_ publicationId: String) async throws -> Locator? {
+        loaded()[publicationId]?.furthest
     }
 
     public func recent(_ n: Int) async throws -> [Locator] {

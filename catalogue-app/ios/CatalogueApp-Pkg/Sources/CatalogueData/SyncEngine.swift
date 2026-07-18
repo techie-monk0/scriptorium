@@ -52,6 +52,18 @@ public struct PullTransport: SyncTransport {
     public init() {}
 }
 
+/// A thread-safe mirror of "can we reach the server right now" — the ADAPTER behind the data layer's
+/// `isOffline` predicate. `SyncEngine` is `@MainActor`, but the offline check happens inside async data
+/// adapters off the main actor, so they read this lock-guarded flag instead of the actor-isolated
+/// `SyncState`. Updated on the main actor whenever the engine's online state changes.
+public final class OnlineState: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _online: Bool
+    public init(_ online: Bool = true) { _online = online }
+    public var isOnline: Bool { lock.lock(); defer { lock.unlock() }; return _online }
+    func set(_ v: Bool) { lock.lock(); _online = v; lock.unlock() }
+}
+
 /// Network reachability (`NWPathMonitor`), reported as a simple online/offline signal. The engine uses
 /// it to flip the offline chip and to auto-refresh the moment connectivity returns (like the PWA's
 /// `online` event).
@@ -84,6 +96,9 @@ public final class SyncEngine {
     public private(set) var state = SyncState(online: true)
     /// Monotonic — bumped on every `.updated`. Screens key their recompute on it to live-update.
     public private(set) var dataRevision = 0
+    /// A `Sendable` snapshot of `state.online` the off-main data adapters read for their `isOffline`
+    /// predicate (they can't touch this main-actor object directly). Kept in lockstep with `state.online`.
+    public let onlineState = OnlineState(true)
 
     private var resources: [String: any SyncResource] = [:]
     private var order: [String] = []
@@ -115,6 +130,7 @@ public final class SyncEngine {
     private func reachabilityChanged(_ online: Bool) {
         let was = state.online
         state.online = online
+        onlineState.set(online)
         if online && !was { Task { await refresh(.online) } }   // connectivity returned → pull
     }
 
@@ -131,13 +147,14 @@ public final class SyncEngine {
         var changed = false
         var failure: String?
         var wentOffline = false
+        var reached = false     // any resource that answered (200/304) proves the server is reachable
         // Sequential is fine for the handful of small ETag resources; each await releases the main actor
         // during the network wait, so the UI stays responsive. (Parallelize here if the set grows.)
         for id in targets {
             guard let resource = resources[id] else { continue }
             switch await resource.revalidate() {
-            case .updated:   changed = true
-            case .unchanged: break
+            case .updated:   changed = true; reached = true
+            case .unchanged: reached = true
             case .offline:   wentOffline = true
             case .failed(let e): failure = e
             }
@@ -146,7 +163,10 @@ public final class SyncEngine {
         targets.forEach { inFlight.remove($0) }
         if inFlight.isEmpty { state.syncing = false }
         if changed { dataRevision &+= 1 }
-        if wentOffline { state.online = false }
+        // A reachable answer clears offline even if connectivity never "changed" (the server was just
+        // down, then came back on the same network); a pure connectivity failure sets it.
+        if reached { state.online = true } else if wentOffline { state.online = false }
+        onlineState.set(state.online)
         state.lastError = failure
         state.lastCheckedAt = ISO8601DateFormatter().string(from: Date())
         return changed

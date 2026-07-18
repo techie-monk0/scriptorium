@@ -17,7 +17,7 @@ is "implement the ports + render `syncVM`".
 | Shape | What | Endpoint(s) | Cursor | Direction | Conflict |
 |---|---|---|---|---|---|
 | **A — ETag snapshot read cache** | catalogue metadata (replica), starred, wishlist, content-index | `GET /api/v1/replica`, `/starred`, `/wishlist`, `/content-index` | **ETag** (`sha256` of content, excl. `exported_at`) | server→client | none (read-only) / optimistic write returns fresh state |
-| **B — rev-cursor delta (mergeable)** | reader annotations + bookmarks | `GET/POST /sync/reader` | monotonic **`rev`** (`?since=<rev>`) | bidirectional | LWW + `rev` tiebreaker, keyed by uuid |
+| **B — rev-cursor delta (mergeable)** | reader annotations + bookmarks + authored PDF outlines | `GET/POST /sync/reader` | monotonic **`rev`** (`?since=<rev>`) | bidirectional | LWW + `rev` tiebreaker, keyed by uuid (an outline is one wholesale row per copy, keyed by a stable per-copy id) |
 | **C — fire-and-forget LWW** | reading position | `GET/POST /holding/<id>/position` | none | bidirectional | last-write-wins (advisory resume, no merge) |
 
 Everything else is either a **read cache** (covers/spine/preview/file bytes — ETag/immutable, cached on
@@ -74,16 +74,24 @@ Reading position rides along: iOS mirrors it to the server on background/close/p
 
 - **Push (write)** is immediate on each edit (`POST /sync/reader` with `{ops:[…]}`), optimistically
   rendered so a mark shows instantly (even offline). PWA queues failed pushes to an IndexedDB outbox and
-  flushes on `online`; **iOS** renders optimistically but does not yet persist an offline outbox across
-  restarts (tracked).
+  flushes on `online`; **iOS** now does the same — `LocalAnnotationStore` persists every op to a device
+  file *before* the network and keeps it in an outbox, so a mark made offline survives relaunch and
+  flushes on the next reachable pull. The outbox depth is surfaced through the `OutboxProbe` port so the
+  freshness chip shows "N unsynced" (offline) / "N syncing" (online).
 - **Pull (read)** is **incremental**: track the `rev` cursor and `GET /sync/reader?holding=<id>&since=<rev>`
   to fetch only deltas + tombstones, merged **in place** (never repositions the page — marks are an
   **overlay**, not baked into the file, so a delta is a few hundred bytes and never re-downloads the PDF).
 - **Cross-device freshness**: iOS re-pulls on foreground + a 45 s poll while open. Web/PWA re-pull via a
   **⟳ Refresh button** in the reader chrome (pull-to-refresh would fight the reading scroll) and on
   tab-return. (`reader-core.js reloadMarks()` → `overlay.load()` + `repaint()`.)
-- **Flatten/export** (`GET /holding/<id>/annotated.pdf` copy, `POST …/annotated` in-place) is a separate
-  on-demand path, decoupled from sync.
+- **Writes *into* the PDF** — flattening annotations (`GET /holding/<id>/annotated.pdf` copy,
+  `POST …/annotated` in-place) and **authoring the PDF outline** (`GET /holding/<id>/outlined.pdf` copy,
+  `POST …/outlined` in-place) — are a separate on-demand path, decoupled from sync. They share one server
+  mechanism (`pdf_mutation.write_pdf` + `PdfMutation` implementations) so the copy/in-place envelope is
+  written once. The authored outline itself is an **overlay synced through this Shape-B path** (a
+  `reader_state.Outline` row, `outline` op/record in the wire contract v2), so authoring is offline +
+  multi-device like bookmarks; the file bytes are only rewritten on the explicit bake. See
+  `reader_architecture.md` → "Persistent PDF writes".
 
 ### 4.1 The wire contract (versioned)
 
@@ -93,8 +101,10 @@ adapter) target one artifact instead of each re-deriving the shape. It mirrors t
 pattern:
 
 - `db_store/reader_sync_contract.json` — the machine-readable, language-neutral spec (endpoints, the
-  `bookmark`/`annotation` pull-row records, the push ops, and the cursor/auth/conflict semantics), each
-  record `source`-linked to the `reader_state` dataclass it comes from.
+  `bookmark`/`annotation`/`outline` pull-row records, the push ops, and the cursor/auth/conflict
+  semantics), each record `source`-linked to the `reader_state` dataclass it comes from. **v2** adds the
+  `outline` record + op (older clients ignore the new `outlines` array; the client check is `version >=
+  built-for`, so a v1 client keeps working against a v2 server).
 - Every `/sync/reader` response carries `contract_version`, and `GET /sync/reader/contract` serves the full
   descriptor — so a client asserts the live version ≥ what it was built for (a few lines it owns, no
   catalogue import).
@@ -123,7 +133,15 @@ surface's UI — pull silently upgrades to push.
 
 ## 7. Deferred / known gaps
 
-- iOS durable offline reader-push outbox (in-memory only this session).
+- ~~iOS durable offline reader-push outbox~~ — **done**: `LocalAnnotationStore` is a persist-before-network
+  outbox that survives relaunch and self-heals on reconnect; its depth is reported through `OutboxProbe`.
+- iOS offline **search-inside-books** (full-text): `ContentIndex` is still a `NoContentIndex` stub. Browse/
+  search of catalogue metadata and opening a previously-read book already work offline; searching *words
+  inside* books offline needs a local FTS index (whole-library pack, or index-only-what's-cached — the
+  cheaper option). Deferred.
+- ~~iOS offline bookmark outbox~~ — **done**: `LocalBookmarkStore` now has the same persist-before-network
+  outbox as annotations (survives relaunch, flushes on reconnect), drains on the reader's open/foreground/
+  poll cadence, and reports its depth through `OutboxProbe` (folded into the same "N unsynced" count).
 - PWA/web reader while-open *automatic* overlay refresh beyond the button + tab-return.
 - SSE push transport (§6).
 - iOS reader Share/Export affordance (server `annotated.pdf` → share sheet — approach recorded in
@@ -140,7 +158,8 @@ surface's UI — pull silently upgrades to push.
 - iOS engine: `CatalogueData/SyncEngine.swift`; wired in `CatalogueUI/AppModel.swift`, `RootShell.swift`,
   `Components.swift` (`SyncStatusPill`, `catalogueRefreshable`), `Screens.swift`.
 - iOS reader: `CatalogueReader/ReaderView.swift` (delta pull + resume), `PositionSync.swift`, `ReaderSync`,
-  `BookmarkSync`.
+  `BookmarkSync`; authored outline via `OutlineSync` + `LocalOutlineStore` (durable outbox) + the shared
+  `editOutline` control in `readerChromeVM`.
 - PWA: `static/pwa/app.js` (`syncNow`, status chip, pull-to-refresh), `static/pwa/reader.js` (⟳ button),
   `static/reader/reader-core.js` (`reloadMarks`). Web: `templates/home.html`, `templates/reader.html`.
 - Server: `routes/api.py` (replica/starred/wishlist ETag), `routes/reader_sync.py` (`/sync/reader`),

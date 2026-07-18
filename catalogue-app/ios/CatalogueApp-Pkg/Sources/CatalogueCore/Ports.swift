@@ -82,3 +82,12 @@ public protocol Platform: Sendable {
     var prefs: PrefsPort { get }
     func isOffline() -> Bool
 }
+
+/// Reports how many local writes haven't reached the server yet (the outbox depth) — the number the
+/// freshness chip renders as "N unsynced" (offline) / "N syncing" (online). This is the ABSTRACTION;
+/// the concrete ADAPTER is whatever durable outbox a surface keeps (on iOS, the reader's
+/// `LocalAnnotationStore`). The composition root queries it on each sync trigger; it never learns how
+/// the writes are stored.
+public protocol OutboxProbe: Sendable {
+    func pendingWriteCount() async -> Int
+}

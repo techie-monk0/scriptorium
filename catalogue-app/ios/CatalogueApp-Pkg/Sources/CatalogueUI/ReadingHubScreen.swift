@@ -46,7 +46,7 @@ struct ReadingHubScreen: View {
         .refreshable { await refresh() }
         .fullScreenCover(item: $toOpen) { book in
             ReaderShell(open: book, store: app.openSessions, endpoint: app.endpoint,
-                        readingStore: app.readingStore,
+                        readingStore: app.readingStore, settingsStore: app.settingsStore, historyStore: app.historyStore,
                         starAccessory: { e in e.map { AnyView(StarButton(eid: $0).environment(app)) }
                             ?? AnyView(EmptyView()) })
         }

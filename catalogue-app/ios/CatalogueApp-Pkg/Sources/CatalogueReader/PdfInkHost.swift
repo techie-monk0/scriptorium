@@ -1,6 +1,7 @@
 #if canImport(UIKit)
 import UIKit
 import PDFKit
+import os
 import Postilla
 import PostillaRender
 
@@ -40,11 +41,14 @@ public final class PdfInkHost: InkHost {
 
         // Remove annotations whose region is gone (an erase or an undo of a draw).
         var removedAny = false
+        var removedCount = 0
         for (id, entry) in drawn where !wantedIds.contains(id) {
             hide(entry)
             drawn[id] = nil
             removedAny = true
+            removedCount += 1
         }
+        if removedCount > 0 { ReaderLog.annotations.info("PdfInkHost.render REMOVING=\(removedCount) (wanted=\(wanted.count))") }
         // Add annotations for regions we aren't already showing (a fresh draw, or a redo).
         for region in wanted where drawn[region.id] == nil {
             let index = region.anchor.locations.position
@@ -55,15 +59,28 @@ public final class PdfInkHost: InkHost {
             page.addAnnotation(ann)
             drawn[region.id] = (page, ann)
         }
-        // A removal (erase/undo) needs a nudge — see `hide`. A pure add doesn't: `addAnnotation` repaints.
-        if removedAny { pdfView.setNeedsDisplay() }
+        // A removal (erase/undo) needs a reliable re-composite: `setNeedsDisplay` leaves the erased stroke
+        // baked in the page's cached tile. `layoutDocumentView` re-tiles and clears it — but an ERASE
+        // happens mid-PencilKit-gesture, where an inline re-tile is ignored until the interaction ends
+        // (why the erase only showed after a later refresh/tab-switch). Defer it to the next runloop so it
+        // runs after the gesture event completes. Only on removal — a pure add repaints via `addAnnotation`.
+        if removedAny {
+            let view = pdfView
+            ReaderLog.annotations.info("🧹 PdfInkHost: removed=\(removedCount) → scheduling redraw (layoutDocumentView)")
+            DispatchQueue.main.async {
+                view.layoutDocumentView()
+                view.setNeedsDisplay(view.bounds)
+                ReaderLog.annotations.info("🧹 PdfInkHost: redraw EXECUTED (layoutDocumentView + setNeedsDisplay)")
+            }
+        }
+        ReaderLog.annotations.info("PdfInkHost.render: wanted=\(wanted.count) drawn=\(self.drawn.count) removedAny=\(removedAny) removed=\(removedCount)")
     }
 
     public func clear() {
         guard !drawn.isEmpty else { return }
         for entry in drawn.values { hide(entry) }
         drawn.removeAll()
-        pdfView.setNeedsDisplay()
+        pdfView.layoutDocumentView()   // reliable re-composite (setNeedsDisplay leaves erased ink baked in)
     }
 
     /// Remove an ink annotation so it actually disappears. `removeAnnotation` alone updates the page model

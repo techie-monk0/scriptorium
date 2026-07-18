@@ -1,31 +1,28 @@
 import Foundation
+import Octavo
 
-/// Per-document reading settings — the layout/fit choices that genuinely differ from book to book
-/// (a large-print novel vs a dense scanned PDF), so they are remembered PER book rather than globally.
-/// Persisted to a JSON file keyed by `publicationId` ("holding:<id>") — the same key
-/// `CatalogueReadingStore` uses for the reading position. Reading THEME stays a global preference
-/// (see `ReaderView`'s `@AppStorage`), not here. Device-local, not synced.
-public struct ReaderSettings: Codable, Equatable, Sendable {
-    /// EPUB font size as an epub.js percent (e.g. 120). `nil` → the engine's default (100%).
-    public var epubFontPct: Int?
-    /// PDFKit `scaleFactor` the book was left at. `nil` → fit-to-width on open.
-    public var pdfScale: Double?
-    /// PDF reflow-to-text font size, in points. `nil` → the default (18pt).
-    public var reflowFontPt: Double?
-
-    public init(epubFontPct: Int? = nil, pdfScale: Double? = nil, reflowFontPt: Double? = nil) {
-        self.epubFontPct = epubFontPct
-        self.pdfScale = pdfScale
-        self.reflowFontPt = reflowFontPt
+/// The catalogue-app's concrete `octavo` **`ReaderSettingsStore`** — the sibling of
+/// `CatalogueReadingStore`, persisting the per-document reading settings (font size / zoom) to a JSON
+/// file keyed by `publicationId` ("holding:<id>"). octavo's `Octavo.open(settingsStore:)` restores
+/// these on open and auto-persists every change (font A±, PDF zoom, incl. pinch) through the navigator's
+/// `apply` / `onSettingsChanged` — so the reader no longer hand-rolls save/restore (which is what
+/// silently dropped PDF magnification).
+///
+/// Two deliberate scoping choices:
+/// - **Theme stays global.** Reading theme is an app-wide `@AppStorage` preference, not per book, so
+///   `setSettings` strips `theme` before persisting and never restores it — otherwise the SDK's
+///   per-document theme would fight the global one. (Everything else octavo models — font, spacing,
+///   margins, columns, PDF fit/crop, warmth, brightness, orientation, highlight colour — is per book.)
+/// - **`reflowFontPt` / `reflowMode` are app-only.** PDF reflow-to-text isn't an octavo engine setting,
+///   so it is persisted here via dedicated methods, alongside the octavo blob in the same file.
+public actor CatalogueReaderSettingsStore: ReaderSettingsStore {
+    private struct Entry: Codable {
+        var settings: ReaderSettings
+        var reflowFontPt: Double? = nil
+        var reflowMode: Bool? = nil
     }
-}
-
-/// A tiny per-publication settings file store, modelled on `CatalogueReadingStore` (same actor +
-/// JSON-in-Application-Support pattern, same `publicationId` key). Reads restore on open; writes are a
-/// field-wise merge so setting one control (say PDF zoom) never clobbers another (say EPUB font).
-public actor ReaderSettingsStore {
     private let fileURL: URL
-    private var entries: [String: ReaderSettings]?
+    private var entries: [String: Entry]?
 
     public init(directory: URL? = nil) {
         let dir = directory ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -34,33 +31,60 @@ public actor ReaderSettingsStore {
         self.fileURL = dir.appendingPathComponent("reader-settings.json")
     }
 
-    private func loaded() -> [String: ReaderSettings] {
+    private func loaded() -> [String: Entry] {
         if let entries { return entries }
         let e = (try? Data(contentsOf: fileURL))
-            .flatMap { try? JSONDecoder().decode([String: ReaderSettings].self, from: $0) } ?? [:]
+            .flatMap { try? JSONDecoder().decode([String: Entry].self, from: $0) } ?? [:]
         entries = e
         return e
     }
 
-    private func persist(_ e: [String: ReaderSettings]) {
+    private func persist(_ e: [String: Entry]) {
         entries = e
         if let data = try? JSONEncoder().encode(e) { try? data.write(to: fileURL, options: .atomic) }
     }
 
-    /// The saved settings for a publication (an all-`nil` `ReaderSettings` if none saved yet).
-    public func get(_ publicationId: String) -> ReaderSettings {
-        loaded()[publicationId] ?? ReaderSettings()
+    // MARK: ReaderSettingsStore (octavo port) — font size / zoom, per document
+
+    public func getSettings(_ publicationId: String) async throws -> ReaderSettings? {
+        loaded()[publicationId]?.settings
     }
 
-    /// Field-wise merge: only the non-`nil` fields of `change` overwrite; `nil` leaves the stored
-    /// value untouched. So `update(pub, ReaderSettings(pdfScale: 1.5))` sets zoom alone.
-    public func update(_ publicationId: String, _ change: ReaderSettings) {
+    public func setSettings(_ publicationId: String, _ settings: ReaderSettings) async throws {
         var e = loaded()
-        var s = e[publicationId] ?? ReaderSettings()
-        if let v = change.epubFontPct { s.epubFontPct = v }
-        if let v = change.pdfScale { s.pdfScale = v }
-        if let v = change.reflowFontPt { s.reflowFontPt = v }
-        e[publicationId] = s
+        var entry = e[publicationId] ?? Entry(settings: .defaults)
+        // Theme is a global app preference — keep it out of the per-document blob so the SDK's
+        // per-document restore can't override the global reading theme.
+        var s = settings
+        s.theme = nil
+        entry.settings = s
+        e[publicationId] = entry
+        persist(e)
+    }
+
+    // MARK: App extras — PDF reflow-to-text (mode + font size); not octavo engine settings
+
+    public func reflowFontPt(_ publicationId: String) -> Double? {
+        loaded()[publicationId]?.reflowFontPt
+    }
+
+    public func setReflowFontPt(_ publicationId: String, _ pt: Double) {
+        mutateEntry(publicationId) { $0.reflowFontPt = pt }
+    }
+
+    public func reflowMode(_ publicationId: String) -> Bool {
+        loaded()[publicationId]?.reflowMode ?? false
+    }
+
+    public func setReflowMode(_ publicationId: String, _ on: Bool) {
+        mutateEntry(publicationId) { $0.reflowMode = on }
+    }
+
+    private func mutateEntry(_ publicationId: String, _ mutate: (inout Entry) -> Void) {
+        var e = loaded()
+        var entry = e[publicationId] ?? Entry(settings: .defaults)
+        mutate(&entry)
+        e[publicationId] = entry
         persist(e)
     }
 }
