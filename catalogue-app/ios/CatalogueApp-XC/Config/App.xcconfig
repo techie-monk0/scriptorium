@@ -9,6 +9,11 @@
 // so overriding the id here is enough — nothing else hardcodes it.
 PRODUCT_BUNDLE_IDENTIFIER = app.scriptorium.reader
 
+// Built-in default server address (expanded into the Info.plist `CatalogueDefaultServer` key,
+// read by AppModel.defaultEndpoint). Empty here so public/fresh builds default to loopback; the
+// maintainer's real address lives in the git-ignored App.local.xcconfig below.
+CATALOGUE_DEFAULT_SERVER =
+
 // Optional per-machine override (git-ignored). Absent in fresh/public checkouts, so the
 // default above applies. Present on the maintainer's machine to keep signing + the
 // existing keychain login stable.

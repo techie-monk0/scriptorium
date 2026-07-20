@@ -13,8 +13,20 @@ import CatalogueReader
 public final class AppModel {
     public static let serverKey = "serverEndpoint"
     /// Default endpoint when nothing is set — overridden by the persisted choice, then `CATALOGUE_SERVER`.
-    public static let defaultEndpoint: any ServerEndpoint =
-        LocalNetworkEndpoint(baseURL: URL(string: "http://127.0.0.1:8000")!)
+    /// The built-in default reads the `CatalogueDefaultServer` Info.plist key (injected at build time
+    /// from the git-ignored `App.local.xcconfig` → `CATALOGUE_DEFAULT_SERVER`, which mirrors
+    /// `app_default_server` in `private/local_defaults.json`). Empty/absent in public builds → loopback.
+    public static var defaultEndpoint: any ServerEndpoint {
+        builtinDefault(Bundle.main.object(forInfoDictionaryKey: "CatalogueDefaultServer") as? String)
+    }
+
+    /// Resolve a built-in default endpoint from a raw address string (the `CatalogueDefaultServer`
+    /// Info.plist value). A non-empty, parseable address wins (scheme inferred, so a bare
+    /// `host.ts.net:8000` becomes an `http://` LAN endpoint); anything empty/invalid → loopback.
+    nonisolated static func builtinDefault(_ raw: String?) -> any ServerEndpoint {
+        if let raw, let e = ServerEndpoints.infer(from: raw) { return e }
+        return LocalNetworkEndpoint(baseURL: URL(string: "http://127.0.0.1:8000")!)
+    }
 
     /// The current reachability strategy. Changing it (via `setServer`/`setEndpoint`) rebuilds the
     /// API/platform; `serverURL` is its base URL.

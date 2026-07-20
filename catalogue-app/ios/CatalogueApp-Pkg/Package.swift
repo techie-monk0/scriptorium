@@ -54,6 +54,7 @@ let package = Package(
         .testTarget(name: "CatalogueDesignTests", dependencies: ["CatalogueDesign"]),
         .testTarget(name: "CatalogueCoreTests", dependencies: ["CatalogueCore"], resources: [.copy("Goldens")]),
         .testTarget(name: "CatalogueDataTests", dependencies: ["CatalogueData", "CatalogueCore"]),
+        .testTarget(name: "CatalogueUITests", dependencies: ["CatalogueUI"]),
         .testTarget(name: "CatalogueReaderTests", dependencies: [
             "CatalogueReader", "CatalogueReaderWire",
             .product(name: "Octavo", package: "octavo-swift"),

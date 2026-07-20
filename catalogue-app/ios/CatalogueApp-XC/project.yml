@@ -30,10 +30,24 @@ targets:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
-        # The library server is plain HTTP on the LAN → allow local networking (not arbitrary loads).
+        # The library server is plain HTTP. ATS exemptions, narrowest that work:
+        #  - NSAllowsLocalNetworking: true → RFC1918 LAN (192.168/10/172.16), .local, loopback.
+        #  - NSExceptionDomains ts.net    → the Tailscale tailnet (MagicDNS). Tailscale hands out
+        #    100.64.0.0/10 (CGNAT) addresses, which ATS does NOT treat as local, so plain HTTP to a
+        #    tailnet host needs its own exception. WireGuard already encrypts the tailnet, so cleartext
+        #    on top is safe. Reach the server by its MagicDNS name (…​.ts.net), not the raw 100.x IP —
+        #    ATS exception domains match DNS names, not IP literals.
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
+          NSExceptionDomains:
+            ts.net:
+              NSIncludesSubdomains: true
+              NSExceptionAllowsInsecureHTTPLoads: true
         NSLocalNetworkUsageDescription: "Connect to your catalogue server on the local network."
+        # Built-in default server address (empty in public builds → app falls back to loopback).
+        # Expanded at build time from CATALOGUE_DEFAULT_SERVER (git-ignored App.local.xcconfig,
+        # mirroring `private/local_defaults.json`). Read by AppModel.defaultEndpoint.
+        CatalogueDefaultServer: $(CATALOGUE_DEFAULT_SERVER)
     configFiles:
       Debug: Config/App.xcconfig
       Release: Config/App.xcconfig
