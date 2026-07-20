@@ -35,14 +35,34 @@
     return STATUS.OK;
   }
 
+  // Reload into FRESH assets. On a plain web page this is just location.reload() (static_v already
+  // cache-busts changed files). Under a PWA service worker, a bare reload would re-serve the
+  // stale-while-revalidate cache, so first ask the SW to re-fetch the shell + reader libs from the
+  // network, then reload when it confirms (with a timeout fallback so we always reload).
+  function reloadFresh() {
+    var swc = (typeof navigator !== 'undefined') && navigator.serviceWorker;
+    if (!swc || !swc.controller) { location.reload(); return; }
+    var done = false;
+    var finish = function () { if (done) return; done = true; location.reload(); };
+    var onMsg = function (e) { if (e.data && e.data.type === 'ASSETS_REFRESHED') finish(); };
+    swc.addEventListener('message', onMsg);
+    swc.controller.postMessage({ type: 'REFRESH_ASSETS' });
+    if (swc.getRegistration) swc.getRegistration().then(function (reg) {    // also pull a changed sw.js
+      if (!reg) return;
+      try { reg.update(); } catch (e) {}
+      if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+    });
+    setTimeout(finish, 4000);
+  }
+
   var TEXT = {};
   TEXT[STATUS.OUTDATED] = {
     msg: 'A newer version of the app is available.',
-    action: 'Reload', run: function () { location.reload(); }
+    action: 'Reload', run: reloadFresh
   };
   TEXT[STATUS.SERVER_STALE] = {
     msg: 'The server is running older code than what’s on disk — restart it, then reload.',
-    action: 'Reload', run: function () { location.reload(); }
+    action: 'Reload', run: reloadFresh
   };
 
   function banner(status) {
@@ -110,6 +130,7 @@
     pageBuild: pageBuild,
     classify: classify,     // pure — unit-testable in a browser without network
     apply: apply,
-    watch: watch
+    watch: watch,
+    reloadFresh: reloadFresh
   };
 })();

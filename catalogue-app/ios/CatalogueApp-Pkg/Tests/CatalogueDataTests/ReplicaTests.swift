@@ -97,4 +97,16 @@ final class ReplicaTests: XCTestCase {
         XCTAssertEqual(cached?.count, 3)
         XCTAssertEqual(cached?.editions.map(\.editionId), [42, 43, 50])
     }
+
+    func testClearETagRemovesTheTagButKeepsTheReplica() async throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let store = ReplicaStore(directory: dir)
+        await store.store(try replica(), etag: "\"v1\"")
+        let etagFile = dir.appendingPathComponent("replica.etag")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: etagFile.path))
+        await store.clearETag()                                  // force the next pull to be a full 200
+        XCTAssertFalse(FileManager.default.fileExists(atPath: etagFile.path))
+        let cached = await store.cached()                        // data itself is untouched
+        XCTAssertEqual(cached?.count, 3)
+    }
 }

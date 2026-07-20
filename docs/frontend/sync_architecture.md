@@ -76,9 +76,18 @@ build it's running and whether it's stale; every client compares and reacts:
   hand a client a broken page; the API/health/version/static routes stay open so clients can still detect
   the condition and recover. `CATALOGUE_ALLOW_STALE=1` opts out for live-editing dev.
 
-Clients act on the same two fields: web pages + the reader show a reload/restart banner
-(`static/js/app-version.js`), the PWA folds the check into its `/api/v1/health` probe, and iOS surfaces it
-in Settings (`AppBuildContract` / `AppBuildWatcher`, the native mirror of `app-version.js`).
+Clients act on the same two fields (`static/js/app-version.js`, mirrored on iOS by `AppBuildContract` /
+`AppBuildWatcher`):
+- **Web + reader**: a dismissible reload/restart banner. "Reload" is a plain reload (static assets are
+  cache-busted by `static_v`).
+- **PWA**: the check rides on the existing `/api/v1/health` probe. Because the service worker serves the
+  shell stale-while-revalidate, a bare reload would re-serve the *stale* cache, so "Reload" first messages
+  the SW (`REFRESH_ASSETS` / `SKIP_WAITING`) to re-fetch the shell + reader libs from the network, then
+  reloads on the SW's `ASSETS_REFRESHED` reply — landing on genuinely fresh assets in one click.
+- **iOS**: an app-wide `Notice` popup (not just a Settings label) — `.outdated` offers a data refresh
+  (`AppModel.forceResync()` re-baselines the build, drops the replica ETag, re-pulls), `.serverStale`
+  tells the user to restart the server (a native binary can't reload its own code; wire compatibility
+  stays guarded by the per-surface contracts like `reader_sync`).
 
 "Requires a restart" is scoped to Python code: templates are served fresh (`TEMPLATES_AUTO_RELOAD`) and
 static assets are cache-busted (`static_v`), so changing those needs no restart and doesn't flip
@@ -108,9 +117,11 @@ bumps the build automatically because the build id is derived from the files.
   wins → restart; else a live build ≠ the baseline → reload; else ok. Missing fields (an older server) → ok,
   so it never false-alarms.
 - **Where it lives**: server `app_version.py` + the staleness gate in `web.py` + `/version` in `routes/api.py`;
-  clients `static/js/app-version.js` (web/PWA/reader) and `CatalogueCore/AppBuildContract.swift` (iOS);
-  interstitial `templates/_stale.html`. Guards: `tests/test_app_version.py`, `tests/system/test_version_handshake*.py`,
-  `Tests/CatalogueCoreTests/AppBuildContractTests.swift`.
+  clients `static/js/app-version.js` (web/PWA/reader) with the PWA SW refresh in `static/pwa/sw.js`
+  (`REFRESH_ASSETS`/`SKIP_WAITING`), and iOS `CatalogueCore/AppBuildContract.swift` + the `RootShell` popup +
+  `AppModel.forceResync()`; interstitial `templates/_stale.html`. Guards: `tests/test_app_version.py`,
+  `tests/system/test_version_handshake*.py` (incl. the browser SW round-trip),
+  `Tests/CatalogueCoreTests/AppBuildContractTests.swift`, `Tests/CatalogueDataTests/ReplicaTests.swift`.
 
 ## 3. Triggers — when each surface revalidates
 

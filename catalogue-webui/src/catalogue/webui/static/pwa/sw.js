@@ -14,7 +14,7 @@
  * shell fresh within one extra load. Covers are network-first, so they need no bump to
  * refresh — bump COVERS only to drop offline-cached art that older clients still hold.
  */
-const CACHE = 'lib-device-v15';   // bump → purge + re-precache (added reader-themes.css)
+const CACHE = 'lib-device-v16';   // bump → purge + re-precache (message-driven refresh for app-version)
 const COVERS = 'lib-covers-v3';   // bump → purge stale art cached by older clients (now network-first)
 const SHELL = ['/app', '/static/pwa/app.js', '/static/pwa/reader.js', '/static/pwa/pwa.css',
                '/static/css/tokens.css', '/static/css/shelf.css', '/static/js/shelf.js',
@@ -120,4 +120,25 @@ self.addEventListener('fetch', e => {
   }
 
   e.respondWith(fetch(req).catch(() => caches.match(req)));        // default: network-first
+});
+
+// App-version handshake support (see static/js/app-version.js). Stale-while-revalidate means a plain
+// reload still serves the PREVIOUSLY-cached (stale) shell/assets — the fresh copy only lands one load
+// later. So when the client detects a new server build it asks us to RE-FETCH the shell + reader libs
+// from the network NOW (bypassing the HTTP cache) into the active cache, then tells the page to reload
+// into genuinely fresh assets. `SKIP_WAITING` lets a newly-installed sw.js take over immediately.
+self.addEventListener('message', e => {
+  const type = e.data && e.data.type;
+  if (type === 'SKIP_WAITING') { self.skipWaiting(); return; }
+  if (type === 'REFRESH_ASSETS') {
+    e.waitUntil((async () => {
+      const c = await caches.open(CACHE);
+      await Promise.all([...SHELL, ...VENDOR].map(async u => {
+        try { const r = await fetch(u, { cache: 'reload' }); if (r.ok) await c.put(u, r.clone()); }
+        catch (err) {}                                 // best-effort: a miss just leaves the old copy
+      }));
+      const clients = await self.clients.matchAll({ includeUncontrolled: true });
+      clients.forEach(cl => cl.postMessage({ type: 'ASSETS_REFRESHED' }));
+    })());
+  }
 });

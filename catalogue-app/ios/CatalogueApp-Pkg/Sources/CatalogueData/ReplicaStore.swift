@@ -40,6 +40,13 @@ public actor ReplicaStore {
         try await revalidate().replica
     }
 
+    /// Forget the saved ETag so the next `revalidate()` sends no `If-None-Match` and gets a full 200
+    /// (never a 304). Used to force a complete re-pull — e.g. after the server was rebuilt and the
+    /// client wants to be sure it isn't holding a shape the old ETag would have kept.
+    public func clearETag() {
+        try? FileManager.default.removeItem(at: etagURL)
+    }
+
     /// Conditional refresh that also reports whether the payload actually changed (200 vs 304) — the
     /// signal the `SyncEngine` needs to bump its data revision only when there's new data.
     @discardableResult
