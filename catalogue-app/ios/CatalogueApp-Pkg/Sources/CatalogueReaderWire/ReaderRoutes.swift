@@ -20,6 +20,14 @@ public enum ReaderRoutes {
         components(baseURL, "/sync/reader").url ?? baseURL
     }
 
+    /// GET `/sync/reader/rev?holding=<id>` — the cheap change-probe: max rev per resource for one
+    /// copy, so a reader can decide whether to pull without fetching any rows.
+    public static func syncRev(baseURL: URL, holding: Int) -> URL {
+        var c = components(baseURL, "/sync/reader/rev")
+        c.queryItems = [URLQueryItem(name: "holding", value: String(holding))]
+        return c.url ?? baseURL
+    }
+
     /// GET/POST `/holding/<id>/position` — cross-device reading position.
     public static func position(baseURL: URL, holding: Int) -> URL {
         components(baseURL, "/holding/\(holding)/position").url

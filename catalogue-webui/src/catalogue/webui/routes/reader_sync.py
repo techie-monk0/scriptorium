@@ -85,6 +85,19 @@ def register(app, ctx):
                         "bookmarks": bookmarks, "annotations": annotations,
                         "outlines": outlines, **_contract_version()})
 
+    @app.get("/sync/reader/rev")
+    def reader_sync_rev():
+        # The cheap CHANGE PROBE: max rev per resource for ONE copy, so a reader can ask "did this
+        # book's bookmarks / outline / annotations change on another device since I last synced?"
+        # without pulling any rows — then only do the full `?holding&since` pull when something did.
+        # Editor-only, same boundary as the pull (the auth before_request gate keys on the endpoint
+        # name; a viewer doesn't sync marks). A pure read → no `can_edit()` here.
+        store = store_factory(g.db)
+        holding = request.args.get("holding", type=int)
+        if holding is None:
+            return jsonify({"error": "holding required"}), 400
+        return jsonify({**store.holding_revs(holding), **_contract_version()})
+
     @app.post("/sync/reader")
     def reader_sync_push():
         # Reader marks are the library owner's; a read-only viewer doesn't write them.

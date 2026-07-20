@@ -334,6 +334,39 @@ def test_outline_older_edit_skipped(app_env, seed):
     assert json.loads(outs[0]["entries"])[0]["title"] == "Newer"
 
 
+# ── the cheap change-probe: GET /sync/reader/rev ─────────────────────────────
+def test_reader_sync_rev_probe_reports_per_resource_max(app_env, seed):
+    """The reader asks this before pulling: max rev per resource for one copy, so it can skip the
+    full pull when nothing changed and only fetch when it did."""
+    c, _, _ = app_env
+    hid = _holding(seed)
+
+    # Nothing yet → all zero.
+    revs = c.get(f"/sync/reader/rev?holding={hid}").get_json()
+    assert (revs["bookmarks_rev"], revs["annotations_rev"], revs["outlines_rev"]) == (0, 0, 0)
+
+    # A bookmark, an annotation, an outline each advance their own probe (shared monotonic rev).
+    _bm(c, id="bm-1", holding_id=hid, updated_at="2026-06-29T10:00:00Z")
+    _ann(c, id="an-1", holding_id=hid, kind="highlight", updated_at="2026-06-29T10:01:00Z")
+    _outline(c, id=f"outline:holding:{hid}", holding_id=hid, entries=_entries((1, "X", 1)),
+             updated_at="2026-06-29T10:02:00Z")
+    revs = c.get(f"/sync/reader/rev?holding={hid}").get_json()
+    assert (revs["bookmarks_rev"], revs["annotations_rev"], revs["outlines_rev"]) == (1, 2, 3)
+
+    # A new write to ONE resource moves only that probe — the reader learns exactly what to re-pull.
+    before = c.get(f"/sync/reader/rev?holding={hid}").get_json()
+    _bm(c, id="bm-2", holding_id=hid, updated_at="2026-06-29T10:03:00Z")
+    after = c.get(f"/sync/reader/rev?holding={hid}").get_json()
+    assert after["bookmarks_rev"] > before["bookmarks_rev"]        # change detected
+    assert after["annotations_rev"] == before["annotations_rev"]   # unrelated resources unchanged
+    assert after["outlines_rev"] == before["outlines_rev"]
+
+
+def test_reader_sync_rev_requires_holding(app_env, seed):
+    c, _, _ = app_env
+    assert c.get("/sync/reader/rev").status_code == 400
+
+
 def test_outline_holding_scoped_live_and_tombstone(app_env, seed):
     c, _, _ = app_env
     hid = _holding(seed)

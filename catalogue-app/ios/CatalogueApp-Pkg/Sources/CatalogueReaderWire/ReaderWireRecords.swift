@@ -15,6 +15,31 @@ public struct ReaderPullResponse: Decodable, Sendable {
     public var contract_version: Int?
 }
 
+/// GET `/sync/reader/rev` → the max rev per resource for one copy (the cheap change-probe). A reader
+/// stores the last set it merged and compares — if any is higher, that resource changed elsewhere.
+public struct ReaderRevResponse: Decodable, Sendable {
+    public var bookmarks_rev: Int
+    public var annotations_rev: Int
+    public var outlines_rev: Int
+    public var contract_version: Int?
+}
+
+/// The neutral value: max rev per resource for one copy. `Codable` so a client can persist the last
+/// set it merged (its per-book sync cursor) and diff the next probe against it.
+public struct HoldingRevs: Codable, Equatable, Sendable {
+    public var bookmarks: Int
+    public var annotations: Int
+    public var outlines: Int
+    public init(bookmarks: Int = 0, annotations: Int = 0, outlines: Int = 0) {
+        self.bookmarks = bookmarks; self.annotations = annotations; self.outlines = outlines
+    }
+    public static let zero = HoldingRevs()
+    /// True if the server has a newer rev for ANY resource than what we last merged (`seen`).
+    public func hasChanges(since seen: HoldingRevs) -> Bool {
+        bookmarks > seen.bookmarks || annotations > seen.annotations || outlines > seen.outlines
+    }
+}
+
 /// One authored table-of-contents entry: a heading at `level` (>=1) pointing at 1-based `page`. The
 /// neutral shape shared by the wire, the local store, and the editor UI.
 public struct OutlineEntry: Codable, Equatable, Sendable {

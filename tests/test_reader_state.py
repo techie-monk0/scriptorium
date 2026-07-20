@@ -63,6 +63,30 @@ def test_rev_is_monotonic_and_cursor_tracks_it(store, hid):
     assert [b.id for b in store.bookmarks_since(1)] == ["b"]   # only after the cursor
 
 
+def test_holding_revs_probe_tracks_each_resource(store, hid):
+    # The cheap change-probe the reader uses to decide whether to pull. Empty → all zero.
+    assert store.holding_revs(hid) == {"bookmarks_rev": 0, "annotations_rev": 0, "outlines_rev": 0}
+
+    # A bookmark advances only its own probe (even though the rev counter is shared globally).
+    store.apply_bookmark(id="bm-1", holding_id=hid, updated_at="2026-06-26T10:00:00Z")
+    revs = store.holding_revs(hid)
+    assert revs["bookmarks_rev"] == 1 and revs["annotations_rev"] == 0 and revs["outlines_rev"] == 0
+
+    # An annotation, then an outline, each advance their own probe to the shared high-water mark.
+    store.apply_annotation(id="an-1", holding_id=hid, kind="highlight",
+                           updated_at="2026-06-26T10:01:00Z")
+    store.apply_outline(id=f"outline:holding:{hid}", holding_id=hid,
+                        entries=json.dumps([{"level": 1, "title": "X", "page": 1}]),
+                        updated_at="2026-06-26T10:02:00Z")
+    revs = store.holding_revs(hid)
+    assert revs == {"bookmarks_rev": 1, "annotations_rev": 2, "outlines_rev": 3}
+
+    # A tombstone (cross-device deletion) still bumps the probe, so the delete is detected as change.
+    store.apply_bookmark(id="bm-1", holding_id=hid, deleted_at="2026-06-26T10:03:00Z",
+                         updated_at="2026-06-26T10:03:00Z")
+    assert store.holding_revs(hid)["bookmarks_rev"] == 4
+
+
 def test_last_write_wins(store, hid):
     store.apply_bookmark(id="x", holding_id=hid, label="old", updated_at="2026-06-26T10:00:00Z")
     assert store.apply_bookmark(id="x", holding_id=hid, label="new",

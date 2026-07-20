@@ -213,6 +213,15 @@ class ReaderStateStore(abc.ABC):
     def next_rev(self) -> int:
         """Claim the next monotonic rev for a write."""
 
+    @abc.abstractmethod
+    def holding_revs(self, holding_id: int) -> "dict[str, int]":
+        """Max rev per resource (bookmark/annotation/outline) for one copy, INCLUDING tombstones —
+        the cheap CHANGE PROBE a reader uses to decide whether a book's marks changed on another
+        device before pulling any rows. Returns `{"bookmarks_rev", "annotations_rev",
+        "outlines_rev"}`, each 0 when that resource is empty. Tombstones count (their write bumps
+        rev), so a cross-device deletion is detected too. The global `cursor()` can't answer this —
+        it advances on writes to *any* book."""
+
     # ── reads (incl. tombstones, oldest-change first) ────────────────────────
     @abc.abstractmethod
     def bookmarks_since(self, since: int) -> "list[Bookmark]":
@@ -348,6 +357,19 @@ class SqliteReaderStateStore(ReaderStateStore):
         self._c.execute("INSERT OR IGNORE INTO sync_state (id, rev) VALUES (1, 0)")
         self._c.execute("UPDATE sync_state SET rev = rev + 1 WHERE id = 1")
         return self._c.execute("SELECT rev FROM sync_state WHERE id = 1").fetchone()[0]
+
+    def holding_revs(self, holding_id: int) -> "dict[str, int]":
+        # One indexed MAX(rev) per table, filtered by holding — no rows returned. Table names are
+        # module constants, never user input, so the f-string is safe. INCLUDES tombstones (no
+        # deleted_at filter) so a deletion elsewhere is a detected change.
+        def _max(table: str) -> int:
+            r = self._c.execute(
+                f"SELECT COALESCE(MAX(rev), 0) FROM {table} WHERE holding_id = ?", (holding_id,)
+            ).fetchone()
+            return r[0] if r else 0
+        return {"bookmarks_rev": _max("bookmark"),
+                "annotations_rev": _max("annotation"),
+                "outlines_rev": _max("outline")}
 
     def bookmarks_since(self, since: int) -> "list[Bookmark]":
         rows = self._c.execute(
@@ -535,6 +557,14 @@ class InMemoryReaderStateStore(ReaderStateStore):
     def next_rev(self) -> int:
         self._rev += 1
         return self._rev
+
+    def holding_revs(self, holding_id):
+        def _max(items):
+            revs = [x.rev for x in items.values() if x.holding_id == holding_id]
+            return max(revs) if revs else 0
+        return {"bookmarks_rev": _max(self._bm),
+                "annotations_rev": _max(self._ann),
+                "outlines_rev": _max(self._out)}
 
     def bookmarks_since(self, since):
         return sorted((b for b in self._bm.values() if b.rev > since), key=lambda b: b.rev)

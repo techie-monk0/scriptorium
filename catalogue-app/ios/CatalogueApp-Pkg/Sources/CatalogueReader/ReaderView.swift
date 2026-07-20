@@ -89,6 +89,9 @@ public struct ReaderView: View {
     // Bookmarks (list + Add) and the authored-outline editor (entries + Save / Save into PDF) live here.
     enum ContentsTab: Int, Hashable { case bookmarks, outline }
     @State private var showContents = false
+    // Armed while a refresh initiated FROM opening Contents is in flight — drives the two-phase
+    // "Checking…"/"Getting…" dialog over the Contents panel (background refreshes show the chip instead).
+    @State private var contentsRefreshArmed = false
     @State private var contentsTab: ContentsTab = .bookmarks
     @State private var contentsEditing = false        // Edit/Done toggle: tap-to-jump vs edit (PDF-Expert style)
     // Naming a bookmark before it's saved (instead of a default "Page N"), and renaming an existing one.
@@ -182,7 +185,15 @@ public struct ReaderView: View {
             bmStore as? any RemoteReconcilable,
             olStore as? any RemoteReconcilable,
         ].compactMap { $0 }
-        self._syncCoordinator = State(initialValue: ReaderSyncCoordinator(resources: reconcilables))
+        // The cheap change-probe + per-book cursor let the coordinator ask "did anything change?"
+        // before pulling — so a routine open with no cross-device edits does one tiny request, not a
+        // full three-resource pull. A failed probe (offline) falls back to fetching.
+        let revChecker = ReaderRevCheck(baseURL: endpoint.baseURL, authorize: { endpoint.authorize(&$0) })
+        let revCheck: @Sendable (String) async -> HoldingRevs? = { pub in
+            try? await revChecker.revs(publicationId: pub)
+        }
+        self._syncCoordinator = State(initialValue: ReaderSyncCoordinator(
+            resources: reconcilables, revCheck: revCheck, cursors: ReaderSyncCursorStore()))
     }
 
     private var pubId: String { "holding:\(holding.holdingId)" }
@@ -441,6 +452,11 @@ public struct ReaderView: View {
             // so the fresh marks/bookmarks/outline show up in place — the FIRST Contents open, not the
             // third, and live if the panel is already open.
             .onChange(of: syncCoordinator.generation) { Task { await repopulateAfterSync() } }
+            // Disarm the Contents dialog once a sync settles, so a later BACKGROUND refresh (which never
+            // arms it) can't spuriously re-raise the dialog over an open panel.
+            .onChange(of: syncCoordinator.phase) { _, p in
+                if p == .synced || p == .failed { contentsRefreshArmed = false }
+            }
             // Reader freshness (Shape-B delta sync): pick up what another device changed — on return to
             // foreground and via a light poll while the book stays open. One coordinator refresh reconciles
             // marks/bookmarks/outline together (merged in place, so the current page never moves).
@@ -1196,20 +1212,23 @@ public struct ReaderView: View {
         contentsEditing = false            // open in view/jump mode; Edit reveals the editing affordances
         renamingBookmark = nil
         showContents = true
+        contentsRefreshArmed = true        // this refresh shows the two-phase dialog over the panel
         Task {
             await reloadBookmarks()
             let authored = (try? await outline.pull(publicationId: pubId)) ?? []
             editor.open(authored: authored, embedded: reader?.outline() ?? [])   // emits `outline.open …`
-            // Reconcile the server now; when it lands, `repopulateAfterSync` refreshes this open panel in
-            // place (no need to close and reopen to see another device's bookmarks/outline).
+            // Two-step: probe whether anything changed ("Checking…"), then pull if it did ("Getting…").
+            // When it lands, `repopulateAfterSync` refreshes this open panel in place — no reopen needed.
             await syncCoordinator.refresh(pubId: pubId)
         }
     }
 
-    /// The single global sync chip (nav-bar centre): silent unless a cross-device refresh is running, when
-    /// it shows a small spinner + "Refreshing…". One indicator for every synced resource at once.
+    /// The single global sync chip (nav-bar centre): silent unless a background refresh is running, when
+    /// it shows a small spinner + "Refreshing…". Suppressed while the Contents refresh dialog is armed —
+    /// that flow shows the fuller two-phase dialog instead, so the two never double up.
     @ViewBuilder private var syncChip: some View {
-        if syncCoordinator.phase == .refreshing {
+        let busy = syncCoordinator.phase == .checking || syncCoordinator.phase == .fetching
+        if busy, !contentsRefreshArmed {
             HStack(spacing: 6) {
                 ProgressView().controlSize(.mini)
                 Text("Refreshing…").font(.caption).foregroundStyle(.secondary)
@@ -1317,7 +1336,46 @@ public struct ReaderView: View {
             } message: {
                 Text("A name helps you find it later.")
             }
+            // The two-phase refresh dialog, over the panel content. Auto-clears when the sync settles
+            // (revealing the now-updated list); Cancel dismisses it AND the panel while the sync finishes
+            // in the background.
+            .overlay {
+                if contentsRefreshArmed,
+                   syncCoordinator.phase == .checking || syncCoordinator.phase == .fetching {
+                    contentsRefreshDialog.transition(.opacity)
+                }
+            }
+            .animation(.easeInOut(duration: 0.2), value: syncCoordinator.phase)
         }
+    }
+
+    /// The spinner card shown over the Contents panel while a refresh runs. Two messages, one per phase:
+    /// probing for changes, then downloading them. Cancel closes the dialog + panel; the sync keeps going.
+    private var contentsRefreshDialog: some View {
+        ZStack {
+            Color.black.opacity(0.28).ignoresSafeArea()
+            VStack(spacing: 16) {
+                ProgressView()
+                Text(syncCoordinator.phase == .fetching
+                     ? "Getting updated content markers"
+                     : "Checking if content markers changed")
+                    .font(.headline).multilineTextAlignment(.center)
+                Button("Cancel") { cancelContentsRefresh() }
+                    .buttonStyle(.bordered)
+            }
+            .padding(28)
+            .frame(maxWidth: 300)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .shadow(radius: 20, y: 8)
+            .padding(28)
+        }
+    }
+
+    /// Cancel the dialog: hide it and the Contents panel. The background sync is a detached Task, so it
+    /// keeps running — the fetched markers land locally and show on the next open (no wasted round-trip).
+    private func cancelContentsRefresh() {
+        contentsRefreshArmed = false
+        showContents = false
     }
 
     /// Toolbar: Close (which also syncs a pending outline edit) + the Edit/Done toggle + per-tab actions.

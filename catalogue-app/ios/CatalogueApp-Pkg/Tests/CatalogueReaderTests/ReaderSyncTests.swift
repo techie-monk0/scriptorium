@@ -37,9 +37,30 @@ final class ReaderSyncTests: XCTestCase {
         cfg.protocolClasses = [MockURLProtocol.self]
         return ReaderSync(baseURL: URL(string: "http://mac.local:5000")!, session: URLSession(configuration: cfg))
     }
+    private func makeRevCheck() -> ReaderRevCheck {
+        let cfg = URLSessionConfiguration.ephemeral
+        cfg.protocolClasses = [MockURLProtocol.self]
+        return ReaderRevCheck(baseURL: URL(string: "http://mac.local:5000")!,
+                              session: URLSession(configuration: cfg))
+    }
     override func tearDown() { MockURLProtocol.routes = [:]; MockURLProtocol.lastBody = nil; super.tearDown() }
 
     private let sampleId = UUID(uuidString: "11111111-1111-1111-1111-111111111111")!
+
+    /// The change-probe transport decodes `/sync/reader/rev` → `HoldingRevs`.
+    func testRevCheckDecodesPerResourceRevs() async throws {
+        MockURLProtocol.routes["/sync/reader/rev"] =
+            (200, Data(#"{"bookmarks_rev":3,"annotations_rev":2,"outlines_rev":1}"#.utf8))
+        let revs = try await makeRevCheck().revs(publicationId: "holding:7")
+        XCTAssertEqual(revs, HoldingRevs(bookmarks: 3, annotations: 2, outlines: 1))
+    }
+
+    /// A non-2xx probe throws, so the coordinator falls back to "assume changed" and still fetches.
+    func testRevCheckThrowsOnServerError() async {
+        MockURLProtocol.routes["/sync/reader/rev"] = (500, Data())
+        do { _ = try await makeRevCheck().revs(publicationId: "holding:7"); XCTFail("expected throw") }
+        catch { /* expected */ }
+    }
 
     private func sampleAnnotation() -> Annotation {
         let loc = Locator(publicationId: "holding:7", format: .pdf, locations: .init(page: 3))
