@@ -40,10 +40,15 @@
      keeps the active item in sync with the router. Same component the web UI mounts. #}
   <div id="navhost"></div>
   {# Shared frontend layer (Tiers 2–3), then the PWA app (which defines the PWA adapter). #}
+  {# App-version handshake: the build this shell was served from. app.js's probe() feeds each
+     /api/v1/health response to AppVersion, which banners a reload when the server build changes or
+     the server goes stale. #}
+  <script>window.APP_BUILD = {{ app_build | tojson }};</script>
   <script src="/static/js/shelf.js"></script>
   <script src="/static/js/typeahead.js"></script>
   <script src="/static/js/library-core.js"></script>
   <script src="/static/js/library-ui-dom.js"></script>
+  <script src="/static/js/app-version.js"></script>
   <script src="/static/pwa/content-index.js"></script>
   <script src="/static/pwa/app.js"></script>
 </body>

@@ -4,8 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>{{ title }}</title>
-  <link rel="stylesheet" href="/static/reader/reader.css">
-  <link rel="stylesheet" href="/static/reader/reader-themes.css"><!-- generated from palette.json reading_themes -->
+  {# static_v = ?v=mtime cache-buster (same as _base.html): a changed reader asset is refetched
+     immediately, never served stale from the browser cache. #}
+  <link rel="stylesheet" href="{{ static_v('reader/reader.css') }}">
+  <link rel="stylesheet" href="{{ static_v('reader/reader-themes.css') }}"><!-- generated from palette.json reading_themes -->
+  {# The build this reader page was served from; app-version.js banners a reload if the server build
+     changes underneath an open reader (or the server goes stale). #}
+  <script>window.APP_BUILD = {{ app_build | tojson }};</script>
 </head>
 <body>
   <div class="tabstrip hidden" id="tabstrip"></div>{# open books (tabs) — shown when 2+ are open #}
@@ -63,12 +68,14 @@
        Flask-backed adapters (URL-streamed PDF, fetch-bytes EPUB, /position get/save/beacon)
        into ReaderCore. The PWA / a future native webview drive the SAME engine with their
        own adapters. -->
-  <script src="/static/reader/vendor.js"></script>
-  <script src="/static/reader/overlay.js"></script>
-  <script src="/static/reader/reader-core.js"></script>
-  <script src="/static/reader/reader-sessions.js"></script>
-  <script src="/static/js/library-core.js"></script>
-  <script src="/static/js/web-recent.js"></script>
+  <script src="{{ static_v('reader/vendor.js') }}"></script>
+  <script src="{{ static_v('reader/overlay.js') }}"></script>
+  <script src="{{ static_v('reader/reader-core.js') }}"></script>
+  <script src="{{ static_v('reader/reader-sessions.js') }}"></script>
+  <script src="{{ static_v('js/library-core.js') }}"></script>
+  <script src="{{ static_v('js/web-recent.js') }}"></script>
+  <script src="{{ static_v('js/app-version.js') }}"></script>
+  <script>if (window.AppVersion) AppVersion.watch();</script>
   <script>/* device-local recent list (feeds the Read menu's resume) — web has no synced store */
     if (window.WebRecent) WebRecent.record({ hid: {{ hid|tojson }}, eid: {{ eid|tojson }},
                                              title: {{ (title or '')|tojson }}, ext: {{ (ext or '')|tojson }} });</script>

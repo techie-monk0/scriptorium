@@ -59,6 +59,11 @@ public final class AppModel {
     public let syncEngine = SyncEngine()
     /// Unsynced local writes (the reader outbox depth), surfaced in the freshness chip.
     public private(set) var pendingWrites = 0
+    /// The app-version handshake tracker (AppBuildContract). Fed each `/api/v1/health` response, it
+    /// latches the first server build it sees and reports `.outdated` (the server was rebuilt/redeployed
+    /// under us → the app should refresh) or `.serverStale` (the server is running old code → restart
+    /// it). Surfaced in Settings; the same signal every client (web/PWA) acts on.
+    public private(set) var appBuild = AppBuildWatcher()
     /// Read-only probes over the shared reader outbox files (the same `annotations.json` /
     /// `bookmarks.json` the reader's `LocalAnnotationStore` / `LocalBookmarkStore` write). Queried on each
     /// sync trigger to surface the total unsynced-write count; depends only on the `OutboxProbe`
@@ -257,7 +262,31 @@ public final class AppModel {
     public func refresh(_ reason: SyncReason) async -> Bool {
         let changed = await syncEngine.refresh(reason)
         await refreshPendingWrites()
+        _ = await probeHealth()
         return changed
+    }
+
+    /// Act on an `.outdated` app-version prompt: accept the current server build as the new baseline
+    /// (so the notice clears), drop the replica ETag, and pull everything fresh. A native binary can't
+    /// reload its own code, so "refresh" here means "re-sync my data against the new server"; wire
+    /// compatibility stays guarded by the per-surface contract checks (e.g. reader_sync).
+    public func forceResync() async {
+        appBuild.reset()                     // re-latch the baseline to the server's current build
+        await replicaStore.clearETag()       // next pull is a full 200, not a 304
+        _ = await refresh(.manual)           // re-pull replica + starred, and re-probe health
+    }
+
+    /// Probe `/api/v1/health` and feed the app-version handshake. Cheap (no DB) and folded into every
+    /// refresh, so a server restart/redeploy (new `app_build`) or a server gone stale (`server_stale`)
+    /// surfaces without a dedicated poller. Returns the decoded Health so a caller (Settings' test
+    /// connection) can reuse the same round-trip for reachability.
+    @discardableResult
+    public func probeHealth() async -> Health? {
+        guard let api else { return nil }
+        guard let h = try? await api.health() else { return nil }
+        appBuild.update(h)
+        AppBuildLog.note(appBuild.status, live: h.appBuild, baseline: appBuild.baseline)
+        return h
     }
     /// Update the surfaced unsynced-writes count (called by the reader outbox).
     public func setPendingWrites(_ n: Int) { pendingWrites = n }

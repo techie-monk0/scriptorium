@@ -90,9 +90,10 @@ def test_edition_read_renders_shell_wired_to_core_pdf(app_env, seed, tmp_path):
     r = c.get(f"/edition/{eid}/read")
     assert r.status_code == 200
     body = r.data
-    # The page no longer carries the engine inline — it loads the standalone modules…
-    assert b'src="/static/reader/vendor.js"' in body
-    assert b'src="/static/reader/reader-core.js"' in body
+    # The page no longer carries the engine inline — it loads the standalone modules… (via the
+    # static_v cache-buster now, so the src carries a ?v=<mtime> query — match the path prefix).
+    assert b'src="/static/reader/vendor.js' in body
+    assert b'src="/static/reader/reader-core.js' in body
     # …and drives them through ReaderCore.mount, routed to the PDF engine, bound to this copy.
     assert b"ReaderCore.mount(" in body
     assert b'ext: "pdf"' in body

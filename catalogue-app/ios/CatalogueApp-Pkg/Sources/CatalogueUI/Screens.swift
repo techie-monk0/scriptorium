@@ -739,14 +739,30 @@ public struct SettingsScreen: View {
         }
     }
 
-    /// Hit `/api/v1/health` so the user gets immediate confirmation the address works.
+    /// Hit `/api/v1/health` so the user gets immediate confirmation the address works. Goes through
+    /// `app.probeHealth()` so the same round-trip also updates the app-version handshake (build /
+    /// staleness), surfaced by `appBuildLabel`.
     private func testConnection() async {
-        guard let api = app.api else { return }
+        guard app.api != nil else { return }
         checking = true
         defer { checking = false }
         let host = app.serverURL.host ?? app.serverURL.absoluteString
-        do { status = (try await api.health().ok) ? .ok(host) : .fail(host) }
-        catch { status = .fail(host) }
+        let h = await app.probeHealth()
+        status = (h?.ok == true) ? .ok(host) : .fail(host)
+    }
+
+    /// A restart/refresh hint when the app-version handshake reports drift — the native mirror of the
+    /// web/PWA reload banner. Nothing shown when in sync.
+    @ViewBuilder private var appBuildLabel: some View {
+        switch app.appBuild.status {
+        case .ok: EmptyView()
+        case .outdated:
+            Label("Server updated — reopen the app to refresh", systemImage: "arrow.down.circle")
+                .font(Typography.caption).foregroundStyle(tokens.warn)
+        case .serverStale:
+            Label("Server is running old code — restart it", systemImage: "exclamationmark.arrow.triangle.2.circlepath")
+                .font(Typography.caption).foregroundStyle(tokens.warn)
+        }
     }
 
     /// Connect + sign in in one step: apply the typed server address (rebuilding the API for it), then

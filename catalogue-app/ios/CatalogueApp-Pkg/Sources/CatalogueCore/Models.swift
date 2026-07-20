@@ -52,6 +52,11 @@ public struct Health: Codable, Equatable, Sendable {
     public var role: String?
     public var canEdit: Bool?
     public var canDownload: Bool?
+    // App-version handshake (see AppBuildContract). `appBuild` = the build the server is running;
+    // `serverStale` = the server is behind its own code on disk (restart pending). Optional/additive,
+    // so an older server that omits them just reads as nil (no drift signalled).
+    public var appBuild: String?
+    public var serverStale: Bool?
 }
 
 // ── /api/v1/library  → browser rows (the metadata "Search"/browse list) ───────

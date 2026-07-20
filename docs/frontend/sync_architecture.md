@@ -56,6 +56,62 @@ Shared *shape* per language, native *implementation* (touches disk/IndexedDB/URL
 iOS: `catalogue-app/.../CatalogueData/SyncEngine.swift`. Web/PWA: the same states/methods realized in
 `app.js` (`syncNow`, `refresh`, `setStatus`).
 
+### 2.3 App-version handshake (stale-server guard)
+
+A long-running server keeps serving the code and cached templates it loaded at startup, even after the
+files on disk change. Browsers, meanwhile, refetch changed static JS/CSS. So a server that hasn't been
+restarted after an edit can hand a client a mismatched pair — an old cached template wired to fresh JS —
+and the page silently breaks. (This is how a scanned-PDF reader once hung at "Downloading… X/X": the
+process served the old range-mode template against the new whole-file engine.)
+
+The fix is a version handshake, built the same way as the reader_sync contract. The server advertises the
+build it's running and whether it's stale; every client compares and reacts:
+
+- **`app_build`** — identifies the build the server process is running. It's stamped into every page as
+  `window.APP_BUILD` and returned by `GET /version` and `GET /api/v1/health`. A client compares the build
+  it loaded with against the live one; a difference means the server was restarted/redeployed, so the open
+  page should reload.
+- **`server_stale`** — true when the running process is behind its own code on disk (a restart is pending).
+  While this is true the web app **refuses to serve HTML pages** (503 interstitial) so a stale server can't
+  hand a client a broken page; the API/health/version/static routes stay open so clients can still detect
+  the condition and recover. `CATALOGUE_ALLOW_STALE=1` opts out for live-editing dev.
+
+Clients act on the same two fields: web pages + the reader show a reload/restart banner
+(`static/js/app-version.js`), the PWA folds the check into its `/api/v1/health` probe, and iOS surfaces it
+in Settings (`AppBuildContract` / `AppBuildWatcher`, the native mirror of `app-version.js`).
+
+"Requires a restart" is scoped to Python code: templates are served fresh (`TEMPLATES_AUTO_RELOAD`) and
+static assets are cache-busted (`static_v`), so changing those needs no restart and doesn't flip
+`server_stale`; only a code change does — which is exactly "a feature that requires a restart", and it
+bumps the build automatically because the build id is derived from the files.
+
+#### Technical details
+
+- **Build id** = a short SHA-256 over each tracked file's path + `st_mtime_ns`, sorted. Captured at process
+  start (`catalogue.webui.app_version.BuildStamp`, the `DEFAULT` instance). It is a fingerprint, not a
+  monotonic counter — the handshake only needs "same or different", and a content-derived stamp updates
+  automatically with no manual bump or persistence. Per-process/per-machine (mtime-based), so it's only ever
+  compared against values from the *same* running server.
+- **Scope = every catalogue package this process imported**, not just webui. `loaded_catalogue_roots()` reads
+  `sys.modules` for `catalogue.*` and fingerprints each package's directory (`web.py` calls `finalize()` once
+  all eager imports are done). So a restart-requiring change in `db_store`, `services`, `contracts`, … — or a
+  contract descriptor JSON read into a module global at import — flips `server_stale`, not only a change under
+  `webui/`. Packages the server never imports (populate, test_kit) contribute nothing, so they don't cause
+  false blocks.
+- **Staleness** = the restart-tracked fingerprint (`.py` + `.json`) recomputed now ≠ the one captured at
+  startup. Recomputed at most every ~1.5s (a `before_request` on every hit must stay cheap; a full-namespace
+  scan is ~3 ms). `__pycache__` + vendored assets are skipped; templates (`.html`) and static JS/CSS are
+  excluded because they update live (auto-reload / `static_v`).
+- **Wire**: `{ "app_build": str, "server_stale": bool }`, additive on `/api/v1/health` (older clients ignore
+  it) and standalone on `/version`.
+- **Client rule** (identical in JS `AppVersion.classify` and Swift `AppBuildContract.classify`): `server_stale`
+  wins → restart; else a live build ≠ the baseline → reload; else ok. Missing fields (an older server) → ok,
+  so it never false-alarms.
+- **Where it lives**: server `app_version.py` + the staleness gate in `web.py` + `/version` in `routes/api.py`;
+  clients `static/js/app-version.js` (web/PWA/reader) and `CatalogueCore/AppBuildContract.swift` (iOS);
+  interstitial `templates/_stale.html`. Guards: `tests/test_app_version.py`, `tests/system/test_version_handshake*.py`,
+  `Tests/CatalogueCoreTests/AppBuildContractTests.swift`.
+
 ## 3. Triggers — when each surface revalidates
 
 | Trigger | web | PWA | iOS |

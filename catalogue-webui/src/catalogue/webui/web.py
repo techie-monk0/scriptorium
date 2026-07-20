@@ -19,6 +19,7 @@ from flask import Flask, g, request
 
 from catalogue.db_store import DryRunConnection, Store, connect, init_db
 from catalogue.webui import auth as auth_mod
+from catalogue.webui import app_version
 from catalogue.webui.ask import OpenAIProxyBackend
 from catalogue.db_store import reader_state
 from catalogue.services.isbn import (
@@ -75,6 +76,19 @@ def create_app(db_path: str | os.PathLike | None = None, *,
         __name__,
         template_folder=str(Path(__file__).parent / "templates"),
     )
+    # Re-read templates from disk when they change, instead of caching the compiled version for the
+    # life of the process. Without this a long-running server keeps serving the template it first
+    # rendered — the stale-template half of the mismatched-pair bug (a cached old reader.html wired to
+    # fresh JS). Paired with static_v (cache-busts static assets) and the app_version staleness gate
+    # (blocks a process running old CODE), this closes the "stale server serves clients" hole. The
+    # per-render stat is negligible for this app.
+    app.config["TEMPLATES_AUTO_RELOAD"] = True
+    # The build this process is running, stamped into every page as window.APP_BUILD so a client can
+    # tell when the server it loaded from has been replaced (see static/js/app-version.js). finalize()
+    # captures the baseline across EVERY catalogue package imported so far (webui + db_store + services
+    # + contracts + …), so a restart-requiring change anywhere in the namespace flips server_stale —
+    # not just one under webui/.
+    app.jinja_env.globals["app_build"] = app_version.finalize().app_build
     # Secret key backs flash() popups (e.g. the "tagged Uncategorized" notice and the
     # review-gate block). A stable per-host default keeps single-user dev sessions
     # signed; override with CATALOGUE_SECRET in any shared deployment.
@@ -199,6 +213,32 @@ def create_app(db_path: str | os.PathLike | None = None, *,
         if perf.is_enabled():
             import time as _t
             g._perf_t0 = _t.perf_counter()
+
+    # ── Staleness gate: a server running OLD code doesn't serve pages ──────────
+    # If a .py file changed on disk since this process started, the process is executing stale code
+    # (Python won't reload it) — the classic "I fixed it but the running server predates the fix". We
+    # refuse to serve HTML PAGES until it's restarted, so a stale server can't hand clients a broken
+    # page. The API/health/version/static/sync/file routes stay open so every client can still REACH
+    # the server to DETECT the staleness (and so this page's Reload works). Set CATALOGUE_ALLOW_STALE=1
+    # for live-editing dev where you don't want the block. Registered before _open_conn so a blocked
+    # request never opens a DB connection.
+    _allow_stale = os.environ.get("CATALOGUE_ALLOW_STALE", "").strip().lower() in (
+        "1", "true", "yes", "on")
+    _STALE_OPEN_PREFIXES = ("/static/", "/api/", "/sync/", "/holding/", "/capture/")
+    _STALE_OPEN_EXACT = ("/health", "/version", "/login", "/logout")
+
+    @app.before_request
+    def _staleness_gate():
+        if _allow_stale or not app_version.is_stale():
+            return
+        p = request.path
+        if p in _STALE_OPEN_EXACT or p.startswith(_STALE_OPEN_PREFIXES):
+            return                               # escape hatches: clients must still reach these
+        from flask import make_response as _mr, render_template as _rt
+        resp = _mr(_rt("_stale.html", app_build=app_version.build()), 503)
+        resp.headers["Retry-After"] = "5"
+        resp.headers["Cache-Control"] = "no-store"
+        return resp
 
     @app.after_request
     def _perf_end(resp):

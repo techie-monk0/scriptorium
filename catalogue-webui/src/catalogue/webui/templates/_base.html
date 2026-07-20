@@ -17,6 +17,10 @@
   <script src="{{ static_v('js/library-core.js') }}"></script>
   <script src="{{ static_v('js/library-ui-dom.js') }}"></script>
   <script src="{{ static_v('js/library-web.js') }}"></script>
+  {# App-version handshake: window.APP_BUILD = the build this page was served from; app-version.js
+     compares it to the server's live build (via /version) and shows a reload/restart banner on drift. #}
+  <script>window.APP_BUILD = {{ app_build | tojson }};</script>
+  <script src="{{ static_v('js/app-version.js') }}"></script>
   {# Apply the saved theme BEFORE first paint so there's no light→dark flash.
      'auto' (or unset) follows the OS via prefers-color-scheme in CSS below. #}
   <script>
@@ -190,5 +194,7 @@
   {% endwith %}
   <hr>
   {% block body %}{% endblock %}
+  {# Watch for the server being replaced/restarted (or running stale code) while this page is open. #}
+  <script>if (window.AppVersion) AppVersion.watch();</script>
 </body>
 </html>

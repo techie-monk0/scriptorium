@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Server needs a restart</title>
+  <style>
+    /* Self-contained on purpose: this page must render even when the server's OTHER assets are the
+       stale ones. No shared CSS/JS, no reader engine — just inline styles. */
+    :root { color-scheme: light dark; }
+    body { font-family: system-ui, -apple-system, sans-serif; max-width: 34rem;
+           margin: 4rem auto; padding: 0 1.25rem; line-height: 1.5;
+           background: #fff; color: #1a1a1a; }
+    @media (prefers-color-scheme: dark) { body { background: #16181c; color: #e6e6e6; } }
+    h1 { font-size: 1.35rem; margin: 0 0 .5rem; }
+    .icon { font-size: 2.5rem; }
+    code { background: rgba(127,127,127,.18); padding: .1rem .35rem; border-radius: 4px;
+           font-size: .92em; }
+    .row { display: flex; gap: .6rem; margin-top: 1.4rem; flex-wrap: wrap; }
+    button { font: inherit; padding: .5rem 1rem; border-radius: 8px; cursor: pointer;
+             border: 1px solid rgba(127,127,127,.5); background: rgba(127,127,127,.12);
+             color: inherit; }
+    button.primary { background: #2f6feb; border-color: #2f6feb; color: #fff; }
+    .muted { color: #777; font-size: .85rem; margin-top: 1.6rem; }
+  </style>
+</head>
+<body>
+  <div class="icon">♻️</div>
+  <h1>The server is running older code than what's on disk</h1>
+  <p>Its source files changed since it started, and a running Python server can't pick those up on its
+     own. To avoid handing you a half-updated page, it won't serve app pages until it's restarted.</p>
+  <p><b>Fix:</b> restart the catalogue web server, then reload this page.</p>
+  <div class="row">
+    <button class="primary" onclick="location.reload()">Reload</button>
+    <button onclick="check()">Check again</button>
+  </div>
+  <p class="muted">Running build <code id="build">{{ app_build }}</code>.
+     This page auto-reloads once the restarted server is ready.</p>
+  <script>
+    // Poll the version handshake (which stays open while stale); reload as soon as the server reports
+    // it's no longer stale (i.e. it was restarted). No shared code — this page is deliberately alone.
+    async function check() {
+      try {
+        const r = await fetch('/version', { cache: 'no-store' });
+        if (!r.ok) return;
+        const v = await r.json();
+        if (v && v.server_stale === false) location.reload();
+      } catch (e) {}
+    }
+    setInterval(check, 3000);
+  </script>
+</body>
+</html>

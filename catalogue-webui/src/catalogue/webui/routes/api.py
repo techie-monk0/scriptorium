@@ -35,6 +35,17 @@ def register(app, ctx):
             "db_path": app.config["DB_PATH"],
         }
 
+    @app.get("/version")
+    def version():
+        """The app-version handshake (catalogue.webui.app_version). `app_build` identifies the build
+        THIS process is running; `server_stale` is True when the process is behind its own code on
+        disk (a restart is pending). Every client compares its loaded `app_build` against this to
+        decide whether to reload; the stale interstitial polls `server_stale` to auto-recover after a
+        restart. Kept open even while the server is stale (see web.py's staleness gate) so clients can
+        always detect the condition."""
+        from catalogue.webui import app_version
+        return jsonify(app_version.handshake())
+
     @app.get("/integrity")
     def integrity_check():
         """Referential + completeness integrity report (catalogue/integrity.py).
@@ -53,10 +64,15 @@ def register(app, ctx):
         view-only-vs-download behavior without per-client wiring. (The server still
         enforces these regardless; this only lets a client hide what it can't do.)"""
         from catalogue.webui import auth as _auth
+        from catalogue.webui import app_version
+        # The version handshake rides on the probe every client already polls, so no surface needs a
+        # second request to learn the server build / staleness (see static/js/app-version.js + the
+        # iOS AppBuildContract). app_build/server_stale are ADDITIVE — older clients ignore them.
         return jsonify({"ok": True, "service": "catalogue", "api": 1,
                         "role": _auth.current_role(),
                         "can_edit": _auth.can_edit(),
-                        "can_download": _auth.can_download()})
+                        "can_download": _auth.can_download(),
+                        **app_version.handshake()})
 
     @app.get("/api/v1/replica")
     def api_replica():

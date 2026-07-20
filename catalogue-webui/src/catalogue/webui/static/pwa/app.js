@@ -179,7 +179,13 @@ async function prefetchCovers() {
 async function probe() {
   try {
     const r = await Net.fetch('/api/v1/health', { cache: 'no-store', signal: AbortSignal.timeout(3000) });
-    if (r.ok) { try { CAN_DOWNLOAD = (await r.json()).can_download !== false; } catch {} }
+    if (r.ok) { try {
+      const h = await r.json();
+      CAN_DOWNLOAD = h.can_download !== false;
+      // Version handshake rides on the probe every reachable pass already makes — banner a reload
+      // when the server build changed under us or the server is running stale code.
+      if (window.AppVersion) AppVersion.apply(h);
+    } catch {} }
     return r.ok;
   }
   catch { return false; }
