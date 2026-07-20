@@ -1,6 +1,7 @@
 #if canImport(UIKit)
 import SwiftUI
 import CatalogueCore
+import CatalogueDesign
 import CatalogueReader
 
 /// The "Read" tab — a reading hub. Lists the currently-open books (the reader tabs, from
@@ -15,8 +16,8 @@ struct ReadingHubScreen: View {
     var body: some View {
         Group {
             if books.isEmpty {
-                ContentUnavailableView("No open books", systemImage: "book",
-                    description: Text("Open a book from Home or Books to start reading — it’ll appear here."))
+                NoticeView(icon: "book", title: "No open books",
+                           message: "Open a book from Home or Books to start reading — it’ll appear here.")
             } else {
                 List {
                     if let recent = books.first {

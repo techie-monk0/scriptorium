@@ -8,8 +8,11 @@
  *   ReaderCore.mount({
  *     ext,                       // 'epub' | 'pdf' | … (anything else → PDF.js)
  *     els: { viewer, prog, topbar, pgPrev, pgNext, fdec, finc },   // host-owned chrome
- *     io: {                       // byte source — the host decides URL-stream vs cached bytes
- *       pdfSource(),              //   → arg for pdfjsLib.getDocument (web: {url}; PWA: {data})
+ *     io: {                       // byte source — the host supplies the bytes
+ *       pdfSource(onProgress),    //   → (Promise of) arg for pdfjsLib.getDocument. Prefer {data}:
+ *                                 //     web fetches the whole file (reporting onProgress(recv,total)),
+ *                                 //     PWA returns cached bytes. A {url} works but opts into pdf.js
+ *                                 //     range mode — avoid it over the tunnel (stalls scanned PDFs).
  *       epubData(),               //   → Promise<ArrayBuffer>
  *     },
  *     position: {                 // where the reading spot is read/written
@@ -627,9 +630,19 @@
       let doc;
       showLoad('Opening PDF…');
       try {
-        const task = pdfjsLib.getDocument(io.pdfSource());
-        // pdf.js reports overall download bytes (range/stream mode) — show it until the document
-        // is ready enough to render page 1 (the doc.promise resolves before the full file lands).
+        // Ask the host adapter for the getDocument source. The web shell FETCHES the whole file as
+        // ONE stream (reporting bytes through onLoadProgress) and returns {data}; the PWA returns
+        // its already-cached {data}. We deliberately hand pdf.js the BYTES, not a {url}:
+        //   A {url} puts pdf.js in HTTP range/auto-fetch mode — many small range round-trips plus
+        //   extra concurrent connections. A NON-linearized (scanned) PDF has its cross-reference at
+        //   the end, so pdf.js must range-walk the object graph before page 1; over a high-latency
+        //   tunnel those round-trips stall and the "Downloading… X/X" bar sits full forever while
+        //   doc.promise never resolves. A single whole-file stream (exactly what EPUB uses, and it
+        //   works) sidesteps all of it. `await` also tolerates a synchronous {data} adapter (PWA).
+        const source = await io.pdfSource(onLoadProgress);
+        const task = pdfjsLib.getDocument(source);
+        // If a host still hands back a {url}, pdf.js drives progress; a {data} source finished
+        // downloading above, so this is a harmless no-op then.
         task.onProgress = (p) => onLoadProgress(p.loaded || 0, p.total || 0);
         doc = await task.promise;
       }

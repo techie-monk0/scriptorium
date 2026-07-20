@@ -1,5 +1,6 @@
 #if canImport(UIKit)
 import SwiftUI
+import CatalogueDesign
 
 /// PDF "reflow to text" reading surface (GoodReader style): the current page's extracted text as
 /// formatted paragraphs, comfortable to read on a phone. Themed to the active reading theme + a
@@ -17,8 +18,8 @@ struct ReflowTextView: View {
         ZStack {
             bg.ignoresSafeArea()
             if paragraphs.isEmpty {
-                ContentUnavailableView("No text on this page", systemImage: "doc.plaintext",
-                                       description: Text("This page has no extractable text — it may be a scan."))
+                NoticeView(icon: "doc.plaintext", title: "No text on this page",
+                           message: "This page has no extractable text — it may be a scan.")
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: fontSize * 0.85) {

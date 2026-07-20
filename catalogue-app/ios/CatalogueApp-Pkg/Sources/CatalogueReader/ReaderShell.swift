@@ -2,6 +2,7 @@
 import SwiftUI
 import CatalogueCore
 import CatalogueData
+import CatalogueDesign
 
 /// The multi-book reader container (PDF Expert style): a **disappearable top tab bar** of open books
 /// sitting above the ACTIVE book's `ReaderView`. Only the active book is mounted — one live engine; a
@@ -42,6 +43,10 @@ public struct ReaderShell: View {
 
     private var active: OpenBook? { books.first { $0.pubId == activeId } ?? books.first }
 
+    /// True only on the "Read tab → nothing open" path: no active book AND this presentation wasn't
+    /// opened for a specific book (which would just be mid-load). That's when we show the popup.
+    private var showEmptyPopup: Bool { active == nil && opening == nil }
+
     public var body: some View {
         VStack(spacing: 0) {
             if showChrome && books.count > 1 { tabBar }
@@ -53,11 +58,27 @@ public struct ReaderShell: View {
                            settingsStore: settingsStore, historyStore: historyStore,
                            topBarAccessory: starAccessory(book.eid))
                     .id(book.pubId)
+            } else if showEmptyPopup {
+                // Nothing open. Presented as a DISMISSIBLE POPUP, not a full screen: a card on a dimmed
+                // scrim. Tapping outside the card, or its Close button, dismisses the cover and returns
+                // you to the tab you were on — so the "Read" tab with no open book is never a dead-end.
+                NoticeOverlay(Notice(
+                    icon: "book",
+                    title: "No document open",
+                    message: "Open a book from Home or Books to start reading — it’ll appear here.",
+                    actions: [.close { dismiss() }]),
+                    onDismiss: { dismiss() })
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                ContentUnavailableView("No book open", systemImage: "book",
-                    description: Text("Open a book from Home or Books — it’ll appear here."))
+                // Opened for a specific book that's still loading (Home/Books/Continue-reading path).
+                ProgressView("Opening…")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+        }
+        // See-through ONLY for the empty popup, so its scrim dims the previous screen behind it (a real
+        // popup, not a black screen). The reader / loading states keep the opaque cover background.
+        .presentationBackground {
+            showEmptyPopup ? Color.clear : Color(uiColor: .systemBackground)
         }
         .task {
             if let opening { await store.open(opening) }   // focus (or add) the book this presentation opened

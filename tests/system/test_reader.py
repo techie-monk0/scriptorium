@@ -102,6 +102,22 @@ def test_edition_read_renders_shell_wired_to_core_pdf(app_env, seed, tmp_path):
     assert b"/holding/${HID}/position" in body
 
 
+def test_pdf_adapter_hands_pdfjs_whole_file_bytes_not_a_range_url(app_env, seed, tmp_path):
+    """REGRESSION GUARD (scanned-PDF stall): the web shell must fetch the whole PDF as one
+    stream and hand pdf.js {data}, NOT a {url}. A {url} puts pdf.js in HTTP range/auto-fetch
+    mode, whose round-trips stall a non-linearized (scanned) PDF over the tunnel — the bar sits
+    at 'Downloading… X/X' forever. The template must use streamWholeFile → {data} (same
+    single-stream transport EPUB uses) and never reintroduce the range-mode source."""
+    c, _, _ = app_env
+    eid, _ = _edition_with_file(seed, _write_pdf(tmp_path / "book.pdf"))
+    body = c.get(f"/edition/{eid}/read").data
+    assert b"streamWholeFile" in body                       # the single-stream whole-file fetch
+    assert b"pdfSource: async" in body and b"data: await streamWholeFile" in body
+    # The old range-mode source must be gone (this is what stalled scanned PDFs).
+    assert b"rangeChunkSize" not in body
+    assert b"url: FILE_URL" not in body
+
+
 def test_edition_read_routes_epub_engine(app_env, seed, tmp_path):
     c, _, _ = app_env
     eid, _ = _edition_with_file(seed, _write_epub(tmp_path / "book.epub"))
@@ -136,8 +152,9 @@ def test_edition_read_404_for_missing_edition(app_env):
 
 # ── the byte source the reader depends on ────────────────────────────────────
 def test_pdf_file_streams_with_range_support(app_env, seed, tmp_path):
-    """The reader streams PDFs by URL (pdfSource → {url}); HTTP Range is what lets a big
-    PDF page in without loading the whole file. send_file(conditional=True) must honour it."""
+    """The /file route must still honour HTTP Range (send_file(conditional=True)): the raw
+    download link and other clients rely on it, even though the in-app reader now fetches the
+    whole file in one stream rather than range-paging it."""
     c, _, _ = app_env
     _, hid = _edition_with_file(seed, _write_pdf(tmp_path / "book.pdf"))
     full = c.get(f"/holding/{hid}/file")

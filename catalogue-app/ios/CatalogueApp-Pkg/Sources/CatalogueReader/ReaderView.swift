@@ -33,6 +33,10 @@ public struct ReaderView: View {
     private let outline: any OutlineStore
     private let settingsStore: CatalogueReaderSettingsStore
     private let historyStore: ReaderHistoryStore
+    // Drives cross-device refresh for every synced resource at once (marks/bookmarks/outline): awaits the
+    // stores' reconcile, publishes `phase` (the global "Refreshing…" chip) and a `generation` the view
+    // re-populates on — so a landed reconcile shows up immediately instead of on the next panel open.
+    @State private var syncCoordinator: ReaderSyncCoordinator
     // A host-injected top-bar accessory (ports-and-adapters: the reader core stays ignorant of what it
     // is — the catalogue layer drops in the star toggle here, a test/preview injects nothing).
     private let topBarAccessory: AnyView
@@ -155,18 +159,30 @@ public struct ReaderView: View {
         self._showChrome = showChrome
         // Local-first: marks persist to a device file (survive relaunch even offline) AND mirror to the
         // server via ReaderSync, with an outbox that flushes offline marks on reconnect.
-        self.annotations = annotations ?? LocalAnnotationStore(
+        let annStore = annotations ?? LocalAnnotationStore(
             remote: ReaderSync(baseURL: endpoint.baseURL, authorize: { endpoint.authorize(&$0) }))
         // Local-first: bookmarks persist to a device file (survive reopens even offline) AND mirror to
         // the server via BookmarkSync — position does the same, which is why it survived when bookmarks
         // (server-only, before this) did not.
-        self.bookmarks = bookmarks ?? LocalBookmarkStore(remote: BookmarkSync(baseURL: endpoint.baseURL,
-                                                                              authorize: { endpoint.authorize(&$0) }))
+        let bmStore = bookmarks ?? LocalBookmarkStore(remote: BookmarkSync(baseURL: endpoint.baseURL,
+                                                                           authorize: { endpoint.authorize(&$0) }))
         // Local-first authored outline (persistent TOC): durable + synced through /sync/reader like
         // bookmarks; baked into the file only on the explicit "Save into PDF" action.
-        self.outline = LocalOutlineStore(remote: OutlineSync(baseURL: endpoint.baseURL,
-                                                             authorize: { endpoint.authorize(&$0) }))
+        let olStore = LocalOutlineStore(remote: OutlineSync(baseURL: endpoint.baseURL,
+                                                            authorize: { endpoint.authorize(&$0) }))
+        self.annotations = annStore
+        self.bookmarks = bmStore
+        self.outline = olStore
         self.topBarAccessory = topBarAccessory
+        // One refresh driver for every synced resource (marks/bookmarks/outline). Only the local-first
+        // stores are reconcilable — a test/preview may inject an in-memory store, which simply doesn't
+        // join (its resources sync nothing to reconcile). See `ReaderSyncCoordinator`.
+        let reconcilables: [any RemoteReconcilable] = [
+            annStore as? any RemoteReconcilable,
+            bmStore as? any RemoteReconcilable,
+            olStore as? any RemoteReconcilable,
+        ].compactMap { $0 }
+        self._syncCoordinator = State(initialValue: ReaderSyncCoordinator(resources: reconcilables))
     }
 
     private var pubId: String { "holding:\(holding.holdingId)" }
@@ -266,7 +282,7 @@ public struct ReaderView: View {
                             withAnimation(.easeInOut(duration: 0.2)) { showChrome.toggle() }
                         })
                 } else if let errorText {
-                    ContentUnavailableView("Couldn’t open", systemImage: "exclamationmark.triangle", description: Text(errorText))
+                    NoticeView(icon: "exclamationmark.triangle", title: "Couldn’t open", message: errorText)
                 } else {
                     ProgressView("Opening…")
                 }
@@ -388,6 +404,8 @@ public struct ReaderView: View {
                 ToolbarItem(placement: .topBarLeading) {
                     if !generalBarPinned { HStack(spacing: 8) { barItems(.general) }.imageScale(.small) }
                 }
+                // The single global sync chip — quiet (empty) except while a cross-device refresh runs.
+                ToolbarItem(placement: .principal) { syncChip }
                 ToolbarItem(placement: .topBarTrailing) {
                     if !documentBarPinned { HStack(spacing: 8) { barItems(.document) }.imageScale(.small) }
                 }
@@ -419,15 +437,19 @@ public struct ReaderView: View {
             .onChange(of: readerThemeRaw) { Task { await applyReadingTheme() } }
             .onChange(of: colorScheme) { if readerThemeRaw == "auto" { Task { await applyReadingTheme() } } }
             .task { await open() }
-            // Reader freshness (Shape-B delta sync): pick up marks another device added — on return to
-            // foreground and via a light poll while the book stays open. Delta pull (`since: rev`),
-            // merged in place, so the current page never moves.
+            // A landed reconcile bumps the coordinator's `generation`; re-run the populate pipeline once
+            // so the fresh marks/bookmarks/outline show up in place — the FIRST Contents open, not the
+            // third, and live if the panel is already open.
+            .onChange(of: syncCoordinator.generation) { Task { await repopulateAfterSync() } }
+            // Reader freshness (Shape-B delta sync): pick up what another device changed — on return to
+            // foreground and via a light poll while the book stays open. One coordinator refresh reconciles
+            // marks/bookmarks/outline together (merged in place, so the current page never moves).
             .onChange(of: scenePhase) { _, phase in
-                if phase == .active { Task { await pullMarks(reset: false); await flushBookmarks() } }
+                if phase == .active { Task { await syncCoordinator.refresh(pubId: pubId) } }
                 else { Task { await pushPosition() } }   // backgrounding → mirror position for other devices
             }
             .onReceive(Timer.publish(every: 45, on: .main, in: .common).autoconnect()) { _ in
-                Task { await pullMarks(reset: false); await flushBookmarks(); await pushPosition() }
+                Task { await syncCoordinator.refresh(pubId: pubId); await pushPosition() }
             }
             .onDisappear {
                 ReaderLog.annotations.info("[\(vid, privacy: .public)] onDisappear pub=\(pubId, privacy: .public)")
@@ -485,6 +507,10 @@ public struct ReaderView: View {
             // ADVISORY cross-device resume is the ONLY networked step — never let it gate the display.
             // Run it detached so a slow/timing-out server can't block anything above (it only sets a pill).
             Task { await checkResume() }
+            // Cross-device refresh runs in the background (the local-first render above already painted).
+            // When it lands, `generation` bumps → `repopulateAfterSync` folds in another device's
+            // marks/bookmarks/outline; the chip shows "Refreshing…" meanwhile.
+            Task { await syncCoordinator.refresh(pubId: pubId) }
         } catch {
             errorText = (error as? LocalizedError)?.errorDescription ?? String(describing: error)
         }
@@ -1174,6 +1200,34 @@ public struct ReaderView: View {
             await reloadBookmarks()
             let authored = (try? await outline.pull(publicationId: pubId)) ?? []
             editor.open(authored: authored, embedded: reader?.outline() ?? [])   // emits `outline.open …`
+            // Reconcile the server now; when it lands, `repopulateAfterSync` refreshes this open panel in
+            // place (no need to close and reopen to see another device's bookmarks/outline).
+            await syncCoordinator.refresh(pubId: pubId)
+        }
+    }
+
+    /// The single global sync chip (nav-bar centre): silent unless a cross-device refresh is running, when
+    /// it shows a small spinner + "Refreshing…". One indicator for every synced resource at once.
+    @ViewBuilder private var syncChip: some View {
+        if syncCoordinator.phase == .refreshing {
+            HStack(spacing: 6) {
+                ProgressView().controlSize(.mini)
+                Text("Refreshing…").font(.caption).foregroundStyle(.secondary)
+            }
+            .transition(.opacity)
+        }
+    }
+
+    /// Fold a just-landed reconcile into the live view — run once per `generation` bump. Marks re-render
+    /// (position preserved); the bookmark list re-reads; the outline draft refreshes only when the panel
+    /// is showing the outline in view mode, so an in-progress edit is never clobbered.
+    private func repopulateAfterSync() async {
+        guard reader != nil else { return }
+        await pullMarks(reset: false)
+        await reloadBookmarks()
+        if showContents, contentsTab == .outline, !contentsEditing {
+            let authored = (try? await outline.pull(publicationId: pubId)) ?? []
+            editor.open(authored: authored, embedded: reader?.outline() ?? [])
         }
     }
 
@@ -1310,8 +1364,8 @@ public struct ReaderView: View {
 
     @ViewBuilder private var bookmarksListContent: some View {
         if bookmarkItems.isEmpty {
-            ContentUnavailableView("No bookmarks", systemImage: "bookmark",
-                                   description: Text("Add one with “Add Bookmark” below while reading."))
+            NoticeView(icon: "bookmark", title: "No bookmarks",
+                       message: "Add one with “Add Bookmark” below while reading.")
         } else {
             List {
                 ForEach(bookmarkItems) { bm in
@@ -1349,8 +1403,8 @@ public struct ReaderView: View {
     /// small font. Edit reveals `outlineEditorContent` for add/rename/reorder/delete.
     @ViewBuilder private var outlineViewContent: some View {
         if editor.entries.isEmpty {
-            ContentUnavailableView("No outline", systemImage: "list.bullet.indent",
-                                   description: Text("Tap Edit to add contents entries."))
+            NoticeView(icon: "list.bullet.indent", title: "No outline",
+                       message: "Tap Edit to add contents entries.")
         } else {
             List {
                 ForEach(editor.entries.indices, id: \.self) { i in
@@ -1397,8 +1451,8 @@ public struct ReaderView: View {
         NavigationStack {
             Group {
                 if tocRows.isEmpty {
-                    ContentUnavailableView("No contents", systemImage: "list.bullet",
-                                           description: Text("This book has no table of contents."))
+                    NoticeView(icon: "list.bullet", title: "No contents",
+                               message: "This book has no table of contents.")
                 } else {
                     List(tocRows) { row in
                         Button { jump(to: row.item.locator); showToc = false } label: {
@@ -1435,8 +1489,8 @@ public struct ReaderView: View {
             }
             .overlay {
                 if searchResults.isEmpty {
-                    ContentUnavailableView("Search the book", systemImage: "magnifyingglass",
-                                           description: Text("Type a query and press Search."))
+                    NoticeView(icon: "magnifyingglass", title: "Search the book",
+                               message: "Type a query and press Search.")
                 }
             }
             .searchable(text: $searchQuery, placement: .navigationBarDrawer(displayMode: .always))
@@ -1467,15 +1521,6 @@ public struct ReaderView: View {
         rev = max(rev, result.rev)
         ReaderLog.annotations.info("[\(vid, privacy: .public)] pullMarks[\(pubId, privacy: .public)] reset=\(reset) pulled=\(result.ops.count) total=\(marksById.count)")
         renderMarks()
-    }
-
-    /// Drain the bookmark outbox on the same cadence as marks (open / foreground / poll). A `pull` folds
-    /// in another device's bookmarks AND flushes anything made offline — so an offline bookmark reaches
-    /// the server on reconnect without waiting for the bookmark-list panel to open. Result is ignored
-    /// (the list re-reads from the store when the panel opens); this call is purely the sync tick.
-    private func flushBookmarks() async {
-        guard reader != nil else { return }
-        _ = try? await bookmarks.pull(publicationId: pubId, since: 0)
     }
 
     /// Re-render the live (non-tombstoned) marks from the merged set. Preserves the current reading

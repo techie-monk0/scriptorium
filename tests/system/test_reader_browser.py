@@ -17,11 +17,14 @@ Skipped automatically where the Playwright Chromium build isn't installed (so a 
 """
 from __future__ import annotations
 
+import io as _io
 import os
 import sqlite3
+import struct
 import threading
 import time
 import zipfile
+import zlib
 from pathlib import Path
 
 import pytest
@@ -62,6 +65,41 @@ def _make_pdf(path: Path, pages: int = 6) -> Path:
         pg.insert_text((50, 120), f"Page {i + 1}", fontsize=64)
     doc.set_toc([[1, "Chapter A", 1], [1, "Chapter B", 4]])   # a real PDF outline for the TOC test
     doc.save(str(path))
+    doc.close()
+    return path
+
+
+def _make_big_scanned_pdf(path: Path, pages: int = 24) -> Path:
+    """A big, image-heavy, NON-linearized PDF that mimics a scanned book: each page embeds a large
+    poorly-compressible raster, so the file lands in the ~9 MB range where pdf.js — given a {url} —
+    switches to HTTP range mode and range-walks the (end-of-file) cross-reference before page 1.
+    That range walk is what stalled scanned PDFs at 'Downloading… X/X' over the tunnel. PyMuPDF's
+    default save is not linearized, so pdf.js can't shortcut to a front-loaded first page."""
+    import fitz
+    W, H = 1500, 2000
+    seed = 1234567
+    raw = bytearray()
+    for _y in range(H):
+        raw.append(0)                                   # PNG per-scanline filter byte
+        for _x in range(W):
+            seed = (1103515245 * seed + 12345) & 0x7fffffff   # LCG → near-random, poorly compressible
+            raw += bytes(((seed >> 16) & 0xff, (seed >> 8) & 0xff, seed & 0xff))
+
+    def _chunk(tag, data):
+        return (struct.pack(">I", len(data)) + tag + data
+                + struct.pack(">I", zlib.crc32(tag + data) & 0xffffffff))
+
+    png = (b"\x89PNG\r\n\x1a\n"
+           + _chunk(b"IHDR", struct.pack(">IIBBBBB", W, H, 8, 2, 0, 0, 0))
+           + _chunk(b"IDAT", zlib.compress(bytes(raw), 6))
+           + _chunk(b"IEND", b""))
+    img = fitz.Pixmap(_io.BytesIO(png))
+    doc = fitz.open()
+    for i in range(pages):
+        pg = doc.new_page(width=1200, height=1600)
+        pg.insert_image(fitz.Rect(0, 0, 1200, 1600), pixmap=img)
+        pg.insert_text((80, 200), f"Page {i + 1}", fontsize=90, color=(1, 1, 1))
+    doc.save(str(path))              # NOT linearized (no garbage/deflate/linear flags)
     doc.close()
     return path
 
@@ -681,3 +719,61 @@ def test_epub_underline_create_and_persist(live, page):
     page.wait_for_selector("#viewer iframe")
     page.frame_locator("#viewer iframe").get_by_role("heading", name="Chapter One").wait_for()
     assert live.active_annotations(live.epub_hid) == 1
+
+
+# ── scanned-PDF transport regression ─────────────────────────────────────────
+@pytest.fixture
+def live_scan(tmp_path, monkeypatch):
+    """A live server holding one big, non-linearized (scan-like) PDF — the shape that stalled
+    in pdf.js range mode over the tunnel."""
+    from werkzeug.serving import make_server
+
+    monkeypatch.setenv("CATALOGUE_UPLOAD_DIR", str(tmp_path / "uploads"))
+    db_path = tmp_path / "scan.db"
+    app = create_app(db_path)
+    pdf = _make_big_scanned_pdf(tmp_path / "scan.pdf")
+    conn = sqlite3.connect(db_path)
+    conn.execute("PRAGMA foreign_keys = ON")
+    eid = conn.execute("INSERT INTO edition (title) VALUES ('Scanned Book')").lastrowid
+    conn.execute("INSERT INTO holding (edition_id, form, file_path, text_status) "
+                 "VALUES (?, 'electronic', ?, 'ocr_good')", (eid, str(pdf)))
+    conn.commit(); conn.close()
+
+    srv = make_server("127.0.0.1", 0, app, threaded=True)
+    t = threading.Thread(target=srv.serve_forever, daemon=True); t.start()
+    try:
+        yield f"http://127.0.0.1:{srv.server_port}", eid, os.path.getsize(pdf)
+    finally:
+        srv.shutdown(); t.join()
+
+
+def test_big_scanned_pdf_loads_via_single_stream_no_range_requests(live_scan, page):
+    """Regression for the reported bug: a large, non-linearized PDF hung at 'Downloading… X/X'
+    with a full bar because pdf.js was handed a {url} and range-walked the object graph, whose
+    round-trips stall over the tunnel. The fix fetches the whole file as ONE stream and hands
+    pdf.js the bytes ({data}) — the same transport EPUB uses. This asserts the observable
+    transport property that prevents the stall: the PDF renders, and it did so via a single full
+    GET of /file with ZERO HTTP Range requests (any Range request means range mode came back)."""
+    base, eid, size = live_scan
+    assert size > 4 * 1024 * 1024, f"test PDF too small ({size} B) to exercise range mode"
+
+    file_reqs, range_reqs = [], []
+
+    def _on_request(r):
+        if "/file" in r.url:
+            file_reqs.append(r.url)
+            if r.headers.get("range"):
+                range_reqs.append(r.url)
+
+    page.on("request", _on_request)
+    page.set_default_timeout(30000)
+    page.set_viewport_size({"width": 1100, "height": 1000})
+    page.goto(f"{base}/edition/{eid}/read")
+
+    # It actually renders (pdf.js parsed the in-memory bytes and painted a page).
+    page.wait_for_selector("#pdfStack canvas")
+    assert page.locator("#viewer .msg").count() == 0            # no error fallback
+
+    # Transport property: exactly one whole-file GET, no range paging.
+    assert len(file_reqs) == 1, f"expected 1 /file request, got {len(file_reqs)}: {file_reqs}"
+    assert range_reqs == [], f"reader made HTTP Range requests (range mode is back): {range_reqs}"

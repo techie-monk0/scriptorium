@@ -151,6 +151,29 @@
     const _uuid = () => (self.crypto && crypto.randomUUID) ? crypto.randomUUID()
       : ('id-' + Date.now() + '-' + Math.random().toString(16).slice(2));
 
+    // Fetch the whole book file as ONE stream, reporting (received, total) bytes so the reader's
+    // overlay shows real download progress. One request, one connection — the transport EPUB has
+    // always used, and (since PDFs stalled in pdf.js range mode over the tunnel) the one PDFs use
+    // too. Returns a Uint8Array; falls back to a plain arrayBuffer read when streaming/progress
+    // isn't available. `onProgress` may be omitted.
+    async function streamWholeFile(onProgress) {
+      const r = await fetch(FILE_URL);
+      if (!r.ok) throw new Error('HTTP ' + r.status);   // 202 online-only etc. → surface as an error
+      if (!r.body || !onProgress) return new Uint8Array(await r.arrayBuffer());
+      const total = +(r.headers.get('Content-Length') || 0);   // may be 0 over a chunked proxy
+      const reader = r.body.getReader();
+      const chunks = []; let received = 0;
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value); received += value.length;
+        try { onProgress(received, total); } catch (e) {}
+      }
+      const out = new Uint8Array(received); let off = 0;
+      for (const c of chunks) { out.set(c, off); off += c.length; }
+      return out;
+    }
+
     ReaderCore.mount({
       ext: "{{ ext }}",
       docId: HID,   // per-document reading settings (font %, zoom, reflow size) are keyed by this
@@ -179,34 +202,16 @@
         annBtn:   document.getElementById('annBtn'),     // annotations list (browse, tap to jump)
         annPanel: document.getElementById('annPanel'),
       },
-      // Byte source. PDF streams by URL (range requests — never loads a 50M file whole), but with
-      // a 1MB rangeChunkSize instead of pdf.js's 64KB default: a non-linearized PDF makes pdf.js
-      // walk the object graph one dependency at a time, so 64KB chunks meant DOZENS of sequential
-      // range round-trips for the first page — pathological over a high-latency tunnel (Cloudflare).
-      // 1MB chunks cut the round-trips ~16x while still rendering page 1 without the whole file.
-      // EPUB fetches the bytes (epub.js needs an unambiguous archive, see reader-core).
+      // Byte source. BOTH formats fetch the whole file as one stream (see streamWholeFile). PDFs
+      // used to stream by {url} in pdf.js range mode to avoid loading a big file whole, but a
+      // non-linearized (scanned) PDF makes pdf.js range-walk the object graph before page 1, and
+      // those round-trips stall over the high-latency tunnel — the "Downloading… X/X" bar filled
+      // but the page never rendered. Handing pdf.js the finished bytes ({data}) uses the same
+      // single-stream transport EPUB does (which works), at the cost of holding the file in memory
+      // (the same cost EPUB and the PWA reader already pay). epub.js needs the whole archive anyway.
       io: {
-        pdfSource: () => ({ url: FILE_URL, rangeChunkSize: 1048576 }),
-        // EPUB: fetch the whole archive, STREAMING the body so we can report download progress
-        // (received / total bytes) to the engine's overlay — a big EPUB over the tunnel is a long
-        // blank otherwise. Falls back to a plain arrayBuffer() if streaming isn't available.
-        epubData: async (onProgress) => {
-          const r = await fetch(FILE_URL);
-          if (!r.ok) throw new Error('HTTP ' + r.status);
-          if (!r.body || !onProgress) return r.arrayBuffer();
-          const total = +(r.headers.get('Content-Length') || 0);   // may be 0 over a chunked proxy
-          const reader = r.body.getReader();
-          const chunks = []; let received = 0;
-          for (;;) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            chunks.push(value); received += value.length;
-            try { onProgress(received, total); } catch (e) {}
-          }
-          const out = new Uint8Array(received); let off = 0;
-          for (const c of chunks) { out.set(c, off); off += c.length; }
-          return out.buffer;
-        },
+        pdfSource: async (onProgress) => ({ data: await streamWholeFile(onProgress) }),
+        epubData: async (onProgress) => (await streamWholeFile(onProgress)).buffer,
       },
       // Reading position → the server's reading_position row (resumes + syncs across devices).
       position: {
